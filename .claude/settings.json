@@ -46,7 +46,8 @@
       "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ' *)",
       "Bash(taskkill /F /IM IJPSystem.Platform.HMI.exe)",
       "Bash(git remote *)",
-      "Bash(gh auth *)"
+      "Bash(gh auth *)",
+      "Bash(powershell.exe -NoProfile -Command ' *)"
     ],
     "additionalDirectories": [
       "d:\\tmp",
