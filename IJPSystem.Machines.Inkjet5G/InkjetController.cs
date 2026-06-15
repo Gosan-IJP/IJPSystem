@@ -14,7 +14,7 @@ namespace IJPSystem.Machines.Inkjet5G
             _machine = machine;
         }
 
-        public IMachine GetMachine() => _machine;
+        public IMachine GetMachine() => _machine; 
 
         // ── 인터락 (장비 수준 정책) ──
 

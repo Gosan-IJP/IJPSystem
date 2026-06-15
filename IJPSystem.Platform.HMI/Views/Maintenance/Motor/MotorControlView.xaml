@@ -274,6 +274,26 @@
                                                 Background="#F87171" BorderBrush="#EF4444" Margin="4,0,0,0" Height="35"
                                                 Style="{StaticResource ModernActionButton}"/>
                                     </Grid>
+
+                                    <!-- Move 진행률 / 남은거리 (이동 중에만 표시) -->
+                                    <Grid Margin="0,12,0,0"
+                                          Visibility="{Binding SelectedAxis.IsMoveActive, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid Grid.Row="0" Margin="0,0,0,4">
+                                            <TextBlock Text="DISTANCE TO GO" Foreground="#94A3B8" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                <TextBlock Text="{Binding SelectedAxis.DistanceToGo, StringFormat={}{0:+0.000;-0.000;0.000}}"
+                                                           Foreground="#FCD34D" FontFamily="Consolas" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+                                                <TextBlock Text="mm" Foreground="#64748B" FontSize="10" Margin="3,0,0,0" VerticalAlignment="Bottom"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <ProgressBar Grid.Row="1" Height="8" Minimum="0" Maximum="100"
+                                                     Value="{Binding SelectedAxis.MoveProgress, Mode=OneWay}"
+                                                     Background="#0F172A" Foreground="#22C55E" BorderThickness="0"/>
+                                    </Grid>
                                 </StackPanel>
                             <Separator Background="#334155" Margin="1,5"/>
                             <StackPanel>
@@ -286,6 +306,7 @@
                                             Tag="SEL"
                                             PreviewMouseDown="JogBackward_MouseDown"
                                             PreviewMouseUp="JogStop_MouseUp" Margin="0,0,4,0"
+                                            IsEnabled="{Binding SelectedAxis.CanJog, FallbackValue=False}"
                                             Background="#334155" BorderBrush="#475569" Height="35"
                                             Style="{StaticResource ModernActionButton}">
                                         <StackPanel Orientation="Horizontal">
@@ -296,7 +317,8 @@
                                     <Button Grid.Column="1"
                                             Tag="SEL"
                                             PreviewMouseDown="JogForward_MouseDown"
-                                            PreviewMouseUp="JogStop_MouseUp" Margin="4,0,0,0" 
+                                            PreviewMouseUp="JogStop_MouseUp" Margin="4,0,0,0"
+                                            IsEnabled="{Binding SelectedAxis.CanJog, FallbackValue=False}"
                                             Background="#334155" BorderBrush="#475569" Height="35"
                                             Style="{StaticResource ModernActionButton}">
                                         <StackPanel Orientation="Horizontal">
@@ -359,6 +381,7 @@
                                             PreviewMouseDown="JogForward_MouseDown"
                                             PreviewMouseUp="JogStop_MouseUp"
                                             Style="{StaticResource JogControlStyle}"
+                                            IsEnabled="{Binding AxisY.CanJog, FallbackValue=False}"
                                             Content="↑  +Y"/>
 
                                     <!-- -X (왼) -->
@@ -367,6 +390,7 @@
                                             PreviewMouseDown="JogBackward_MouseDown"
                                             PreviewMouseUp="JogStop_MouseUp"
                                             Style="{StaticResource JogControlStyle}"
+                                            IsEnabled="{Binding AxisX.CanJog, FallbackValue=False}"
                                             Content="←  -X"/>
 
                                     <!-- 중앙 HOME 표시 -->
@@ -383,6 +407,7 @@
                                             PreviewMouseDown="JogForward_MouseDown"
                                             PreviewMouseUp="JogStop_MouseUp"
                                             Style="{StaticResource JogControlStyle}"
+                                            IsEnabled="{Binding AxisX.CanJog, FallbackValue=False}"
                                             Content="+X  →"/>
 
                                     <!-- -Y (아래) -->
@@ -391,6 +416,7 @@
                                             PreviewMouseDown="JogBackward_MouseDown"
                                             PreviewMouseUp="JogStop_MouseUp"
                                             Style="{StaticResource JogControlStyle}"
+                                            IsEnabled="{Binding AxisY.CanJog, FallbackValue=False}"
                                             Content="↓  -Y"/>
                                 </Grid>
                             </Border>
@@ -404,11 +430,13 @@
                                             PreviewMouseDown="JogBackward_MouseDown"
                                             PreviewMouseUp="JogStop_MouseUp"
                                             Style="{StaticResource JogControlStyle}"
+                                            IsEnabled="{Binding AxisZ.CanJog, FallbackValue=False}"
                                             Content="↑  -Z"/>
                                     <Button Tag="Z" FontSize="15"
                                             PreviewMouseDown="JogForward_MouseDown"
                                             PreviewMouseUp="JogStop_MouseUp"
                                             Style="{StaticResource JogControlStyle}"
+                                            IsEnabled="{Binding AxisZ.CanJog, FallbackValue=False}"
                                             Content="↓  +Z"/>
                                 </StackPanel>
                             </Border>
@@ -422,11 +450,13 @@
                                             PreviewMouseDown="JogBackward_MouseDown"
                                             PreviewMouseUp="JogStop_MouseUp"
                                             Style="{StaticResource JogControlStyle}"
+                                            IsEnabled="{Binding AxisT.CanJog, FallbackValue=False}"
                                             Content="↺  -T"/>
                                         <Button Tag="T" FontSize="15"
                                             PreviewMouseDown="JogForward_MouseDown"
                                             PreviewMouseUp="JogStop_MouseUp"
                                             Style="{StaticResource JogControlStyle}"
+                                            IsEnabled="{Binding AxisT.CanJog, FallbackValue=False}"
                                             Content="↻  +T"/>
                                 </StackPanel>
                             </Border>

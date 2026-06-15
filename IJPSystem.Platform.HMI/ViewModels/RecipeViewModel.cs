@@ -509,6 +509,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     "IsUnitContinuity",
                     "IsUnit10um",
                     "IsUnit100um",
+
+                    // 축제어 화면 파생 상태 (레시피 데이터 아님 — 버튼 활성/이동 진행률용)
+                    "CanMove",
+                    "CanJog",
+                    "IsMoveActive",
+                    "DistanceToGo",
+                    "MoveProgress",
                 };
 
             // 무시 대상이 아닐 때만 IsDirty를 true로 만듭니다.

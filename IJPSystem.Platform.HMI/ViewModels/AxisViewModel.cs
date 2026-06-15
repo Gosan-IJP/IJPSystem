@@ -158,6 +158,46 @@ namespace IJPSystem.Platform.HMI.ViewModels
             get => _status;
             set => SetProperty(ref _status, value);
         }
+
+        // Move/Jog 허용 조건 — 서보 ON · 알람 없음 · 모션 드라이버 연결됨.
+        // 정비 중 서보 OFF/알람/미연결 상태에서 무반응 버튼을 눌러 생기는 혼란·오조작 방지.
+        // UpdateMotorStatus(100ms)에서 변화 감지 시 PropertyChanged/RaiseCanExecuteChanged로 갱신.
+        public bool CanMove => IsServoOn && !IsAlarm && _mainViewModel.MotionConnected;
+        private bool _lastCanMove;
+
+        // ── Move 진행률/남은거리 (절대·상대 이동 모두 지원) ──
+        private double _moveStartPos;   // 이동 시작 시점 위치
+        private double _moveTargetAbs;  // 목표 절대 위치 (INC면 시작위치 + 입력값)
+        private bool   _moveSawMotion;  // 실제 모션(IsMoving) 관측 여부 — 완료 판정용
+
+        private bool _isMoveActive;
+        public bool IsMoveActive
+        {
+            get => _isMoveActive;
+            private set { if (SetProperty(ref _isMoveActive, value)) OnPropertyChanged(nameof(CanJog)); }
+        }
+
+        // 조그 허용 = Move 가능 조건 && 이동명령(Move) 진행 중이 아님.
+        // IsMoving이 아닌 IsMoveActive로 판정 — 조그 자체가 IsMoving을 띄워
+        // dead-man(MouseUp) 정지가 막히는 위험을 피한다.
+        public bool CanJog => CanMove && !IsMoveActive;
+
+        // 목표까지 남은 거리(부호 있음 = 목표 − 현재, mm). 이동 방향이 부호로 드러남.
+        // 진행 중이 아니면 0.
+        public double DistanceToGo => IsMoveActive ? _moveTargetAbs - CurrentPos : 0.0;
+
+        // 이동 진행률 0~100(%).
+        public double MoveProgress
+        {
+            get
+            {
+                if (!IsMoveActive) return 0.0;
+                double total = _moveTargetAbs - _moveStartPos;
+                if (Math.Abs(total) < 1e-6) return 100.0;
+                double done = (CurrentPos - _moveStartPos) / total;
+                return Math.Clamp(done, 0.0, 1.0) * 100.0;
+            }
+        }
         #endregion
 
         #region Commands
@@ -179,7 +219,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             
 
             // 커맨드 연결 (메서드를 참조하도록 수정)
-            MoveAbsCommand = new RelayCommand(async _ => await MoveAsync());
+            MoveAbsCommand = new RelayCommand(async _ => await MoveAsync(), _ => CanMove);
             JogForwardCommand = new RelayCommand(async _ => await JogMoveAsync(true));
             JogBackwardCommand = new RelayCommand(async _ => await JogMoveAsync(false));
             ServoCommand = new RelayCommand(async _ => await ServoOnOffAsync());
@@ -235,6 +275,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             string modeName = IsAbsMode ? "ABS" : "INC";
             _mainViewModel.AddLog($"[MOTION] {Info.Name} -> Start {modeName} Move ({profileKind}): {TargetPosition:F3}mm");
 
+            // Move 진행률 추적 시작 — 절대/상대 입력을 목표 절대위치로 환산
+            _moveStartPos  = CurrentPos;
+            _moveTargetAbs = IsAbsMode ? TargetPosition : CurrentPos + TargetPosition;
+            _moveSawMotion = false;
+            IsMoveActive   = true;
+            OnPropertyChanged(nameof(DistanceToGo));
+            OnPropertyChanged(nameof(MoveProgress));
+
             var profile = profileOverride ?? (profileKind switch
             {
                 MotionProfileKind.Printing => Info.MotionConfig.Printing,
@@ -259,6 +307,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
             catch (Exception ex)
             {
+                IsMoveActive = false;
                 _mainViewModel.AddLog($"[MOTION] Move Failed: {ex.Message}", LogLevel.Error);
             }
         }
@@ -296,6 +345,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public async Task StopAsync()
         {
             _isStepJogging = false;
+            IsMoveActive = false;   // 진행률 표시 종료
             _mainViewModel.AddLog($"[MOTION] {Info.Name} Motor Stop Command.");
             await _driver.Stop(Info.AxisNo);
         }
@@ -359,12 +409,39 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
                     // UI에 상태 변화 알림
                     OnPropertyChanged(nameof(Status));
+
+                    // Move 진행률/남은거리 갱신 + 완료 판정
+                    // 완료 = 정지 상태 && (모션을 한 번이라도 관측 || 목표 근접 20µm 이내)
+                    //   → start 시점의 stale In-Position으로 인한 즉시 완료 오판 방지
+                    if (IsMoveActive)
+                    {
+                        if (latest.IsMoving) _moveSawMotion = true;
+                        bool reached = !latest.IsMoving &&
+                                       (_moveSawMotion || Math.Abs(_moveTargetAbs - latest.CurrentPos) <= 0.02);
+                        if (reached) IsMoveActive = false;
+
+                        OnPropertyChanged(nameof(DistanceToGo));
+                        OnPropertyChanged(nameof(MoveProgress));
+                    }
                 }
             }
             catch (Exception ex)
             {
                 /* 통신 에러 로그 출력 */
                 _mainViewModel.AddLog($"[MOTION] Axis {Info.AxisNo} comm error: {ex.Message}", LogLevel.Warning);
+            }
+            finally
+            {
+                // Move/Jog 허용 여부가 바뀌면 버튼 활성화 상태와 Move 커맨드를 갱신.
+                // 연결 끊김/예외 시에도 반드시 반영되도록 finally에서 처리.
+                bool canMoveNow = CanMove;
+                if (canMoveNow != _lastCanMove)
+                {
+                    _lastCanMove = canMoveNow;
+                    OnPropertyChanged(nameof(CanMove));
+                    OnPropertyChanged(nameof(CanJog));
+                    (MoveAbsCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                }
             }
         }
     }

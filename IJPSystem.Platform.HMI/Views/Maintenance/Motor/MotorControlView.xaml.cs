@@ -39,6 +39,9 @@ namespace IJPSystem.Platform.HMI.Views
             var targetAxis = ResolveAxis(sender);
             if (targetAxis == null) return;
 
+            // 서보 OFF·알람·미연결·이동명령(Move) 진행 중이면 조그 차단 (버튼은 이미 비활성이지만 안전망)
+            if (!targetAxis.CanJog) return;
+
             // 선택된 축의 조그 단위를 대상 축에 동기화
             if (vm.SelectedAxis != null)
                 targetAxis.JogUnit = vm.SelectedAxis.JogUnit;
