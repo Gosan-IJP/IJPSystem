@@ -349,13 +349,32 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         private async Task OnMoveToPoint()
         {
-            if (_selectedTeachingPoint == null || _selectedAxis == null) return;
-            if (!_selectedTeachingPoint.Positions.TryGetValue(_selectedAxis.Info.Name, out double targetPos)) return;
+            var point = _selectedTeachingPoint;
+            if (point == null) return;
 
-            _mainVM.AddLog($"[MOTION] Teach Move: {_selectedTeachingPoint.PointName} → {_selectedAxis.Info.Name}: {targetPos:F3}mm");
-            _selectedAxis.IsAbsMode = true;
-            _selectedAxis.TargetPosition = targetPos;
-            await _selectedAxis.MoveAsync();
+            // 해당 포인트에서 위치값이 있고 '사용(AxisUsed)' 체크된 모든 축을 동시에 이동
+            var moves = new List<Task>();
+            var moved = new List<string>();
+            foreach (var axis in AxisList)
+            {
+                string name = axis.Info.Name;
+                if (!point.Positions.TryGetValue(name, out double targetPos)) continue;
+                if (point.AxisUsed.TryGetValue(name, out bool used) && !used) continue;
+
+                axis.IsAbsMode = true;
+                axis.TargetPosition = targetPos;
+                moves.Add(axis.MoveAsync());
+                moved.Add($"{name}:{targetPos:F3}");
+            }
+
+            if (moves.Count == 0)
+            {
+                _mainVM.AddLog($"[MOTION] Teach Move: {point.PointName} — 이동할 축 없음", LogLevel.Warning);
+                return;
+            }
+
+            _mainVM.AddLog($"[MOTION] Teach Move: {point.PointName} → {string.Join(", ", moved)}");
+            await Task.WhenAll(moves);
         }
 
         /// <summary>View가 Unloaded될 때 호출 — 이벤트 구독 전체 해제</summary>

@@ -46,7 +46,11 @@
       "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ' *)",
       "Bash(taskkill /F /IM IJPSystem.Platform.HMI.exe)",
       "Bash(git remote *)",
-      "Bash(gh auth *)"
+      "Bash(gh auth *)",
+      "Bash(powershell.exe -NoProfile -Command ' *)",
+      "Bash(powershell.exe -NoProfile -Command \"winget install --id GitHub.cli -e --source winget --accept-source-agreements --accept-package-agreements 2>&1 | Select-Object -Last 20\")",
+      "Bash(git fetch *)",
+      "Bash(git rev-list *)"
     ],
     "additionalDirectories": [
       "d:\\tmp",
