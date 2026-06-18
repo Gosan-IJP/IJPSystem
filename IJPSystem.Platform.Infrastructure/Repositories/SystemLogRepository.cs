@@ -101,7 +101,7 @@ namespace IJPSystem.Platform.Infrastructure.Repositories
             DateTime? from = null, DateTime? to = null,
             string? level = null, string[]? levels = null,
             string? keyword = null,
-            string[]? patterns = null, int limit = 5000)
+            string[]? patterns = null, int limit = 10000)
         {
             try
             {
