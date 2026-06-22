@@ -2,58 +2,26 @@ using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.Domain.Enums;
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.Vision;
-using IJPSystem.Platform.HMI.Services;
-using IJPSystem.Platform.HMI.Views;
-using IJPSystem.Platform.Infrastructure.Repositories;
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Threading;
 
 namespace IJPSystem.Platform.HMI.ViewModels
 {
-    public enum NozzleState { Unknown, Good, Weak, Missing }
-
-    public class NozzleStatusItem : ViewModelBase
-    {
-        public int Index { get; }
-
-        private NozzleState _state = NozzleState.Unknown;
-        public NozzleState State
-        {
-            get => _state;
-            set
-            {
-                if (SetProperty(ref _state, value))
-                    OnPropertyChanged(nameof(Color));
-            }
-        }
-
-        public string Color => State switch
-        {
-            NozzleState.Good    => "#22C55E",
-            NozzleState.Weak    => "#F59E0B",
-            NozzleState.Missing => "#EF4444",
-            _                   => "#334155"
-        };
-
-        public NozzleStatusItem(int index) => Index = index;
-    }
-
+    /// <summary>
+    /// Drop Watcher 화면 — LabVIEW 'Sample DW.vi' 레이아웃(좌측 카메라 이미지 + 중앙 파라미터/버튼)으로 재구성.
+    /// 현재 단계는 UI 레이아웃 + 파라미터 바인딩이며, 실제 측정 알고리즘은 추후 연결한다(버튼은 placeholder).
+    /// </summary>
     public class DropWatcherViewModel : ViewModelBase, IDisposable
     {
         private const string CamId = "CAM_DW";
-        private const int NozzleCount = 128;
 
         private readonly IVisionDriver _vision;
         private readonly MainViewModel _mainVM;
         private readonly DispatcherTimer _pollTimer;
-        private readonly INozzleClassifier _classifier = new RandomNozzleClassifier();
 
-        // ── 카메라 상태 ────────────────────────────────────────────────────────
+        // ── 카메라 상태 / 이미지 ──────────────────────────────────────────────
         private CameraStatus? _camStatus;
         public CameraStatus? CamStatus
         {
@@ -69,7 +37,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ? "-"
             : CamStatus.LastCaptureTime.Value.ToString("HH:mm:ss.fff");
 
-        // ── 현재 이미지 경로 ───────────────────────────────────────────────────
         private string? _currentImagePath;
         public string? CurrentImagePath
         {
@@ -86,62 +53,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public bool HasImage   => !string.IsNullOrEmpty(CurrentImagePath);
         public bool HasNoImage => string.IsNullOrEmpty(CurrentImagePath);
 
-        // ── 노즐 상태 목록 ────────────────────────────────────────────────────
-        public ObservableCollection<NozzleStatusItem> Nozzles { get; } = new();
-
-        // ── 통계 ──────────────────────────────────────────────────────────────
-        private int _goodCount;
-        public int GoodCount
-        {
-            get => _goodCount;
-            private set
-            {
-                SetProperty(ref _goodCount, value);
-                OnPropertyChanged(nameof(HealthRateText));
-                OnPropertyChanged(nameof(HealthRatePct));
-            }
-        }
-
-        private int _weakCount;
-        public int WeakCount
-        {
-            get => _weakCount;
-            private set => SetProperty(ref _weakCount, value);
-        }
-
-        private int _missingCount;
-        public int MissingCount
-        {
-            get => _missingCount;
-            private set => SetProperty(ref _missingCount, value);
-        }
-
-        public string HealthRateText => GoodCount + WeakCount + MissingCount == 0
-            ? "- %"
-            : $"{GoodCount * 100.0 / NozzleCount:F1} %";
-        public double HealthRatePct => GoodCount * 100.0 / NozzleCount;
-
-        // ── 조명 강도 ──────────────────────────────────────────────────────────
-        private int _lightIntensity = 200;
-        public int LightIntensity
-        {
-            get => _lightIntensity;
-            set
-            {
-                if (SetProperty(ref _lightIntensity, value))
-                    _vision.SetLightIntensity(CamId, value);
-            }
-        }
-
-        // ── 스트로브 주파수 ────────────────────────────────────────────────────
-        private int _strobeFreqHz = 3000;
-        public int StrobeFreqHz
-        {
-            get => _strobeFreqHz;
-            set => SetProperty(ref _strobeFreqHz, Math.Clamp(value, 100, 30000));
-        }
-
-        // ── 처리 중 ───────────────────────────────────────────────────────────
         private bool _isBusy;
         public bool IsBusy
         {
@@ -149,28 +60,58 @@ namespace IJPSystem.Platform.HMI.ViewModels
             private set => SetProperty(ref _isBusy, value);
         }
 
+        // ── Drop Watcher Parameter ────────────────────────────────────────────
+        private int _frequencyHz = 1000;
+        public int FrequencyHz { get => _frequencyHz; set => SetProperty(ref _frequencyHz, value); }
+
+        private double _delayTimeUs = 890.0;
+        public double DelayTimeUs { get => _delayTimeUs; set => SetProperty(ref _delayTimeUs, value); }
+
+        private double _durationSec = 1000000;
+        public double DurationSec { get => _durationSec; set => SetProperty(ref _durationSec, value); }
+
+        // 적용된 Delay Time (읽기 전용 표시 — Set Delay Time 시 갱신)
+        private double _appliedDelayUs = 910.0;
+        public double AppliedDelayUs { get => _appliedDelayUs; private set => SetProperty(ref _appliedDelayUs, value); }
+
+        private double _delay1Us = 890.0;
+        public double Delay1Us { get => _delay1Us; private set => SetProperty(ref _delay1Us, value); }
+
+        private double _delay2Us = 920.0;
+        public double Delay2Us { get => _delay2Us; private set => SetProperty(ref _delay2Us, value); }
+
+        // ── Measure Parameter ─────────────────────────────────────────────────
+        private double _measureStartUm = 130.0;
+        public double MeasureStartUm { get => _measureStartUm; set => SetProperty(ref _measureStartUm, value); }
+
+        private double _measureEndUm = 910.0;
+        public double MeasureEndUm { get => _measureEndUm; set => SetProperty(ref _measureEndUm, value); }
+
+        private double _timeIntervalUs = 5.0;
+        public double TimeIntervalUs { get => _timeIntervalUs; set => SetProperty(ref _timeIntervalUs, value); }
+
+        private double _measureAreaXUm = 60.0;
+        public double MeasureAreaXUm { get => _measureAreaXUm; set => SetProperty(ref _measureAreaXUm, value); }
+
         // ── 커맨드 ────────────────────────────────────────────────────────────
-        public ICommand CaptureCommand     { get; }
-        public ICommand InspectAllCommand  { get; }
-        public ICommand ClearResultCommand { get; }
-        public ICommand LightOnCommand     { get; }
-        public ICommand LightOffCommand    { get; }
-        public ICommand OpenTrendCommand   { get; }
+        public ICommand SetDelay1Command           { get; }
+        public ICommand SetDelay2Command           { get; }
+        public ICommand NozzleSelectCommand        { get; }
+        public ICommand AbortCommand               { get; }
+        public ICommand MeasureVelocityCommand     { get; }
+        public ICommand TimeIntervalMeasureCommand { get; }
 
         public DropWatcherViewModel(MainViewModel mainVM)
         {
             _mainVM = mainVM;
             _vision = mainVM.GetController().GetMachine().Vision;
 
-            for (int i = 1; i <= NozzleCount; i++)
-                Nozzles.Add(new NozzleStatusItem(i));
-
-            CaptureCommand     = new RelayCommand(async _ => await ExecuteCaptureAsync(),    _ => !IsBusy);
-            InspectAllCommand  = new RelayCommand(async _ => await ExecuteInspectAllAsync(), _ => !IsBusy);
-            ClearResultCommand = new RelayCommand(_ => ExecuteClearResult(),                 _ => !IsBusy);
-            LightOnCommand     = new RelayCommand(_ => ExecuteLight(true),  _ => !IsBusy);
-            LightOffCommand    = new RelayCommand(_ => ExecuteLight(false), _ => !IsBusy);
-            OpenTrendCommand   = new RelayCommand(_ => ExecuteOpenTrend());
+            SetDelay1Command           = new RelayCommand(_ => ExecuteSetDelay(1));
+            SetDelay2Command           = new RelayCommand(_ => ExecuteSetDelay(2));
+            NozzleSelectCommand        = new RelayCommand(_ => LogPlaceholder("Nozzle Select"));
+            AbortCommand               = new RelayCommand(_ => ExecuteAbort());
+            MeasureVelocityCommand     = new RelayCommand(async _ => await ExecuteMeasureAsync("Measure Velocity"),      _ => !IsBusy);
+            TimeIntervalMeasureCommand = new RelayCommand(async _ => await ExecuteMeasureAsync("Time Interval Measure"), _ => !IsBusy);
 
             _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _pollTimer.Tick += (_, _) => CamStatus = _vision.GetStatus(CamId);
@@ -179,117 +120,57 @@ namespace IJPSystem.Platform.HMI.ViewModels
             CamStatus = _vision.GetStatus(CamId);
         }
 
-        private void ExecuteLight(bool on)
+        // Set Delay Time 버튼 — 현재 Delay Time 값을 Delay 1/2 및 적용값으로 반영
+        private void ExecuteSetDelay(int which)
         {
-            _vision.SetLight(CamId, on);
-            if (on) _vision.SetLightIntensity(CamId, LightIntensity);
-            CamStatus = _vision.GetStatus(CamId);
+            if (which == 1) Delay1Us = DelayTimeUs;
+            else            Delay2Us = DelayTimeUs;
+            AppliedDelayUs = DelayTimeUs;
+            LogPlaceholder($"Set Delay Time {which} ← {DelayTimeUs:F1} us");
         }
 
-        private async Task ExecuteCaptureAsync()
+        private void ExecuteAbort()
+        {
+            IsBusy = false;
+            RaiseMeasureCanExecute();
+            _mainVM.AddLog("[VISION] DropWatcher: Abort", LogLevel.Warning);
+        }
+
+        // Measure Velocity / Time Interval Measure — 현재는 캡쳐만 수행하고 측정 알고리즘은 추후 연결
+        private async Task ExecuteMeasureAsync(string action)
         {
             IsBusy = true;
-            RaiseAllCanExecute();
+            RaiseMeasureCanExecute();
             try
             {
                 var image = await _vision.CaptureAsync(CamId);
                 if (image.IsValid)
-                {
                     CurrentImagePath = image.FilePath;
-                    _mainVM.AddLog($"[VISION] DropWatcher: 캡쳐 완료 ({image.Width}×{image.Height})", LogLevel.Info);
-                }
+                _mainVM.AddLog($"[VISION] DropWatcher: {action} — 캡쳐 완료 (측정 알고리즘 미구현)", LogLevel.Info);
             }
             catch (Exception ex)
             {
-                _mainVM.AddLog($"[VISION] DropWatcher: 캡쳐 실패: {ex.Message}", LogLevel.Error);
-                _mainVM.AlarmVM.RaiseAlarm("IO-DW-CAPTURE");
+                _mainVM.AddLog($"[VISION] DropWatcher: {action} 실패: {ex.Message}", LogLevel.Error);
             }
-            finally { IsBusy = false; RaiseAllCanExecute(); }
-        }
-
-        private async Task ExecuteInspectAllAsync()
-        {
-            IsBusy = true;
-            RaiseAllCanExecute();
-            try
+            finally
             {
-                var result = await _vision.CaptureAndInspectAsync(CamId);
-                CurrentImagePath = result.Image?.FilePath;
-
-                var states = _classifier.Classify(result, NozzleCount);
-                ApplyNozzleStates(states);
-
-                string status = result.IsPass ? "PASS" : $"NG [{result.NgCode}]";
-                _mainVM.AddLog(
-                    $"[VISION] DropWatcher: 검사 완료 — {status}  Score={result.Score:F1}  Good={GoodCount} Weak={WeakCount} Missing={MissingCount}",
-                    result.IsPass ? LogLevel.Success : LogLevel.Warning);
-
-                // SPC 추세 분석용 이력 저장
-                NozzleHealthRepository.Save(
-                    DateTime.Now,
-                    _mainVM.RecipeVM.ActiveRecipeName,
-                    NozzleCount, GoodCount, WeakCount, MissingCount,
-                    result.Score, result.IsPass,
-                    states);
-
-                if (!result.IsPass)
-                    _mainVM.AlarmVM.RaiseAlarm("DW-NOZZLE-NG");
+                IsBusy = false;
+                RaiseMeasureCanExecute();
             }
-            catch (Exception ex)
-            {
-                _mainVM.AddLog($"[VISION] DropWatcher: 검사 실패: {ex.Message}", LogLevel.Error);
-                _mainVM.AlarmVM.RaiseAlarm("IO-DW-INSPECT");
-            }
-            finally { IsBusy = false; RaiseAllCanExecute(); }
         }
 
-        private void ApplyNozzleStates(IDictionary<int, int> states)
-        {
-            foreach (var nozzle in Nozzles)
-            {
-                if (states.TryGetValue(nozzle.Index, out int s))
-                    nozzle.State = (NozzleState)s;
-            }
-            GoodCount    = Nozzles.Count(n => n.State == NozzleState.Good);
-            WeakCount    = Nozzles.Count(n => n.State == NozzleState.Weak);
-            MissingCount = Nozzles.Count(n => n.State == NozzleState.Missing);
-        }
+        private void LogPlaceholder(string action) =>
+            _mainVM.AddLog($"[VISION] DropWatcher: {action} (미구현)", LogLevel.Info);
 
-        private void ExecuteOpenTrend()
-        {
-            var win = new NozzleTrendWindow();
-            var owner = System.Windows.Application.Current?.MainWindow;
-            if (owner != null && owner.IsLoaded && owner.IsVisible)
-                win.Owner = owner;
-            win.Show();
-        }
-
-        private void ExecuteClearResult()
-        {
-            foreach (var nozzle in Nozzles)
-                nozzle.State = NozzleState.Unknown;
-            GoodCount       = 0;
-            WeakCount       = 0;
-            MissingCount    = 0;
-            CurrentImagePath = null;
-            _mainVM.AddLog("[VISION] DropWatcher: 결과 초기화", LogLevel.Info);
-        }
-
-        private void RaiseAllCanExecute()
+        private void RaiseMeasureCanExecute()
         {
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
-                ((RelayCommand)CaptureCommand).RaiseCanExecuteChanged();
-                ((RelayCommand)InspectAllCommand).RaiseCanExecuteChanged();
-                ((RelayCommand)ClearResultCommand).RaiseCanExecuteChanged();
-                ((RelayCommand)LightOnCommand).RaiseCanExecuteChanged();
-                ((RelayCommand)LightOffCommand).RaiseCanExecuteChanged();
+                ((RelayCommand)MeasureVelocityCommand).RaiseCanExecuteChanged();
+                ((RelayCommand)TimeIntervalMeasureCommand).RaiseCanExecuteChanged();
             });
         }
 
-        public void Dispose()
-        {
-            _pollTimer.Stop();
-        }
+        public void Dispose() => _pollTimer.Stop();
     }
 }

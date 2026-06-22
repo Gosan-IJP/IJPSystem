@@ -8,15 +8,52 @@
              Background="#0B0F1A">
 
     <UserControl.Resources>
-        <cvts:ProgressToWidthConverter   x:Key="ProgressToWidthConverter"/>
         <cvts:PathToBitmapImageConverter x:Key="PathToBitmapImageConverter"/>
+
+        <!-- 파라미터 입력 박스 (라벨 + 단위) 공통 스타일 -->
+        <Style x:Key="DwFieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#94A3B8"/>
+            <Setter Property="FontSize"   Value="11"/>
+            <Setter Property="Margin"     Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="DwTextBox" TargetType="TextBox">
+            <Setter Property="Background"               Value="Transparent"/>
+            <Setter Property="Foreground"               Value="White"/>
+            <Setter Property="BorderThickness"          Value="0"/>
+            <Setter Property="FontSize"                 Value="13"/>
+            <Setter Property="FontFamily"               Value="Consolas"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Right"/>
+            <Setter Property="Padding"                  Value="6,0"/>
+            <Setter Property="CaretBrush"               Value="White"/>
+        </Style>
+        <Style x:Key="DwReadonlyBox" TargetType="TextBlock">
+            <Setter Property="Foreground"   Value="#94A3B8"/>
+            <Setter Property="FontSize"     Value="13"/>
+            <Setter Property="FontFamily"   Value="Consolas"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment"  Value="Center"/>
+            <Setter Property="Padding"      Value="6,0"/>
+        </Style>
+        <Style x:Key="DwUnit" TargetType="TextBlock">
+            <Setter Property="Foreground"        Value="#64748B"/>
+            <Setter Property="FontSize"          Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin"            Value="6,0,8,0"/>
+        </Style>
+        <Style x:Key="DwSectionTitle" TargetType="TextBlock">
+            <Setter Property="Foreground"  Value="#3B82F6"/>
+            <Setter Property="FontSize"    Value="12"/>
+            <Setter Property="FontWeight"  Value="Bold"/>
+            <Setter Property="Margin"      Value="0,0,0,12"/>
+        </Style>
     </UserControl.Resources>
 
     <Grid Margin="16">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="3*"/>
-            <ColumnDefinition Width="12"/>
-            <ColumnDefinition Width="2*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="14"/>
+            <ColumnDefinition Width="420"/>
         </Grid.ColumnDefinitions>
 
         <!-- ══ 좌측: 카메라 이미지 패널 ════════════════════════════════════ -->
@@ -25,81 +62,73 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <!-- 헤더 -->
                 <Border Grid.Row="0" Background="#1E293B" CornerRadius="12,12,0,0" Padding="16,10">
-                    <Grid>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="💧" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="DROP WATCHER  —  CAM_DW" Foreground="White"
-                                       FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
-                            <Border Margin="12,0,0,0" CornerRadius="6" Padding="8,3">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="#450A0A"/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="💧" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="DROP WATCHER  —  CAM_DW" Foreground="White"
+                                   FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+                        <Border Margin="12,0,0,0" CornerRadius="6" Padding="8,3">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#450A0A"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CamStatus.IsConnected}" Value="True">
+                                            <Setter Property="Background" Value="#14532D"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock FontSize="11" FontWeight="Bold">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text"       Value="● DISCONNECTED"/>
+                                        <Setter Property="Foreground" Value="#EF4444"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding CamStatus.IsConnected}" Value="True">
-                                                <Setter Property="Background" Value="#14532D"/>
+                                                <Setter Property="Text"       Value="● CONNECTED"/>
+                                                <Setter Property="Foreground" Value="#22C55E"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </Border.Style>
-                                <TextBlock FontSize="11" FontWeight="Bold">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Text"       Value="● DISCONNECTED"/>
-                                            <Setter Property="Foreground" Value="#EF4444"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding CamStatus.IsConnected}" Value="True">
-                                                    <Setter Property="Text"       Value="● CONNECTED"/>
-                                                    <Setter Property="Foreground" Value="#22C55E"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </Border>
-                        </StackPanel>
-                    </Grid>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- 툴바 (돋보기 / 포인터 / 손 / 선) — 표시용 -->
+                <Border Grid.Row="1" Background="#0F172A" Padding="8,5" BorderBrush="#1F2937" BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Width="30" Height="26" Margin="0,0,4,0" Content="🔍" FontSize="13"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B" ToolTip="Zoom"/>
+                        <Button Width="30" Height="26" Margin="0,0,4,0" Content="🖈" FontSize="13"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B" ToolTip="Select"/>
+                        <Button Width="30" Height="26" Margin="0,0,4,0" Content="✋" FontSize="13"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B" ToolTip="Pan"/>
+                        <Button Width="30" Height="26" Content="╱" FontSize="13"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B" ToolTip="Line"/>
+                    </StackPanel>
                 </Border>
 
                 <!-- 이미지 영역 -->
-                <Border Grid.Row="1" Background="#0D1117" Margin="2,0">
+                <Border Grid.Row="2" Background="#0D1117" Margin="2,0">
                     <Grid>
                         <!-- 플레이스홀더 (이미지 없을 때) -->
                         <Grid Visibility="{Binding HasNoImage, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <Line X1="0" Y1="0.5" X2="1" Y2="0.5" Stretch="Fill"
-                                  Stroke="#161D2A" StrokeThickness="1"/>
-                            <Line X1="0.5" Y1="0" X2="0.5" Y2="1" Stretch="Fill"
-                                  Stroke="#161D2A" StrokeThickness="1"/>
-                            <Border Width="260" Height="200"
-                                    BorderBrush="#1E3A5F" BorderThickness="1"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Border.Effect>
-                                    <DropShadowEffect Color="#3B82F6" BlurRadius="8" Opacity="0.3" ShadowDepth="0"/>
-                                </Border.Effect>
-                            </Border>
-                            <Canvas Width="260" Height="200"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Line Canvas.Left="0"   Canvas.Top="0"   X1="0" Y1="0"  X2="0"  Y2="22" Stroke="#3B82F6" StrokeThickness="2"/>
-                                <Line Canvas.Left="0"   Canvas.Top="0"   X1="0" Y1="0"  X2="22" Y2="0"  Stroke="#3B82F6" StrokeThickness="2"/>
-                                <Line Canvas.Left="238" Canvas.Top="0"   X1="0" Y1="0"  X2="22" Y2="0"  Stroke="#3B82F6" StrokeThickness="2"/>
-                                <Line Canvas.Left="260" Canvas.Top="0"   X1="0" Y1="0"  X2="0"  Y2="22" Stroke="#3B82F6" StrokeThickness="2"/>
-                                <Line Canvas.Left="0"   Canvas.Top="178" X1="0" Y1="0"  X2="0"  Y2="22" Stroke="#3B82F6" StrokeThickness="2"/>
-                                <Line Canvas.Left="0"   Canvas.Top="200" X1="0" Y1="0"  X2="22" Y2="0"  Stroke="#3B82F6" StrokeThickness="2"/>
-                                <Line Canvas.Left="238" Canvas.Top="200" X1="0" Y1="0"  X2="22" Y2="0"  Stroke="#3B82F6" StrokeThickness="2"/>
-                                <Line Canvas.Left="260" Canvas.Top="178" X1="0" Y1="0"  X2="0"  Y2="22" Stroke="#3B82F6" StrokeThickness="2"/>
-                            </Canvas>
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <TextBlock Text="💧" FontSize="52" HorizontalAlignment="Center" Opacity="0.15"/>
-                                <TextBlock Text="STROBE CAPTURE MODE" Foreground="#1E3A5F"
+                                <TextBlock Text="DROP WATCHER" Foreground="#1E3A5F"
                                            FontSize="13" FontWeight="Bold" FontFamily="Consolas"
                                            HorizontalAlignment="Center" Margin="0,10,0,0"/>
-                                <TextBlock Text="CAPTURE 또는 INSPECT 버튼을 누르세요" Foreground="#1E293B"
-                                           FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                <TextBlock Text="MEASURE VELOCITY 또는 TIME INTERVAL MEASURE 를 누르세요"
+                                           Foreground="#1E293B" FontSize="11"
+                                           HorizontalAlignment="Center" Margin="0,4,0,0"/>
                             </StackPanel>
                         </Grid>
 
@@ -108,42 +137,39 @@
                                Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
                                Visibility="{Binding HasImage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
-                        <!-- 이미지 경로 오버레이 -->
-                        <Border HorizontalAlignment="Left" VerticalAlignment="Top"
-                                Background="#CC0D1117" CornerRadius="0,0,6,0" Padding="8,4"
-                                Visibility="{Binding HasImage, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock Text="{Binding CurrentImagePath}" Foreground="#64748B"
-                                       FontSize="9" FontFamily="Consolas"
-                                       TextTrimming="CharacterEllipsis" MaxWidth="400"/>
-                        </Border>
-
                         <!-- 처리 중 오버레이 -->
                         <Border HorizontalAlignment="Center" VerticalAlignment="Center"
                                 Background="#CC1C1A00" CornerRadius="10" Padding="24,12"
                                 Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock Text="⏳  처리 중..." Foreground="#FCD34D"
+                            <TextBlock Text="⏳  측정 중..." Foreground="#FCD34D"
                                        FontSize="14" FontWeight="Bold"/>
                         </Border>
                     </Grid>
                 </Border>
 
-                <!-- 하단 정보 바 -->
-                <Border Grid.Row="2" Background="#1E293B" CornerRadius="0,0,12,12" Padding="16,9">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="LAST CAPTURE : " Foreground="#475569"
-                                   FontSize="11" FontFamily="Consolas"/>
-                        <TextBlock Text="{Binding CaptureTimeText}" Foreground="#94A3B8"
-                                   FontSize="11" FontFamily="Consolas" FontWeight="Bold"/>
-                        <TextBlock Text="        TOTAL CAPTURES : " Foreground="#475569"
-                                   FontSize="11" FontFamily="Consolas"/>
-                        <TextBlock Text="{Binding CamStatus.TotalCaptureCount}" Foreground="#94A3B8"
-                                   FontSize="11" FontFamily="Consolas" FontWeight="Bold"/>
-                    </StackPanel>
+                <!-- 하단 상태바 -->
+                <Border Grid.Row="3" Background="#1E293B" CornerRadius="0,0,12,12" Padding="16,9">
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="1624x1240  0.45X  8-bit image" Foreground="#64748B"
+                                       FontSize="11" FontFamily="Consolas"/>
+                            <TextBlock Text="    LAST : " Foreground="#475569"
+                                       FontSize="11" FontFamily="Consolas"/>
+                            <TextBlock Text="{Binding CaptureTimeText}" Foreground="#94A3B8"
+                                       FontSize="11" FontFamily="Consolas" FontWeight="Bold"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <TextBlock Text="Green = Velocity (m/s)" Foreground="#22C55E"
+                                       FontSize="11" FontWeight="Bold"/>
+                            <TextBlock Text="    Blue = Volume (pl)" Foreground="#38BDF8"
+                                       FontSize="11" FontWeight="Bold"/>
+                        </StackPanel>
+                    </Grid>
                 </Border>
             </Grid>
         </Border>
 
-        <!-- ══ 우측: 제어 패널 ═══════════════════════════════════════════ -->
+        <!-- ══ 중앙: 파라미터 / 제어 패널 ═══════════════════════════════════ -->
         <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
             <ScrollViewer.Resources>
                 <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
@@ -151,258 +177,199 @@
 
             <StackPanel>
 
-                <!-- ── 조명 제어 ─────────────────────────────────────────── -->
+                <!-- ── Drop Watcher Parameter ───────────────────────────────── -->
                 <Border Background="#111827" CornerRadius="12" Padding="16" Margin="0,0,0,10"
                         BorderBrush="#334155" BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="LIGHT CONTROL" Foreground="#3B82F6"
-                                   FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0" Height="42" Command="{Binding LightOnCommand}"
-                                    Style="{StaticResource MutedActionButtonStyle}" Background="#166534">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="💡" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="ON" Foreground="White" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Column="2" Height="42" Command="{Binding LightOffCommand}"
-                                    Style="{StaticResource MutedActionButtonStyle}" Background="#374151">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🌑" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="OFF" Foreground="White" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                        </Grid>
-
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                            <Ellipse Width="8" Height="8" Margin="0,0,7,0">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Setter Property="Fill" Value="#374151"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding CamStatus.IsLightOn}" Value="True">
-                                                <Setter Property="Fill" Value="#FCD34D"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                            </Ellipse>
-                            <TextBlock FontSize="11" FontFamily="Consolas">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Text"       Value="LIGHT OFF"/>
-                                        <Setter Property="Foreground" Value="#475569"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding CamStatus.IsLightOn}" Value="True">
-                                                <Setter Property="Text"       Value="LIGHT ON"/>
-                                                <Setter Property="Foreground" Value="#FCD34D"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </StackPanel>
-
+                        <TextBlock Text="DROP WATCHER PARAMETER" Style="{StaticResource DwSectionTitle}"/>
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="36"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="강도" Foreground="#64748B"
-                                       FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <Slider Grid.Column="1" Minimum="0" Maximum="255"
-                                    Value="{Binding LightIntensity, Mode=TwoWay}"
-                                    VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="2" Text="{Binding LightIntensity}"
-                                       Foreground="#FCD34D" FontSize="12" FontWeight="Bold"
-                                       FontFamily="Consolas" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                        </Grid>
-                    </StackPanel>
-                </Border>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="10"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                <!-- ── 스트로브 설정 ──────────────────────────────────────── -->
-                <Border Background="#111827" CornerRadius="12" Padding="16" Margin="0,0,0,10"
-                        BorderBrush="#334155" BorderThickness="1">
-                    <StackPanel>
-                        <TextBlock Text="STROBE SYNC" Foreground="#3B82F6"
-                                   FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="FREQ" Foreground="#64748B"
-                                       FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <Slider Grid.Column="1" Minimum="100" Maximum="30000"
-                                    Value="{Binding StrobeFreqHz, Mode=TwoWay}"
-                                    VerticalAlignment="Center"/>
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="10,0,0,0">
-                                <TextBlock Text="{Binding StrobeFreqHz}"
-                                           Foreground="#A78BFA" FontSize="12" FontWeight="Bold"
-                                           FontFamily="Consolas" VerticalAlignment="Center"/>
-                                <TextBlock Text=" Hz" Foreground="#64748B" FontSize="10"
-                                           VerticalAlignment="Center"/>
+                            <!-- Frequency -->
+                            <StackPanel Grid.Row="0" Grid.Column="0">
+                                <TextBlock Text="Frequency" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0F172A" CornerRadius="6" Height="32" BorderBrush="#334155" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="Hz" Style="{StaticResource DwUnit}"/>
+                                        <TextBox Text="{Binding FrequencyHz, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DwTextBox}"/>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- Delay Time -->
+                            <StackPanel Grid.Row="0" Grid.Column="2">
+                                <TextBlock Text="Delay Time" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0F172A" CornerRadius="6" Height="32" BorderBrush="#334155" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="us" Style="{StaticResource DwUnit}"/>
+                                        <TextBox Text="{Binding DelayTimeUs, StringFormat={}{0:F1}, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DwTextBox}"/>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- Duration -->
+                            <StackPanel Grid.Row="2" Grid.Column="0">
+                                <TextBlock Text="Duration" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0F172A" CornerRadius="6" Height="32" BorderBrush="#334155" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="Sec" Style="{StaticResource DwUnit}"/>
+                                        <TextBox Text="{Binding DurationSec, StringFormat={}{0:F0}, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DwTextBox}"/>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- 적용된 Delay (읽기 전용) -->
+                            <StackPanel Grid.Row="2" Grid.Column="2">
+                                <TextBlock Text="Applied Delay" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0B1220" CornerRadius="6" Height="32" BorderBrush="#1F2937" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="us" Style="{StaticResource DwUnit}"/>
+                                        <TextBlock Text="{Binding AppliedDelayUs, StringFormat={}{0:F1}}" Style="{StaticResource DwReadonlyBox}"/>
+                                    </DockPanel>
+                                </Border>
                             </StackPanel>
                         </Grid>
                     </StackPanel>
                 </Border>
 
-                <!-- ── 수동 제어 버튼 ─────────────────────────────────────── -->
+                <!-- ── Delay Set (Delay 1 / Delay 2) ────────────────────────── -->
                 <Border Background="#111827" CornerRadius="12" Padding="16" Margin="0,0,0,10"
                         BorderBrush="#334155" BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="MANUAL CONTROL" Foreground="#3B82F6"
-                                   FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0" Height="58" Command="{Binding CaptureCommand}"
-                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1D4ED8">
-                                <StackPanel>
-                                    <TextBlock Text="📷" FontSize="18" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{DynamicResource Btn_Capture}" Foreground="White"
-                                               FontSize="11" FontWeight="Bold"
-                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Column="2" Height="58" Command="{Binding InspectAllCommand}"
-                                    Style="{StaticResource MutedActionButtonStyle}" Background="#166534">
-                                <StackPanel>
-                                    <TextBlock Text="🔍" FontSize="18" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{DynamicResource Btn_InspectAll}" Foreground="White"
-                                               FontSize="11" FontWeight="Bold"
-                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                                </StackPanel>
-                            </Button>
-                        </Grid>
+                        <TextBlock Text="DELAY SET" Style="{StaticResource DwSectionTitle}"/>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="12"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0" Height="36" Command="{Binding ClearResultCommand}"
-                                    Style="{StaticResource MutedActionButtonStyle}" Background="#374151">
-                                <TextBlock Text="{DynamicResource Btn_ClearResults}" Foreground="#94A3B8"
-                                           FontSize="11" FontWeight="Bold"/>
-                            </Button>
-                            <Button Grid.Column="2" Height="36" Command="{Binding OpenTrendCommand}"
-                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E3A8A">
-                                <TextBlock Text="{DynamicResource Btn_TrendSpc}" Foreground="White"
-                                           FontSize="11" FontWeight="Bold"/>
-                            </Button>
+
+                            <!-- Delay 1 -->
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Delay 1" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0B1220" CornerRadius="6" Height="32" BorderBrush="#1F2937" BorderThickness="1" Margin="0,0,0,8">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="us" Style="{StaticResource DwUnit}"/>
+                                        <TextBlock Text="{Binding Delay1Us, StringFormat={}{0:F1}}" Style="{StaticResource DwReadonlyBox}"/>
+                                    </DockPanel>
+                                </Border>
+                                <Button Height="40" Command="{Binding SetDelay1Command}"
+                                        Style="{StaticResource MutedActionButtonStyle}" Background="#1E3A8A">
+                                    <TextBlock Text="Set Delay Time" Foreground="White" FontSize="12" FontWeight="Bold"/>
+                                </Button>
+                            </StackPanel>
+
+                            <!-- Delay 2 -->
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Delay 2" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0B1220" CornerRadius="6" Height="32" BorderBrush="#1F2937" BorderThickness="1" Margin="0,0,0,8">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="us" Style="{StaticResource DwUnit}"/>
+                                        <TextBlock Text="{Binding Delay2Us, StringFormat={}{0:F1}}" Style="{StaticResource DwReadonlyBox}"/>
+                                    </DockPanel>
+                                </Border>
+                                <Button Height="40" Command="{Binding SetDelay2Command}"
+                                        Style="{StaticResource MutedActionButtonStyle}" Background="#1E3A8A">
+                                    <TextBlock Text="Set Delay Time" Foreground="White" FontSize="12" FontWeight="Bold"/>
+                                </Button>
+                            </StackPanel>
                         </Grid>
                     </StackPanel>
                 </Border>
 
-                <!-- ── 노즐 맵 ────────────────────────────────────────────── -->
+                <!-- ── Measure Parameter ────────────────────────────────────── -->
                 <Border Background="#111827" CornerRadius="12" Padding="16" Margin="0,0,0,10"
                         BorderBrush="#334155" BorderThickness="1">
                     <StackPanel>
-                        <Grid Margin="0,0,0,10">
-                            <TextBlock Text="NOZZLE MAP" Foreground="#3B82F6"
-                                       FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <Border Background="#14532D" CornerRadius="3" Padding="5,2" Margin="0,0,5,0">
-                                    <TextBlock Text="● GOOD"    Foreground="#22C55E" FontSize="9" FontWeight="Bold"/>
+                        <TextBlock Text="MEASURE PARAMETER" Style="{StaticResource DwSectionTitle}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="10"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- Measure Start Position -->
+                            <StackPanel Grid.Row="0" Grid.Column="0">
+                                <TextBlock Text="Measure Start Position" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0F172A" CornerRadius="6" Height="32" BorderBrush="#334155" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="um" Style="{StaticResource DwUnit}"/>
+                                        <TextBox Text="{Binding MeasureStartUm, StringFormat={}{0:F1}, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DwTextBox}"/>
+                                    </DockPanel>
                                 </Border>
-                                <Border Background="#78350F" CornerRadius="3" Padding="5,2" Margin="0,0,5,0">
-                                    <TextBlock Text="● WEAK"    Foreground="#F59E0B" FontSize="9" FontWeight="Bold"/>
+                            </StackPanel>
+
+                            <!-- Measure END Position -->
+                            <StackPanel Grid.Row="0" Grid.Column="2">
+                                <TextBlock Text="Measure END Position" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0F172A" CornerRadius="6" Height="32" BorderBrush="#334155" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="um" Style="{StaticResource DwUnit}"/>
+                                        <TextBox Text="{Binding MeasureEndUm, StringFormat={}{0:F1}, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DwTextBox}"/>
+                                    </DockPanel>
                                 </Border>
-                                <Border Background="#7F1D1D" CornerRadius="3" Padding="5,2">
-                                    <TextBlock Text="● MISSING" Foreground="#EF4444" FontSize="9" FontWeight="Bold"/>
+                            </StackPanel>
+
+                            <!-- Time interval -->
+                            <StackPanel Grid.Row="2" Grid.Column="0">
+                                <TextBlock Text="Time interval" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0F172A" CornerRadius="6" Height="32" BorderBrush="#334155" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="us" Style="{StaticResource DwUnit}"/>
+                                        <TextBox Text="{Binding TimeIntervalUs, StringFormat={}{0:F1}, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DwTextBox}"/>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- Measure Area X -->
+                            <StackPanel Grid.Row="2" Grid.Column="2">
+                                <TextBlock Text="Measure Area X" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0F172A" CornerRadius="6" Height="32" BorderBrush="#334155" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="um" Style="{StaticResource DwUnit}"/>
+                                        <TextBox Text="{Binding MeasureAreaXUm, StringFormat={}{0:F1}, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DwTextBox}"/>
+                                    </DockPanel>
                                 </Border>
                             </StackPanel>
                         </Grid>
-
-                        <ItemsControl ItemsSource="{Binding Nozzles}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Width="14" Height="14" CornerRadius="2" Margin="1"
-                                            Background="{Binding Color}"
-                                            ToolTip="{Binding Index}"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
                     </StackPanel>
                 </Border>
 
-                <!-- ── 통계 ──────────────────────────────────────────────── -->
+                <!-- ── 동작 버튼 ────────────────────────────────────────────── -->
                 <Border Background="#111827" CornerRadius="12" Padding="16"
                         BorderBrush="#334155" BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="NOZZLE HEALTH" Foreground="#3B82F6"
-                                   FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
-
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="6"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="6"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Background="#0F172A" CornerRadius="8" Padding="8,10">
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="GOOD" Foreground="#22C55E"
-                                               FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{Binding GoodCount}" Foreground="White"
-                                               FontSize="22" FontWeight="Bold" FontFamily="Consolas"
-                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                                </StackPanel>
-                            </Border>
-                            <Border Grid.Column="2" Background="#0F172A" CornerRadius="8" Padding="8,10">
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="WEAK" Foreground="#F59E0B"
-                                               FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{Binding WeakCount}" Foreground="White"
-                                               FontSize="22" FontWeight="Bold" FontFamily="Consolas"
-                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                                </StackPanel>
-                            </Border>
-                            <Border Grid.Column="4" Background="#0F172A" CornerRadius="8" Padding="8,10">
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="MISSING" Foreground="#EF4444"
-                                               FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{Binding MissingCount}" Foreground="White"
-                                               FontSize="22" FontWeight="Bold" FontFamily="Consolas"
-                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                                </StackPanel>
-                            </Border>
-                        </Grid>
-
-                        <Grid Margin="0,0,0,6">
-                            <TextBlock Text="건강도" Foreground="#64748B" FontSize="11"/>
-                            <TextBlock Text="{Binding HealthRateText}" Foreground="#22C55E"
-                                       FontSize="13" FontWeight="Bold" FontFamily="Consolas"
-                                       HorizontalAlignment="Right"/>
-                        </Grid>
-                        <Border Height="8" CornerRadius="4" Background="#1E293B" x:Name="HealthRateTrack">
-                            <Border HorizontalAlignment="Left" CornerRadius="4" Height="8"
-                                    MinWidth="0" Background="#22C55E">
-                                <Border.Width>
-                                    <MultiBinding Converter="{StaticResource ProgressToWidthConverter}">
-                                        <Binding Path="HealthRatePct"/>
-                                        <Binding Path="ActualWidth" ElementName="HealthRateTrack"/>
-                                    </MultiBinding>
-                                </Border.Width>
-                            </Border>
-                        </Border>
+                        <Button Height="46" Margin="0,0,0,8" Command="{Binding NozzleSelectCommand}"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B">
+                            <TextBlock Text="Nozzle Select" Foreground="White" FontSize="13" FontWeight="Bold"/>
+                        </Button>
+                        <Button Height="46" Margin="0,0,0,8" Command="{Binding AbortCommand}"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#3B4A63">
+                            <TextBlock Text="Abort" Foreground="White" FontSize="13" FontWeight="Bold"/>
+                        </Button>
+                        <Button Height="46" Margin="0,0,0,8" Command="{Binding MeasureVelocityCommand}"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#1D4ED8">
+                            <TextBlock Text="Measure Velocity" Foreground="White" FontSize="13" FontWeight="Bold"/>
+                        </Button>
+                        <Button Height="46" Command="{Binding TimeIntervalMeasureCommand}"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#166534">
+                            <TextBlock Text="Time Interval Measure" Foreground="White" FontSize="13" FontWeight="Bold"/>
+                        </Button>
                     </StackPanel>
                 </Border>
 

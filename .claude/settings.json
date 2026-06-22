@@ -50,7 +50,9 @@
       "Bash(powershell.exe -NoProfile -Command ' *)",
       "Bash(powershell.exe -NoProfile -Command \"winget install --id GitHub.cli -e --source winget --accept-source-agreements --accept-package-agreements 2>&1 | Select-Object -Last 20\")",
       "Bash(git fetch *)",
-      "Bash(git rev-list *)"
+      "Bash(git rev-list *)",
+      "Bash(powershell.exe -NoProfile -Command \"Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue | Select-Object Id,ProcessName | Format-Table -Auto; if \\(-not \\(Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue\\)\\) { '실행 중 아님' }\")",
+      "Bash(powershell.exe -NoProfile -Command 'try { [xml]\\(Get-Content '\\\\''d:\\\\IJP\\\\IJPSystem\\\\IJPSystem.Platform.HMI\\\\Views\\\\Maintenance\\\\Vision\\\\DropWatcherView.xaml'\\\\'' -Raw\\) | Out-Null; '\\\\''DropWatcherView.xaml: XML 정상\\(태그 균형 OK\\)'\\\\'' } catch { '\\\\''DropWatcherView.xaml XML 오류: '\\\\'' + $_.Exception.Message }')"
     ],
     "additionalDirectories": [
       "d:\\tmp",
