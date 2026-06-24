@@ -30,35 +30,19 @@ namespace IJPSystem.Platform.Application.Sequences
             },
             new SequenceDefinition
             {
-                Id             = "BLOTTING",
-                Icon           = "🩹",
-                NameKey        = "Seq_Blotting_Name",
-                DescriptionKey = "Seq_Blotting_Desc",
-                BuildSteps     = BlottingSequence.Build,
-            },
-            new SequenceDefinition
-            {
-                Id             = "MAINTENANCE",
-                Icon           = "🔧",
-                NameKey        = "Seq_Maintenance_Name",
-                DescriptionKey = "Seq_Maintenance_Desc",
-                BuildSteps     = MaintenanceSequence.Build,
-            },
-            new SequenceDefinition
-            {
-                Id             = "NJI",
-                Icon           = "🔍",
-                NameKey        = "Seq_NJI_Name",
-                DescriptionKey = "Seq_NJI_Desc",
-                BuildSteps     = NJISequence.Build,
-            },
-            new SequenceDefinition
-            {
                 Id             = "AUTO_PRINT",
                 Icon           = "🖨",
                 NameKey        = "Seq_AutoPrint_Name",
                 DescriptionKey = "Seq_AutoPrint_Desc",
                 BuildSteps     = AutoPrintSequence.Build,
+            },
+            new SequenceDefinition
+            {
+                Id             = "DROP_WATCHER",
+                Icon           = "🔬",
+                NameKey        = "Seq_DropWatcher_Name",
+                DescriptionKey = "Seq_DropWatcher_Desc",
+                BuildSteps     = DropWatcherSequence.Build,
             },
             new SequenceDefinition
             {

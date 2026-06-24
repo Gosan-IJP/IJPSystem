@@ -1,40 +1,37 @@
-namespace IJPSystem.Machines.Inkjet5G
+namespace IJPSystem.Machines.Pulse
 {
-    // Chuck 진공 (VC/NC) + Glass 감지
-    public partial class InkjetMachine
+    // Chuck / DMD 진공 제어 + Glass(척 안착) 감지
+    // IO 인덱스는 Config/IO.json(COMIZOA ETS-D08MN 실배선) 기준.
+    public partial class PulseMachine
     {
         private static partial class DI
         {
-            public const string GLASS_STOP   = "DI_VC_SENSOR_GLASS_STOP";
-            public const string GLASS_DETECT = "DI_NC_SENSOR_GLASS_DETECT";
+            // 진공 압력 스위치(Regulator Pressure Switch) — 진공이 형성되면 ON
+            public const string PRESS_SW_CHUCK_VAC = "DI_PRESS_SW_CHUCK_VAC"; // X000
+            public const string PRESS_SW_DMD_VAC   = "DI_PRESS_SW_DMD_VAC";   // X001
         }
         private static partial class DO
         {
-            // V/C Vacuum
-            public const string VC_CHUCK_VAC_SUPPLY = "DO_VC_CHUCK_VAC_SUPPLY";
-            public const string VC_CHUCK_VAC_BREAK  = "DO_VC_CHUCK_VAC_BREAK";
-            // N/C Vacuum
-            public const string NC_CHUCK_VACUUM     = "DO_NC_CHUCK_VACUUM_ON";
+            public const string CHUCK_VAC_VALVE = "DO_CHUCK_VAC_VALVE"; // Y000 Chuck Table Vacuum Sol' Valve
+            public const string DMD_VAC_VALVE   = "DO_DMD_VAC_VALVE";   // Y001 DMD Vacuum Sol' Valve
         }
 
-        // ── Vacuum 제어 ──
+        // ── Chuck 진공 제어 ──
         public void VacuumOn()
         {
-            IO?.SetOutput(DO.VC_CHUCK_VAC_BREAK,  false); // BREAK 먼저 끄고
-            IO?.SetOutput(DO.VC_CHUCK_VAC_SUPPLY, true);
-            IO?.SetOutput(DO.NC_CHUCK_VACUUM,     true);
+            IO?.SetOutput(DO.CHUCK_VAC_VALVE, true);
+            IO?.SetOutput(DO.DMD_VAC_VALVE,   true);
         }
 
         public void VacuumOff()
         {
-            IO?.SetOutput(DO.VC_CHUCK_VAC_SUPPLY, false);
-            IO?.SetOutput(DO.VC_CHUCK_VAC_BREAK,  true);  // 진공 파괴
-            IO?.SetOutput(DO.NC_CHUCK_VACUUM,     false);
+            IO?.SetOutput(DO.CHUCK_VAC_VALVE, false);
+            IO?.SetOutput(DO.DMD_VAC_VALVE,   false);
         }
 
-        // ── Glass 감지 ──
+        // ── Glass(척 안착) 감지 ──
+        // 전용 글라스 센서가 없는 구성이므로, 척 진공 압력 스위치로 글라스 안착(진공 형성)을 판단한다.
         public bool IsGlassDetected()
-            => (IO?.GetInput(DI.GLASS_STOP)   ?? false) ||
-               (IO?.GetInput(DI.GLASS_DETECT) ?? false);
+            => IO?.GetInput(DI.PRESS_SW_CHUCK_VAC) ?? false;
     }
 }

@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:IJPSystem.Platform.HMI"
         xmlns:viewmodels="clr-namespace:IJPSystem.Platform.HMI.ViewModels"
         xmlns:views="clr-namespace:IJPSystem.Platform.HMI.Views"
-        mc:Ignorable="d" WindowState="Maximized" Title="IJP System v1.0" Background="#0F172A"
+        mc:Ignorable="d" WindowState="Maximized" Title="Pulse" Background="#0F172A"
         Closing="MainWindow_Closing">
     <Window.Resources>
         <DataTemplate DataType="{x:Type viewmodels:MainDashboardViewModel}">
@@ -190,8 +190,10 @@
                         Style="{StaticResource MaintenanceSubButtonStyle}"
                         Command="{Binding MoveWindowCommand}" CommandParameter="VISION"/>
                 <StackPanel Visibility="{Binding IsVisionSubMenuVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <!-- NJI 버튼: 기능은 유지하되 화면에서 숨김 (삭제하지 않음) -->
                     <Button Content="{DynamicResource SubMenu_NJI}"
                             Style="{StaticResource SubNavButtonStyle}"
+                            Visibility="Collapsed"
                             Command="{Binding MoveWindowCommand}" CommandParameter="NJI"/>
                     <Button Content="{DynamicResource SubMenu_GLASS_VIEW}"
                             Style="{StaticResource SubNavButtonStyle}"

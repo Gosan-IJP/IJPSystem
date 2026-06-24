@@ -19,10 +19,11 @@ namespace IJPSystem.Platform.Application.Sequences
         public const string PrintHeadUp    = "PRINT HEAD UP";
         public const string PrintHeadDown  = "PRINT HEAD DOWN";
 
+        // Pulse 장비에서는 Blotting / NJI / Maintenance(MT) 를 티칭 포인트에서 제외(상수는 시퀀스 호환을 위해 유지).
         public static IReadOnlyList<string> All { get; } = new[]
         {
-            Ready, Load, Unload, Purge, Blotting,
-            PrintStart, PrintEnd, Maintenance, NJI, DropWatcher,
+            Ready, Load, Unload, Purge,
+            PrintStart, PrintEnd, DropWatcher,
             PrintHeadUp, PrintHeadDown,
         };
     }

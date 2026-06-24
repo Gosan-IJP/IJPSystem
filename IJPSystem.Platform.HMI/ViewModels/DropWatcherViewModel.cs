@@ -1,8 +1,10 @@
+using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.Domain.Enums;
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.Vision;
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -20,6 +22,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly IVisionDriver _vision;
         private readonly MainViewModel _mainVM;
         private readonly DispatcherTimer _pollTimer;
+
+        // 드랍와처 검사용 Raw 샘플 이미지 — 이 파일이 있으면 캡쳐 대신 사용한다.
+        // 실제 카메라 연동 전, 실측 Raw 이미지로 화면/검사 로직을 확인하기 위함.
+        // 파일 위치: Config/Samples/DropWatcher_Raw.png  (Config/Samples/README.md 참고)
+        private static readonly string SampleImagePath =
+            PathUtils.GetConfigPath(Path.Combine("Samples", "DropWatcher_Raw.png"));
 
         // ── 카메라 상태 / 이미지 ──────────────────────────────────────────────
         private CameraStatus? _camStatus;
@@ -118,6 +126,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _pollTimer.Start();
 
             CamStatus = _vision.GetStatus(CamId);
+
+            // 샘플 Raw 이미지가 있으면 화면 진입 시 바로 표시
+            if (File.Exists(SampleImagePath))
+                CurrentImagePath = SampleImagePath;
         }
 
         // Set Delay Time 버튼 — 현재 Delay Time 값을 Delay 1/2 및 적용값으로 반영
@@ -143,10 +155,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
             RaiseMeasureCanExecute();
             try
             {
-                var image = await _vision.CaptureAsync(CamId);
-                if (image.IsValid)
-                    CurrentImagePath = image.FilePath;
-                _mainVM.AddLog($"[VISION] DropWatcher: {action} — 캡쳐 완료 (측정 알고리즘 미구현)", LogLevel.Info);
+                // 샘플 Raw 이미지가 있으면 그것을 검사 대상으로 사용, 없으면 가상 캡쳐
+                if (File.Exists(SampleImagePath))
+                {
+                    CurrentImagePath = SampleImagePath;
+                    _mainVM.AddLog($"[VISION] DropWatcher: {action} — Raw 샘플 이미지 사용 (측정 알고리즘 미구현)", LogLevel.Info);
+                }
+                else
+                {
+                    var image = await _vision.CaptureAsync(CamId);
+                    if (image.IsValid)
+                        CurrentImagePath = image.FilePath;
+                    _mainVM.AddLog($"[VISION] DropWatcher: {action} — 캡쳐 완료 (측정 알고리즘 미구현)", LogLevel.Info);
+                }
             }
             catch (Exception ex)
             {

@@ -1,7 +1,7 @@
-namespace IJPSystem.Machines.Inkjet5G
+namespace IJPSystem.Machines.Pulse
 {
     // 약액/유체 계통 (Bottle / Reservoir / Drain / Overflow / Head pack valves)
-    public partial class InkjetMachine
+    public partial class PulseMachine
     {
         private static partial class DI
         {

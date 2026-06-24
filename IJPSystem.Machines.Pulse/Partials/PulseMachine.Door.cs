@@ -1,37 +1,24 @@
-namespace IJPSystem.Machines.Inkjet5G
+namespace IJPSystem.Machines.Pulse
 {
-    // 도어 개폐 / 잠금
-    public partial class InkjetMachine
+    // 도어 감지 — IO.json(COMIZOA ETS-D08MN): DI_DOOR(Door Sensor)만 존재.
+    // ※ 도어 개폐 액추에이터 출력은 IO.json에 없으므로 OpenDoor/CloseDoor는 구동 대상이 없다(인터페이스 계약 유지용).
+    public partial class PulseMachine
     {
         private static partial class DI
         {
-            public const string DOOR_LOCK_ALL         = "DI_DOOR_LOCK_ALL";
-            public const string DOOR_LOCK_FRONT_LEFT  = "DI_DOOR_LOCK_FRONT_LEFT";
-            public const string DOOR_LOCK_FRONT_RIGHT = "DI_DOOR_LOCK_FRONT_RIGHT";
-        }
-        private static partial class DO
-        {
-            public const string DOOR_OPEN      = "DO_DOOR_OPEN_SIGNAL";
-            public const string DOOR_INTERLOCK = "DO_MANUAL_OPEN_INTERLOCK";
+            public const string DOOR = "DI_DOOR"; // X200 Door Sensor (N.C)
         }
 
-        public void OpenDoor()
-        {
-            IO?.SetOutput(DO.DOOR_OPEN,      true);
-            IO?.SetOutput(DO.DOOR_INTERLOCK, false);
-        }
+        // IO.json에 도어 개폐 출력이 없어 실제 제어 대상 없음
+        public void OpenDoor()  { /* no door actuator on this hardware */ }
+        public void CloseDoor() { /* no door actuator on this hardware */ }
 
-        public void CloseDoor()
-        {
-            IO?.SetOutput(DO.DOOR_OPEN,      false);
-            IO?.SetOutput(DO.DOOR_INTERLOCK, true);
-        }
-
+        // 도어 닫힘/잠금 상태 — 도어 센서로 판단
         public bool IsDoorLocked()
-            => IO?.GetInput(DI.DOOR_LOCK_ALL) ?? false;
+            => IO?.GetInput(DI.DOOR) ?? false;
 
         // ── 시뮬레이션 전용 ──
         public void SimulateDoorLockAfter(int delayMs)
-            => IO?.ScheduleInput(DI.DOOR_LOCK_ALL, true, delayMs);
+            => IO?.ScheduleInput(DI.DOOR, true, delayMs);
     }
 }

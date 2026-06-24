@@ -7,58 +7,21 @@
     },
     {
       "AxisNo": "Y",
-      "Name": "GY1 AXIS",
+      "Name": "Y AXIS",
       "Unit": "mm"
     },
-    {
-      "AxisNo": "GY2",
-      "Name": "GY2 AXIS",
-      "Unit": "mm"
-    },
+   
     {
       "AxisNo": "Z",
       "Name": "Z AXIS",
       "Unit": "mm"
     },
-    {
-      "AxisNo": "T",
-      "Name": "T AXIS",
-      "Unit": "deg"
-    },
-    {
-      "AxisNo": "SZ1",
-      "Name": "Slot Die Z1 AXIS",
-      "Unit": "mm"
-    },
-    {
-      "AxisNo": "SZ2",
-      "Name": "Slot Die Z2 AXIS",
-      "Unit": "mm"
-    },
-    {
-      "AxisNo": "MX",
-      "Name": "MT X AXIS",
-      "Unit": "mm"
-    },
-    {
-      "AxisNo": "MY",
-      "Name": "MT Y AXIS",
-      "Unit": "mm"
-    },
-    {
-      "AxisNo": "B",
-      "Name": "Bottle AXIS",
-      "Unit": "deg"
-    },
-    {
-      "AxisNo": "VC",
-      "Name": "VC AXIS",
-      "Unit": "mm"
-    },
-    {
-      "AxisNo": "NC",
-      "Name": "NC AXIS",
+
+  {
+      "AxisNo": "DW",
+      "Name": "DW AXIS",
       "Unit": "mm"
     }
+
   ]
 }

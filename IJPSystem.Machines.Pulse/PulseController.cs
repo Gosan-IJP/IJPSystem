@@ -1,15 +1,15 @@
 using IJPSystem.Platform.Domain.Enums;
 using IJPSystem.Platform.Domain.Interfaces;
 
-namespace IJPSystem.Machines.Inkjet5G
+namespace IJPSystem.Machines.Pulse
 {
-    public class InkjetController
+    public class PulseController
     {
         private readonly IMachine _machine;
 
         public MachineState CurrentState { get; private set; } = MachineState.Idle;
 
-        public InkjetController(IMachine machine)
+        public PulseController(IMachine machine)
         {
             _machine = machine;
         }

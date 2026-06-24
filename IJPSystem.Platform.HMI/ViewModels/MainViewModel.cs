@@ -1,5 +1,5 @@
 ﻿using IJPSystem.Drivers.Motion;
-using IJPSystem.Machines.Inkjet5G;
+using IJPSystem.Machines.Pulse;
 using IJPSystem.Platform.Domain;
 using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.Domain.Enums;
@@ -25,7 +25,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 {
     public class MainViewModel : ViewModelBase
     {
-        private readonly InkjetController _controller;
+        private readonly PulseController _controller;
 
         private DispatcherTimer _fastTimer;
         private DispatcherTimer _slowTimer;
@@ -261,7 +261,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand ToggleLanguageCommand { get; }
         public ICommand OpenLogWindowCommand { get; }
 
-        public MainViewModel(InkjetController controller)
+        public MainViewModel(PulseController controller)
         {
             _controller = controller;
             var machine = _controller.GetMachine();
@@ -647,10 +647,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         IsMotorSubMenuVisible  = false;
                         IsVisionSubMenuVisible = true;
                         SelectedMenu    = "MAINTENANCE";
-                        SelectedSubMenu = "NJI";
-                        _njiVM ??= new NJIViewModel(this);
-                        CurrentView = _njiVM;
-                        AddLog(T("Log_MoveNJI"), LogLevel.Info);
+                        // NJI 버튼은 숨김 상태이므로 비전 메뉴 기본 화면은 Glass View
+                        SelectedSubMenu = "GLASS_VIEW";
+                        CurrentView = new GlassViewModel(this);
+                        AddLog(T("Log_MoveGlassView"), LogLevel.Info);
                     }
                     break;
 
@@ -860,7 +860,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
-        public InkjetController GetController() => _controller;
+        public PulseController GetController() => _controller;
 
         private void OnLogOut()
         {

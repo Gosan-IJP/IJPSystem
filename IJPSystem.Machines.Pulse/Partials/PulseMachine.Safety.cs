@@ -1,40 +1,26 @@
-namespace IJPSystem.Machines.Inkjet5G
+namespace IJPSystem.Machines.Pulse
 {
-    // 안전 센서 계통 (EMO, Pressure Switch)
-    public partial class InkjetMachine
+    // 안전 센서 계통 (EMO, Pressure Switch) — IO.json(COMIZOA ETS-D08MN) 실배선 기준
+    public partial class PulseMachine
     {
         private static partial class DI
         {
-            // ── EMO ──
-            public const string EMO_FRONT = "DI_EMO_FRONT";
-            public const string EMO_LEFT  = "DI_EMO_LEFT";
-            public const string EMO_RIGHT = "DI_EMO_RIGHT";
-            public const string EMO_BACK  = "DI_EMO_BACK";
+            public const string EMO = "DI_EMO"; // X004 EMO (N.C)
 
-            // ── Pressure Switch (1-based index) ──
+            // 압력 스위치 (1-based index) — IO.json 실배선 4개
             public static readonly string[] PRESSURE_SW =
             {
-                "",                                           // [0] 미사용
-                "DI_PRESSURE_SW1_N2_IMS_AIR_KNIFE",           // [1]
-                "DI_PRESSURE_SW2_CDA_IMS_N_EJEC",             // [2]
-                "DI_PRESSURE_SW3_CDA_HM_SOL_P_MT_P",          // [3]
-                "DI_PRESSURE_SW4_VACUUM_CV_P",                // [4]
-                "DI_PRESSURE_SW5_NORMAL_CV_P_AIR_SPRING",     // [5]
-                "DI_PRESSURE_SW6_VACUUM_CV_POROUS_EJEC",      // [6]
-                "DI_PRESSURE_SW7_EJEC_ELEC_BOX",              // [7]
-                "DI_PRESSURE_VC_POROUS_VACUUM_EJECT_8",       // [8]
-                "DI_PRESSURE_SW9_IMS_P_N2",                   // [9]
-                "DI_PRESSURE_SW9_IMS_N_VAC",                  // [10]
-                "DI_PRESSURE_SW11_EJEC_VAC_ELEC_BOX",         // [11]
+                "",                          // [0] 미사용
+                "DI_PRESS_SW_CHUCK_VAC",     // [1] X000 Vacuum, Chuck
+                "DI_PRESS_SW_DMD_VAC",       // [2] X001 Vacuum, DMD
+                "DI_PRESS_SW_3WAY",          // [3] X002 Positive, 3Way Valve
+                "DI_PRESS_SW_HEAD_MODULE",   // [4] X003 Positive, Head Module Valve
             };
         }
 
         // ── EMO (비상정지) ──
         public bool IsEmoActive()
-            => (IO?.GetInput(DI.EMO_FRONT) ?? false) ||
-               (IO?.GetInput(DI.EMO_LEFT)  ?? false) ||
-               (IO?.GetInput(DI.EMO_RIGHT) ?? false) ||
-               (IO?.GetInput(DI.EMO_BACK)  ?? false);
+            => IO?.GetInput(DI.EMO) ?? false;
 
         // ── Pressure Switch ──
         public bool IsPressureOk(int swNo)

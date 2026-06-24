@@ -755,7 +755,9 @@
                                     <TextBlock Text="{DynamicResource Btn_AutoPurge}" FontSize="14" FontWeight="Black" Foreground="White" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
+                            <!-- AUTO BLOTTING: Pulse 장비에서 제외 — 기능/커맨드는 유지하되 화면에서 숨김 -->
                             <Button Height="58" Margin="0,0,0,6"
+                                    Visibility="Collapsed"
                                     Style="{StaticResource MutedActionButtonStyle}" Background="#0E7490"
                                     Command="{Binding AutoBlottingCommand}"
                                     ToolTip="자동 블로팅 시퀀스 시작">

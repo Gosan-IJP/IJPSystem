@@ -20,6 +20,6 @@
     <Project Path="IJPSystem.Drivers.Vision/IJPSystem.Drivers.Vision.csproj" />
   </Folder>
   <Folder Name="/3.Machines/">
-    <Project Path="IJPSystem.Machines.Inkjet5G/IJPSystem.Machines.Inkjet5G.csproj" />
+    <Project Path="IJPSystem.Machines.Pulse/IJPSystem.Machines.Pulse.csproj" />
   </Folder>
 </Solution>

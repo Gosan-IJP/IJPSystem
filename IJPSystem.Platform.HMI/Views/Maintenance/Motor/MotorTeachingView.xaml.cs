@@ -56,9 +56,8 @@ namespace IJPSystem.Platform.HMI.Views
         private void ExecuteJog(object sender, bool isForward)
         {
             if (DataContext is not MotorTeachingViewModel vm) return;
-            var btn = sender as Button;
-            var axis = vm.AxisList.FirstOrDefault(a => a.Info.AxisNo == btn?.Tag?.ToString()) ?? vm.SelectedAxis;
-            if (axis == null) return;
+            var axis = ResolveAxis(sender);
+            if (axis == null) return;   // 구성에 없는 축(예: 3축 구성의 T) 버튼은 무동작
 
             if (vm.SelectedAxis != null)
                 axis.JogUnit = vm.SelectedAxis.JogUnit;
@@ -68,10 +67,21 @@ namespace IJPSystem.Platform.HMI.Views
 
         private void Jog_MouseUp(object sender, MouseButtonEventArgs e)
         {
-            if (DataContext is not MotorTeachingViewModel vm) return;
-            var btn = sender as Button;
-            var axis = vm.AxisList.FirstOrDefault(a => a.Info.AxisNo == btn?.Tag?.ToString()) ?? vm.SelectedAxis;
+            var axis = ResolveAxis(sender);
             if (axis != null) _ = axis.StopAsync();
+        }
+
+        // 조그 대상 축 해석:
+        //   Tag 없음      → SelectedAxis (SELECT AXIS 패널 조그)
+        //   Tag=X/Y/Z/T   → AxisNo 일치 축. 일치하는 축이 없으면 null 반환
+        //                   → 구성에 없는 축(예: 3축 구성의 T) 버튼은 아무 동작도 하지 않음.
+        //                     (이전엔 SelectedAxis 로 폴백되어 T 버튼이 선택 축을 움직이는 버그가 있었음)
+        private AxisViewModel? ResolveAxis(object sender)
+        {
+            if (DataContext is not MotorTeachingViewModel vm) return null;
+            string? tag = (sender as Button)?.Tag?.ToString();
+            if (string.IsNullOrEmpty(tag)) return vm.SelectedAxis;
+            return vm.AxisList.FirstOrDefault(a => a.Info.AxisNo == tag);
         }
 
         // ── View 수명주기 ────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-using IJPSystem.Machines.Inkjet5G;
+using IJPSystem.Machines.Pulse;
 using IJPSystem.Platform.Application.Sequences;
 using IJPSystem.Platform.Common.Enums;
 using IJPSystem.Platform.Domain.Common;
@@ -23,14 +23,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
     public class PnidViewModel : ViewModelBase, IDisposable
     {
         private readonly MainViewModel _mainVM;
-        private readonly InkjetMachine? _machine;
+        private readonly PulseMachine? _machine;
         private DispatcherTimer? _refreshTimer;
         private int _suppressWrite;  // refresh 중에는 SetOutput 재호출 억제
 
         public PnidViewModel(MainViewModel mainVM)
         {
             _mainVM = mainVM;
-            _machine = mainVM.GetController()?.GetMachine() as InkjetMachine;
+            _machine = mainVM.GetController()?.GetMachine() as PulseMachine;
 
             OpenAllHeadValvesCommand      = new RelayCommand(_ => SetAllHeadValves(true));
             CloseAllHeadValvesCommand     = new RelayCommand(_ => SetAllHeadValves(false));

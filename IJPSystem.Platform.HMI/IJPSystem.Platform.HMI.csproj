@@ -24,7 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\IJPSystem.Drivers.IO\IJPSystem.Drivers.IO.csproj" />
     <ProjectReference Include="..\IJPSystem.Drivers.Vision\IJPSystem.Drivers.Vision.csproj" />
-    <ProjectReference Include="..\IJPSystem.Machines.Inkjet5G\IJPSystem.Machines.Inkjet5G.csproj" />
+    <ProjectReference Include="..\IJPSystem.Machines.Pulse\IJPSystem.Machines.Pulse.csproj" />
     <ProjectReference Include="..\IJPSystem.Platform.Application\IJPSystem.Platform.Application.csproj" />
     <ProjectReference Include="..\IJPSystem.Platform.Infrastructure\IJPSystem.Platform.Infrastructure.csproj" />
   </ItemGroup>

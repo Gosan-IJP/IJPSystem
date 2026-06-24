@@ -234,7 +234,7 @@
     <!-- Sequence step display names (matching SequenceStepDef.Name keys) -->
     <system:String x:Key="Step_AutoPrint_WaitGlass">Wait for glass detection (V/C chuck entry)</system:String>
     <system:String x:Key="Step_AutoPrint_VacuumOn">V/C chuck Vacuum ON (clamp glass)</system:String>
-    <system:String x:Key="Step_AutoPrint_VacuumConfirm">Confirm vacuum sensor (Pressure SW4 ON)</system:String>
+    <system:String x:Key="Step_AutoPrint_VacuumConfirm">Confirm chuck vacuum (chuck vacuum pressure ON)</system:String>
     <system:String x:Key="Step_AutoPrint_VacuumStabilize">Vacuum stabilization wait (1s)</system:String>
     <system:String x:Key="Step_AutoPrint_MoveStart">Move to PRINT START position</system:String>
     <system:String x:Key="Step_AutoPrint_MoveStartDone">Confirm InPosition at PRINT START</system:String>
@@ -248,7 +248,6 @@
     <system:String x:Key="Step_Init_Homing">Home — all axes</system:String>
     <system:String x:Key="Step_Init_MoveReady">Move to READY position</system:String>
     <system:String x:Key="Step_Init_MoveReadyDone">Confirm InPosition (all axes)</system:String>
-    <system:String x:Key="Step_Init_WaitGlass">Wait for glass detection sensor</system:String>
     <system:String x:Key="Step_Init_MoveLoad">Move to LOAD position</system:String>
     <system:String x:Key="Step_Init_MoveLoadDone">Confirm InPosition at LOAD</system:String>
 
@@ -280,6 +279,8 @@
     <system:String x:Key="Step_NJI_LightOff">Light OFF</system:String>
     <system:String x:Key="Step_NJI_MoveReady">Move to READY position</system:String>
     <system:String x:Key="Step_NJI_MoveReadyDone">Confirm InPosition at READY</system:String>
+    <system:String x:Key="Step_DropWatcher_Move">Move to DROP WATCHER position</system:String>
+    <system:String x:Key="Step_DropWatcher_MoveDone">Confirm InPosition at DROP WATCHER</system:String>
 
     <!-- Sequence display names / descriptions (matching SequenceRegistry keys) -->
     <system:String x:Key="Seq_Init_Name">INITIALIZE</system:String>
@@ -292,6 +293,8 @@
     <system:String x:Key="Seq_Maintenance_Desc">Move to maintenance → wait for door close → return</system:String>
     <system:String x:Key="Seq_NJI_Name">NJI</system:String>
     <system:String x:Key="Seq_NJI_Desc">Move to NJI → vision inspection → alarm on NG → return</system:String>
+    <system:String x:Key="Seq_DropWatcher_Name">DROP WATCHER</system:String>
+    <system:String x:Key="Seq_DropWatcher_Desc">Move to drop watcher position</system:String>
     <system:String x:Key="Seq_AutoPrint_Name">AUTO PRINT</system:String>
     <system:String x:Key="Seq_AutoPrint_Desc">Glass detection → vacuum clamp → Move to PRINT START → Head DOWN → printing → Head UP → vacuum release → return</system:String>
     <system:String x:Key="Seq_HeadUp_Name">HEAD UP</system:String>

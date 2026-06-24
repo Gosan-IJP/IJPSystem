@@ -12,8 +12,8 @@ namespace IJPSystem.Platform.Application.Sequences
                 ct =>
                 {
                     machine.VacuumOff();
-                    machine.IO.ScheduleInput("DI_VC_SENSOR_GLASS_STOP", false, 500);
-                    return WaitHelper.ForIOSignal(machine.IO, "DI_VC_SENSOR_GLASS_STOP",
+                    machine.IO.ScheduleInput("DI_PRESS_SW_CHUCK_VAC", false, 500);
+                    return WaitHelper.ForIOSignal(machine.IO, "DI_PRESS_SW_CHUCK_VAC",
                                                  expected: false, timeoutMs: 10_000, ct);
                 }),
 

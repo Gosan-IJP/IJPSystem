@@ -234,7 +234,7 @@
     <!-- 시퀀스 단계 표시명 (AutoPrintSequence / InitializeSequence 의 SequenceStepDef.Name 키) -->
     <system:String x:Key="Step_AutoPrint_WaitGlass">글래스 감지 대기 (V/C 척 진입)</system:String>
     <system:String x:Key="Step_AutoPrint_VacuumOn">V/C 척 진공 ON (글래스 고정)</system:String>
-    <system:String x:Key="Step_AutoPrint_VacuumConfirm">V/C 척 진공 센서 확인 (압력 SW4 ON)</system:String>
+    <system:String x:Key="Step_AutoPrint_VacuumConfirm">V/C 척 진공 확인 (척 진공 압력 ON)</system:String>
     <system:String x:Key="Step_AutoPrint_VacuumStabilize">진공 안정화 대기 (1s)</system:String>
     <system:String x:Key="Step_AutoPrint_MoveStart">인쇄 시작 위치(PRINT START) 이동</system:String>
     <system:String x:Key="Step_AutoPrint_MoveStartDone">인쇄 시작 위치 InPosition 확인</system:String>
@@ -248,7 +248,6 @@
     <system:String x:Key="Step_Init_Homing">원점복귀 — 전체 축</system:String>
     <system:String x:Key="Step_Init_MoveReady">대기 위치(READY) 이동</system:String>
     <system:String x:Key="Step_Init_MoveReadyDone">전체 축 InPosition 확인</system:String>
-    <system:String x:Key="Step_Init_WaitGlass">GLASS 감지 센서 대기</system:String>
     <system:String x:Key="Step_Init_MoveLoad">LOAD 위치 이동</system:String>
     <system:String x:Key="Step_Init_MoveLoadDone">LOAD 위치 InPosition 확인</system:String>
 
@@ -280,6 +279,8 @@
     <system:String x:Key="Step_NJI_LightOff">조명 OFF</system:String>
     <system:String x:Key="Step_NJI_MoveReady">대기 위치(READY) 이동</system:String>
     <system:String x:Key="Step_NJI_MoveReadyDone">READY 위치 InPosition 확인</system:String>
+    <system:String x:Key="Step_DropWatcher_Move">드랍와처 위치(DROP WATCHER) 이동</system:String>
+    <system:String x:Key="Step_DropWatcher_MoveDone">드랍와처 위치 InPosition 확인</system:String>
 
     <!-- 시퀀스 표시명 / 설명 (SequenceRegistry 의 Name/Description 키) -->
     <system:String x:Key="Seq_Init_Name">INITIALIZE</system:String>
@@ -292,6 +293,8 @@
     <system:String x:Key="Seq_Maintenance_Desc">유지보수 위치 이동 → 도어 닫힘 대기 → 복귀</system:String>
     <system:String x:Key="Seq_NJI_Name">NJI</system:String>
     <system:String x:Key="Seq_NJI_Desc">NJI 위치 이동 → 비전 검사 → NG시 알람 → 복귀</system:String>
+    <system:String x:Key="Seq_DropWatcher_Name">DROP WATCHER</system:String>
+    <system:String x:Key="Seq_DropWatcher_Desc">드랍와처 위치로 이동</system:String>
     <system:String x:Key="Seq_AutoPrint_Name">AUTO PRINT</system:String>
     <system:String x:Key="Seq_AutoPrint_Desc">글래스 감지 → 진공 고정 → PRINT START 이동 → 헤드 DOWN → 인쇄 진행 → 헤드 UP → 진공 해제 → 복귀</system:String>
     <system:String x:Key="Seq_HeadUp_Name">HEAD UP</system:String>

@@ -556,6 +556,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         AxisUsed  = g.ToDictionary(x => (string)x.AxisName, x => (bool)(Convert.ToInt32(x.IsUsed) != 0))
                     }).ToList();
 
+                // Pulse 제외 포인트(Blotting/NJI 등) — PointNames.All 에 없는 DB 잔존 행은 표시 제외
+                grouped = grouped.Where(g => PointNames.All.Any(
+                    n => string.Equals(n, g.PointName, StringComparison.OrdinalIgnoreCase))).ToList();
+
                 // 기존 포인트 행에 누락된 축을 0/사용으로 보강
                 foreach (var pt in grouped)
                     foreach (var axis in AxisList)

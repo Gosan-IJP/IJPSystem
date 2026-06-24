@@ -52,12 +52,25 @@
       "Bash(git fetch *)",
       "Bash(git rev-list *)",
       "Bash(powershell.exe -NoProfile -Command \"Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue | Select-Object Id,ProcessName | Format-Table -Auto; if \\(-not \\(Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue\\)\\) { '실행 중 아님' }\")",
-      "Bash(powershell.exe -NoProfile -Command 'try { [xml]\\(Get-Content '\\\\''d:\\\\IJP\\\\IJPSystem\\\\IJPSystem.Platform.HMI\\\\Views\\\\Maintenance\\\\Vision\\\\DropWatcherView.xaml'\\\\'' -Raw\\) | Out-Null; '\\\\''DropWatcherView.xaml: XML 정상\\(태그 균형 OK\\)'\\\\'' } catch { '\\\\''DropWatcherView.xaml XML 오류: '\\\\'' + $_.Exception.Message }')"
+      "Bash(powershell.exe -NoProfile -Command 'try { [xml]\\(Get-Content '\\\\''d:\\\\IJP\\\\IJPSystem\\\\IJPSystem.Platform.HMI\\\\Views\\\\Maintenance\\\\Vision\\\\DropWatcherView.xaml'\\\\'' -Raw\\) | Out-Null; '\\\\''DropWatcherView.xaml: XML 정상\\(태그 균형 OK\\)'\\\\'' } catch { '\\\\''DropWatcherView.xaml XML 오류: '\\\\'' + $_.Exception.Message }')",
+      "Read(//c/Users/bluey/OneDrive/바탕 화면//**)",
+      "Bash(grep -iE '\\\\.\\(png|bmp|jpg|jpeg|tif|tiff|raw\\)\\( |$\\)')",
+      "Bash(cp \"/c/Users/bluey/OneDrive/바탕 화면/Dropwatder.png\" \"d:/IJP/IJPSystem/Config/Samples/DropWatcher_Raw.png\" && echo \"복사 완료\" && ls -la \"d:/IJP/IJPSystem/Config/Samples/\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Machines.Inkjet5G/IJPSystem.Machines.Inkjet5G.csproj -nologo 2>&1 | Select-Object -Last 5\")",
+      "Bash(powershell.exe -NoProfile -Command \"Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue | Stop-Process -Force; dotnet build IJPSystem.slnx -nologo 2>&1 | Select-Object -Last 8\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Machines.Pulse/IJPSystem.Machines.Pulse.csproj -nologo 2>&1 | Select-Object -Last 4\")",
+      "Bash(powershell.exe -NoProfile -Command \"Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue | Stop-Process -Force; dotnet build IJPSystem.slnx -nologo 2>&1 | Select-String -Pattern 'error|오류|CS\\\\d|경고|warning NU1701' | Select-Object -Last 6\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.slnx -nologo 2>&1 | Select-Object -Last 3\")",
+      "Bash(powershell.exe -NoProfile -Command \"Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue | Stop-Process -Force; dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -nologo 2>&1 | Select-Object -Last 3\")",
+      "Bash(powershell.exe -NoProfile -Command \"Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue | Stop-Process -Force; dotnet build IJPSystem.slnx -nologo 2>&1 | Select-Object -Last 5\")",
+      "Bash(powershell.exe -NoProfile -Command \"Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue | Stop-Process -Force; dotnet build IJPSystem.slnx -nologo 2>&1 | Select-Object -Last 3\")",
+      "Bash(git switch *)"
     ],
     "additionalDirectories": [
       "d:\\tmp",
       "D:\\tmp",
-      "D:\\IJP\\IJPSystem"
+      "D:\\IJP\\IJPSystem",
+      "C:\\Users\\bluey\\OneDrive\\바탕 화면"
     ]
   }
 }

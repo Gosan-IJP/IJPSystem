@@ -15,24 +15,20 @@ namespace IJPSystem.Platform.Application.Sequences
     {
         public static IReadOnlyList<SequenceStepDef> Build(IMachine machine, IMotionService motion) => new[]
         {
+            // IO.json에 글라스 전용 센서가 없으므로 수동 로드 안착 대기. 글라스 클램프 여부는 이후 척 진공 압력으로 확인.
             new SequenceStepDef(1, "Step_AutoPrint_WaitGlass",
-                ct =>
-                {
-                    machine.IO.ScheduleInput("DI_VC_SENSOR_GLASS_STOP", true, 2_000);
-                    return WaitHelper.ForIOSignal(machine.IO, "DI_VC_SENSOR_GLASS_STOP",
-                                                 expected: true, timeoutMs: 30_000, ct);
-                }),
+                ct => Task.Delay(1_500, ct)),
 
             new SequenceStepDef(2, "Step_AutoPrint_VacuumOn",
                 ct =>
                 {
                     machine.VacuumOn();
-                    machine.IO.ScheduleInput("DI_PRESSURE_SW4_VACUUM_CV_P", true, 500);
+                    machine.IO.ScheduleInput("DI_PRESS_SW_CHUCK_VAC", true, 500);
                     return Task.CompletedTask;
                 }),
 
             new SequenceStepDef(3, "Step_AutoPrint_VacuumConfirm",
-                ct => WaitHelper.ForIOSignal(machine.IO, "DI_PRESSURE_SW4_VACUUM_CV_P",
+                ct => WaitHelper.ForIOSignal(machine.IO, "DI_PRESS_SW_CHUCK_VAC",
                                              expected: true, timeoutMs: 5_000, ct)),
 
             new SequenceStepDef(4, "Step_AutoPrint_VacuumStabilize",
@@ -68,9 +64,8 @@ namespace IJPSystem.Platform.Application.Sequences
                 ct =>
                 {
                     machine.VacuumOff();
-                    machine.IO.ScheduleInput("DI_PRESSURE_SW4_VACUUM_CV_P", false, 200);
-                    machine.IO.ScheduleInput("DI_VC_SENSOR_GLASS_STOP", false, 500);
-                    return WaitHelper.ForIOSignal(machine.IO, "DI_VC_SENSOR_GLASS_STOP",
+                    machine.IO.ScheduleInput("DI_PRESS_SW_CHUCK_VAC", false, 200);
+                    return WaitHelper.ForIOSignal(machine.IO, "DI_PRESS_SW_CHUCK_VAC",
                                                  expected: false, timeoutMs: 10_000, ct);
                 }),
 

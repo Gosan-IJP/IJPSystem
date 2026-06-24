@@ -8,7 +8,7 @@ namespace IJPSystem.Platform.Domain.Models.Config
 {
     public class AppSettings
     {
-        public string MachineType       { get; set; } = "Inkjet5G";
+        public string MachineType       { get; set; } = "Pulse";
         public string AdminPassword     { get; set; } = "admin";
         public string EngineerPassword  { get; set; } = "engineer";
         public string OperatorPassword  { get; set; } = "operator";

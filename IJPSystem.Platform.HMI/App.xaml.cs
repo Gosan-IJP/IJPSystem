@@ -1,7 +1,7 @@
 ﻿using IJPSystem.Drivers.IO;
 using IJPSystem.Drivers.Motion;
 using IJPSystem.Drivers.Vision;
-using IJPSystem.Machines.Inkjet5G;
+using IJPSystem.Machines.Pulse;
 using IJPSystem.Platform.Common.Constants;
 using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Interfaces;
@@ -69,10 +69,10 @@ namespace IJPSystem.Platform.HMI
                     InitializeVisionDriver);
 
                 _machine = await splashVM.RunStepAsync(
-                    "Machine Setup", "InkjetMachine 초기화 + Motor Config 로드",
+                    "Machine Setup", "PulseMachine 초기화 + Motor Config 로드",
                     () => appSettings.MachineType.ToUpper() switch
                     {
-                        "INKJET5G" => CreateInkjet5G(loader, ioDriver, motionDriver, visionDriver),
+                        "PULSE" => CreatePulse(loader, ioDriver, motionDriver, visionDriver),
                         _ => throw new NotSupportedException($"Unsupported: {appSettings.MachineType}"),
                     });
 
@@ -83,7 +83,7 @@ namespace IJPSystem.Platform.HMI
                     "HMI 준비", "메인 ViewModel 구성 + 화면 진입",
                     () =>
                     {
-                        var controller = new InkjetController(_machine);
+                        var controller = new PulseController(_machine);
                         return new MainViewModel(controller);
                     },
                     background: false);
@@ -128,14 +128,14 @@ namespace IJPSystem.Platform.HMI
 
             return appSettings.MachineType.ToUpper() switch
             {
-                "INKJET5G" => CreateInkjet5G(loader, ioDriver, motionDriver, visionDriver),
+                "PULSE" => CreatePulse(loader, ioDriver, motionDriver, visionDriver),
                 _ => throw new NotSupportedException($"Unsupported: {appSettings.MachineType}")
             };
         }
 
-        private IMachine CreateInkjet5G(ConfigLoader loader, IIODriver io, IMotionDriver motion, IVisionDriver vision)
+        private IMachine CreatePulse(ConfigLoader loader, IIODriver io, IMotionDriver motion, IVisionDriver vision)
         {
-            var machine = new InkjetMachine(io, motion, vision);
+            var machine = new PulseMachine(io, motion, vision);
             machine.Config = loader.LoadMotionConfig(GetConfigPath(AppConstants.MotorConfigFile))
                              ?? new MotionAxisRoot();
             machine.Initialize();

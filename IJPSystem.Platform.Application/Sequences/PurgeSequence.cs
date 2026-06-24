@@ -6,25 +6,22 @@ namespace IJPSystem.Platform.Application.Sequences
 {
     public static class PurgeSequence
     {
-        // ── AO 인덱스 (IO.json 매핑) ──
-        private const string AO_PURGE_PRESSURE_SV    = "AO_CH_1_TARGET_PURGE";
-        private const string AO_MENISCUS_PRESSURE_SV = "AO_CH_1_TARGET_MENISCUS";
-        private const int    PressureStabilizeMs     = 1_500;  // 압력 안정화 대기
+        private const int PressureStabilizeMs = 1_500;  // 압력 안정화 대기(타이밍 마커)
 
-        // Default 파라미터는 호출자가 값 미지정 시 폴백 (PNID 화면에서 SET 버튼으로 SV 입력)
+        // purgePressureKpa/meniscusPressureKpa: IO.json(ETS-D08MN)에 아날로그 압력 출력이 없어 현재 미사용(시그니처 보존 — 추후 아날로그 채널 추가 시 재사용).
         public static IReadOnlyList<SequenceStepDef> Build(
             IMachine machine,
             IMotionService motion,
-            double purgePressureKpa    = 50.0,   // 양압 SV (kPa) — PNID 화면 PressureSV 로 주입
-            double meniscusPressureKpa = -3.5)   // 음압 SV (kPa) — PNID 화면 VacuumSV 로 주입
+            double purgePressureKpa    = 50.0,
+            double meniscusPressureKpa = -3.5)
             => new[]
         {
             new SequenceStepDef(1, "Step_Purge_VacuumOff",
                 ct =>
                 {
                     machine.VacuumOff();
-                    machine.IO.ScheduleInput("DI_VC_SENSOR_GLASS_STOP", false, 500);
-                    return WaitHelper.ForIOSignal(machine.IO, "DI_VC_SENSOR_GLASS_STOP",
+                    machine.IO.ScheduleInput("DI_PRESS_SW_CHUCK_VAC", false, 500);
+                    return WaitHelper.ForIOSignal(machine.IO, "DI_PRESS_SW_CHUCK_VAC",
                                                  expected: false, timeoutMs: 10_000, ct);
                 }),
 
@@ -41,52 +38,32 @@ namespace IJPSystem.Platform.Application.Sequences
             new SequenceStepDef(5, "Step_Purge_HeadDownDone",
                 ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 10_000, ct)),
 
-            // ── 신규: 헤드 인렛/리턴 밸브 8개 OPEN (Y700~Y715) ──
+            // ── 헤드 밸브 OPEN (IO.json: DO_HEAD1_LEFT/RIGHT_VALVE) ──
             new SequenceStepDef(6, "Step_Purge_ValveOpen",
                 ct =>
                 {
-                    for (int i = 1; i <= 8; i++)
-                    {
-                        machine.IO.SetOutput($"DO_PACK1_H{i}_IN",  true);
-                        machine.IO.SetOutput($"DO_PACK1_H{i}_OUT", true);
-                    }
+                    machine.IO.SetOutput("DO_HEAD1_LEFT_VALVE",  true);
+                    machine.IO.SetOutput("DO_HEAD1_RIGHT_VALVE", true);
                     return Task.Delay(300, ct);   // 밸브 응답 시간
                 }),
 
-            // ── 신규: 양압(Purge pressure) 인가 + 안정화 대기 ──
+            // ── 양압 인가 단계 — IO.json에 아날로그 압력 출력이 없어 SV 인가 생략(토출 시작 타이밍 마커 유지) ──
             new SequenceStepDef(7, "Step_Purge_PressurizeOn",
-                ct =>
-                {
-                    machine.IO.SetAnalogOutput(AO_PURGE_PRESSURE_SV, purgePressureKpa);
-                    return Task.Delay(PressureStabilizeMs, ct);
-                }),
+                ct => Task.Delay(PressureStabilizeMs, ct)),
 
             new SequenceStepDef(8, "Step_Purge_WaitDispense",
-                ct =>
-                {
-                    machine.IO.ScheduleInput("DI_PRESSURE_SW1_N2_IMS_AIR_KNIFE", true, 3_000);
-                    return WaitHelper.ForIOSignal(machine.IO, "DI_PRESSURE_SW1_N2_IMS_AIR_KNIFE",
-                                                 expected: true, timeoutMs: 15_000, ct);
-                }),
+                ct => Task.Delay(3_000, ct)),   // 토출 시간(전용 토출 감지 센서 없음)
 
-            // ── 신규: 양압 OFF + 음압(Meniscus) 인가 — 노즐 메니스커스 복원 ──
+            // ── 양압 OFF + 음압(Meniscus) 단계 — 아날로그 출력 없음, 타이밍 마커 유지 ──
             new SequenceStepDef(9, "Step_Purge_PressurizeOff",
-                ct =>
-                {
-                    machine.IO.SetAnalogOutput(AO_PURGE_PRESSURE_SV, 0.0);
-                    machine.IO.SetAnalogOutput(AO_MENISCUS_PRESSURE_SV, meniscusPressureKpa);
-                    return Task.Delay(PressureStabilizeMs, ct);
-                }),
+                ct => Task.Delay(PressureStabilizeMs, ct)),
 
-            // ── 신규: 헤드 밸브 CLOSE (16개 일괄) ──
+            // ── 헤드 밸브 CLOSE ──
             new SequenceStepDef(10, "Step_Purge_ValveClose",
                 ct =>
                 {
-                    for (int i = 1; i <= 8; i++)
-                    {
-                        machine.IO.SetOutput($"DO_PACK1_H{i}_IN",  false);
-                        machine.IO.SetOutput($"DO_PACK1_H{i}_OUT", false);
-                    }
+                    machine.IO.SetOutput("DO_HEAD1_LEFT_VALVE",  false);
+                    machine.IO.SetOutput("DO_HEAD1_RIGHT_VALVE", false);
                     return Task.Delay(300, ct);
                 }),
 
