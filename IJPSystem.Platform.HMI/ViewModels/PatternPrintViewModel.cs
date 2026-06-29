@@ -16,6 +16,148 @@ namespace IJPSystem.Platform.HMI.ViewModels
     {
         private readonly MainViewModel _mainVM;
 
+        // ── 조그/모션 (Jog Control · Motion State) ──────────────────────
+        // 공유 축 리스트. Motion State 위치 표시 및 조그 대상.
+        public ObservableCollection<AxisViewModel> AxisList => _mainVM.SharedAxisList;
+
+        // 이름 부분일치로 축을 찾는다 (예: "DW AXIS" → "DW")
+        public AxisViewModel? AxisX  => ResolveByTag("X");
+        public AxisViewModel? AxisY  => ResolveByTag("Y");
+        public AxisViewModel? AxisZ  => ResolveByTag("Z");
+        public AxisViewModel? AxisDW => ResolveByTag("DW");
+        private AxisViewModel? ResolveByTag(string tag) =>
+            AxisList.FirstOrDefault(a => a.Info?.Name != null &&
+                a.Info.Name.IndexOf(tag, StringComparison.OrdinalIgnoreCase) >= 0);
+
+        // 조그 단위(UNIT): 0=Cont, 0.01=10µm, 0.1=100µm, 1.0=1000µm — 조그 시 대상 축에 적용
+        private double _jogUnit = 0;
+        public double JogUnit
+        {
+            get => _jogUnit;
+            set
+            {
+                if (SetProperty(ref _jogUnit, value))
+                    OnPropertyChanged(nameof(JogUnitIndex));
+            }
+        }
+
+        // 콤보박스(Continuous / 10µm / 100µm / 1000µm) 선택 인덱스 ↔ JogUnit 매핑
+        public int JogUnitIndex
+        {
+            get => _jogUnit switch { 0.01 => 1, 0.1 => 2, 1.0 => 3, _ => 0 };
+            set => JogUnit = value switch { 1 => 0.01, 2 => 0.1, 3 => 1.0, _ => 0.0 };
+        }
+
+        // 조그 속도 배율(SPEED)
+        private double _jogSpeedScale = 1.0;
+        public double JogSpeedScale
+        {
+            get => _jogSpeedScale;
+            set
+            {
+                if (SetProperty(ref _jogSpeedScale, value))
+                {
+                    OnPropertyChanged(nameof(IsJogSpeedSlow));
+                    OnPropertyChanged(nameof(IsJogSpeedNormal));
+                    OnPropertyChanged(nameof(IsJogSpeedFast));
+                }
+            }
+        }
+        public bool IsJogSpeedSlow   { get => _jogSpeedScale == 0.25; set { if (value) JogSpeedScale = 0.25; } }
+        public bool IsJogSpeedNormal { get => _jogSpeedScale == 1.0;  set { if (value) JogSpeedScale = 1.0; } }
+        public bool IsJogSpeedFast   { get => _jogSpeedScale == 2.0;  set { if (value) JogSpeedScale = 2.0; } }
+
+        // ── Motion 패널 (Home / Absolute·Relative / Axis / Target / Move) ──
+        private static readonly string[] _motionAxisTags = { "X", "Y", "Z", "DW" };
+
+        // Axis 콤보 선택(0=X,1=Y,2=Z,3=DW)
+        private int _motionAxisIndex = 0;
+        public int MotionAxisIndex
+        {
+            get => _motionAxisIndex;
+            set
+            {
+                if (SetProperty(ref _motionAxisIndex, Math.Clamp(value, 0, 3)))
+                    OnPropertyChanged(nameof(SelectedMotionAxis));
+            }
+        }
+
+        // 좌표 모드 콤보(0=Absolute, 1=Relative)
+        private int _motionModeIndex = 0;
+        public int MotionModeIndex
+        {
+            get => _motionModeIndex;
+            set => SetProperty(ref _motionModeIndex, value);
+        }
+
+        // 입력 가능한 목표 위치(mm) — TextBox 양방향 바인딩
+        private double _motionTarget;
+        public double MotionTarget
+        {
+            get => _motionTarget;
+            set => SetProperty(ref _motionTarget, value);
+        }
+
+        // +/- 버튼 증분(mm)
+        private const double MotionStep = 1.0;
+
+        // 현재 선택된 Motion 대상 축
+        public AxisViewModel? SelectedMotionAxis => ResolveByTag(_motionAxisTags[Math.Clamp(_motionAxisIndex, 0, 3)]);
+
+        public ICommand MotionHomeCommand     { get; private set; } = null!;
+        public ICommand MotionMoveCommand     { get; private set; } = null!;
+        public ICommand MotionStepUpCommand   { get; private set; } = null!;
+        public ICommand MotionStepDownCommand { get; private set; } = null!;
+
+        // ── Spit (노즐 토출 애니메이션) ───────────────────────────────
+        // 버튼 클릭 시마다 ON/OFF 토글 → Fluidics Head 노즐 스트림 동작.
+        private bool _isSpitting;
+        public bool IsSpitting
+        {
+            get => _isSpitting;
+            private set => SetProperty(ref _isSpitting, value);
+        }
+        public ICommand SpitCommand { get; private set; } = null!;
+
+        // ── Purge 압력 (kPa) ──────────────────────────────────────────
+        // 현재값(읽기 전용 표시) / 셋팅값(입력) / 적용된 셋팅값(Set Value 시 캡처)
+        private double _purgeApplied;
+        private double _purgeCurrent;
+        public double PurgeCurrent  { get => _purgeCurrent;  private set => SetProperty(ref _purgeCurrent, value); }
+        private double _purgeSetpoint;
+        public double PurgeSetpoint { get => _purgeSetpoint; set => SetProperty(ref _purgeSetpoint, value); }
+        private bool _isPurgeOn;
+        public bool IsPurgeOn       { get => _isPurgeOn;     private set => SetProperty(ref _isPurgeOn, value); }
+        public ICommand SetPurgeCommand    { get; private set; } = null!;
+        public ICommand TogglePurgeCommand { get; private set; } = null!;
+        public ICommand PurgeStepUpCommand   { get; private set; } = null!;
+        public ICommand PurgeStepDownCommand { get; private set; } = null!;
+        private const double PurgeStep = 0.1;   // kPa
+
+        // ── Meniscus 압력 (Pa) ────────────────────────────────────────
+        private double _meniscusApplied;
+        private double _meniscusCurrent;
+        public double MeniscusCurrent  { get => _meniscusCurrent;  private set => SetProperty(ref _meniscusCurrent, value); }
+        private double _meniscusSetpoint;
+        public double MeniscusSetpoint { get => _meniscusSetpoint; set => SetProperty(ref _meniscusSetpoint, value); }
+        private bool _isMeniscusOn;
+        public bool IsMeniscusOn       { get => _isMeniscusOn;     private set => SetProperty(ref _isMeniscusOn, value); }
+        public ICommand SetMeniscusCommand    { get; private set; } = null!;
+        public ICommand ToggleMeniscusCommand { get; private set; } = null!;
+        public ICommand MeniscusStepUpCommand   { get; private set; } = null!;
+        public ICommand MeniscusStepDownCommand { get; private set; } = null!;
+        private const double MeniscusStep = 10.0;   // Pa
+
+        // ── 메니스커스 DMD 실장치(Modbus TCP) ─────────────────────────
+        // 연결 성공 시 폴링/쓰기가 실제 장치로, 실패 시 mock 으로 동작.
+        // UI 는 Pa, 컨트롤러는 kPa → 1 kPa = 1000 Pa 환산.
+        private readonly object _meniscusLock = new();
+        private IJPSystem.Drivers.Meniscus.DmdModbusClient? _dmdClient;
+        private IJPSystem.Drivers.Meniscus.MeniscusController? _meniscusDev;
+        private System.Threading.Timer? _meniscusPollTimer;
+        private bool _meniscusConnected;
+        private const double PaPerKpa = 1000.0;
+
         // ── 헤드팩 선택 ───────────────────────────────────────────────
         public ObservableCollection<string> HeadPacks { get; } = new()
         {
@@ -106,7 +248,197 @@ namespace IJPSystem.Platform.HMI.ViewModels
             PrintCommand          = new RelayCommand(_ => StartPrint(),  _ => IsOriginSet);
             AbortCommand          = new RelayCommand(_ => AbortPrint());
 
+            // Motion 패널 (활성화는 버튼 IsEnabled="SelectedMotionAxis.CanMove" 바인딩으로 처리)
+            MotionHomeCommand     = new RelayCommand(async _ => await MotionHomeAsync());
+            MotionMoveCommand     = new RelayCommand(async _ => await MotionMoveAsync());
+            MotionStepUpCommand   = new RelayCommand(_ => MotionTarget = Math.Round(MotionTarget + MotionStep, 3));
+            MotionStepDownCommand = new RelayCommand(_ => MotionTarget = Math.Round(MotionTarget - MotionStep, 3));
+
+            SpitCommand = new RelayCommand(_ => ToggleSpit());
+
+            // Purge 압력
+            SetPurgeCommand    = new RelayCommand(_ => ApplyPurgeSetpoint());
+            TogglePurgeCommand = new RelayCommand(_ => TogglePurge());
+            PurgeStepUpCommand   = new RelayCommand(_ => PurgeSetpoint = Math.Round(PurgeSetpoint + PurgeStep, 3));
+            PurgeStepDownCommand = new RelayCommand(_ => PurgeSetpoint = Math.Round(PurgeSetpoint - PurgeStep, 3));
+            // Meniscus 압력
+            SetMeniscusCommand    = new RelayCommand(_ => ApplyMeniscusSetpoint());
+            ToggleMeniscusCommand = new RelayCommand(_ => ToggleMeniscus());
+            MeniscusStepUpCommand   = new RelayCommand(_ => MeniscusSetpoint = Math.Round(MeniscusSetpoint + MeniscusStep, 0));
+            MeniscusStepDownCommand = new RelayCommand(_ => MeniscusSetpoint = Math.Round(MeniscusSetpoint - MeniscusStep, 0));
+
             RefreshPrintVelocity();
+            InitMeniscusDevice();
+        }
+
+        /// <summary>Spit — 클릭할 때마다 노즐 토출 애니메이션을 ON/OFF 토글한다.</summary>
+        private void ToggleSpit()
+        {
+            IsSpitting = !IsSpitting;
+            _mainVM.AddLog($"[PATTERN] Spit {(IsSpitting ? "ON" : "OFF")}", LogLevel.Info);
+        }
+
+        // ── Purge 압력 ───────────────────────────────────────────────
+        /// <summary>Set Value — 입력한 셋팅값을 Purge 압력 명령으로 적용. 출력 ON 상태면 현재값에 즉시 반영.</summary>
+        private void ApplyPurgeSetpoint()
+        {
+            _purgeApplied = PurgeSetpoint;
+            if (IsPurgeOn) PurgeCurrent = _purgeApplied;
+            _mainVM.AddLog($"[PRESSURE] Purge setpoint = {PurgeSetpoint:F3} kPa", LogLevel.Info);
+        }
+        /// <summary>Toggle Purge — 출력 ON/OFF. ON이면 적용된 셋팅값, OFF면 0 을 현재값으로.</summary>
+        private void TogglePurge()
+        {
+            IsPurgeOn = !IsPurgeOn;
+            PurgeCurrent = IsPurgeOn ? _purgeApplied : 0.0;
+            _mainVM.AddLog($"[PRESSURE] Purge {(IsPurgeOn ? "ON" : "OFF")}", LogLevel.Info);
+        }
+
+        // ── Meniscus 압력 (실장치 연동 + mock 폴백) ───────────────────
+        /// <summary>Set Value — 셋팅값을 Meniscus 압력 명령으로 적용. 연결 시 DMD에 쓰기, 미연결 시 mock.</summary>
+        private void ApplyMeniscusSetpoint()
+        {
+            _meniscusApplied = MeniscusSetpoint;
+
+            if (_meniscusConnected && _meniscusDev != null)
+            {
+                double kpa = MeniscusSetpoint / PaPerKpa;
+                RunMeniscusWrite(dev => dev.SetPressureKpa(kpa), "setpoint 쓰기");
+                _mainVM.AddLog($"[MENISCUS] setpoint = {MeniscusSetpoint:F0} Pa ({kpa:F3} kPa)", LogLevel.Info);
+                // 현재값은 폴링이 실제 측정값으로 갱신
+            }
+            else
+            {
+                if (IsMeniscusOn) MeniscusCurrent = _meniscusApplied;
+                _mainVM.AddLog($"[PRESSURE] Meniscus setpoint = {MeniscusSetpoint:F0} Pa (mock)", LogLevel.Info);
+            }
+        }
+        /// <summary>Toggle Meniscus — 출력 ON/OFF. 연결 시 제어 레지스터 쓰기, 미연결 시 mock.</summary>
+        private void ToggleMeniscus()
+        {
+            IsMeniscusOn = !IsMeniscusOn;
+
+            if (_meniscusConnected && _meniscusDev != null)
+            {
+                bool on = IsMeniscusOn;
+                RunMeniscusWrite(dev => dev.SetControlEnabled(on), "제어 쓰기");
+                _mainVM.AddLog($"[MENISCUS] {(on ? "ON" : "OFF")}", LogLevel.Info);
+            }
+            else
+            {
+                MeniscusCurrent = IsMeniscusOn ? _meniscusApplied : 0.0;
+                _mainVM.AddLog($"[PRESSURE] Meniscus {(IsMeniscusOn ? "ON" : "OFF")} (mock)", LogLevel.Info);
+            }
+        }
+
+        // ── 메니스커스 장치 연결 / 폴링 ───────────────────────────────
+        /// <summary>설정(AppConfig)에 따라 DMD Modbus TCP 연결을 백그라운드로 시도하고, 성공 시 500ms 폴링 시작.</summary>
+        private void InitMeniscusDevice()
+        {
+            var cfg = IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Current;
+            if (cfg == null || !cfg.MeniscusEnabled) return;
+
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    // 잘못된 IP 에서 장시간 블로킹되지 않도록 1초 가용성 프로브
+                    if (!ProbeTcp(cfg.MeniscusIp, cfg.MeniscusPort, 1000))
+                    {
+                        _mainVM.AddLog($"[MENISCUS] DMD 미연결(mock) — {cfg.MeniscusIp}:{cfg.MeniscusPort}", LogLevel.Warning);
+                        return;
+                    }
+
+                    var dmd = new IJPSystem.Drivers.Meniscus.DmdModbusClient();
+                    dmd.ConnectTcp(cfg.MeniscusIp, cfg.MeniscusPort);
+                    _dmdClient = dmd;
+                    _meniscusDev = new IJPSystem.Drivers.Meniscus.MeniscusController(dmd);
+                    _meniscusConnected = true;
+                    _mainVM.AddLog($"[MENISCUS] DMD 연결됨 — {cfg.MeniscusIp}:{cfg.MeniscusPort}", LogLevel.Info);
+
+                    _meniscusPollTimer = new System.Threading.Timer(_ => PollMeniscus(), null, 0, 500);
+                }
+                catch (Exception ex)
+                {
+                    _meniscusConnected = false;
+                    _mainVM.AddLog($"[MENISCUS] 연결 실패(mock 전환): {ex.Message}", LogLevel.Warning);
+                }
+            });
+        }
+
+        /// <summary>500ms 주기 현재 압력 읽기. 실패 시 폴링 중단(스팸 방지).</summary>
+        private void PollMeniscus()
+        {
+            double pa;
+            try
+            {
+                lock (_meniscusLock)
+                {
+                    if (_meniscusDev == null) return;
+                    pa = _meniscusDev.ReadPressureKpa() * PaPerKpa;
+                }
+            }
+            catch (Exception ex)
+            {
+                _meniscusConnected = false;
+                _meniscusPollTimer?.Dispose();
+                _meniscusPollTimer = null;
+                _mainVM.AddLog($"[MENISCUS] 읽기 실패 — 폴링 중단: {ex.Message}", LogLevel.Warning);
+                return;
+            }
+            System.Windows.Application.Current?.Dispatcher.Invoke(() => MeniscusCurrent = pa);
+        }
+
+        /// <summary>쓰기 명령을 백그라운드에서 락 보호 하에 실행 (폴링 read 와 직렬화).</summary>
+        private void RunMeniscusWrite(Action<IJPSystem.Drivers.Meniscus.MeniscusController> action, string what)
+        {
+            var dev = _meniscusDev;
+            if (dev == null) return;
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try { lock (_meniscusLock) { action(dev); } }
+                catch (Exception ex) { _mainVM.AddLog($"[MENISCUS] {what} 실패: {ex.Message}", LogLevel.Warning); }
+            });
+        }
+
+        /// <summary>TCP 가용성 빠른 프로브(연결 전 타임아웃 보호).</summary>
+        private static bool ProbeTcp(string ip, int port, int timeoutMs)
+        {
+            try
+            {
+                using var probe = new System.Net.Sockets.TcpClient();
+                var ar = probe.BeginConnect(ip, port, null, null);
+                bool ok = ar.AsyncWaitHandle.WaitOne(timeoutMs);
+                if (ok) probe.EndConnect(ar);
+                return ok && probe.Connected;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>선택 축 원점복귀(Home).</summary>
+        private async System.Threading.Tasks.Task MotionHomeAsync()
+        {
+            var ax = SelectedMotionAxis;
+            if (ax == null)
+            {
+                _mainVM.AddLog("[PATTERN] Home — 대상 축을 찾을 수 없습니다.", LogLevel.Warning);
+                return;
+            }
+            await ax.HomeAsync();
+        }
+
+        /// <summary>선택 축을 Absolute/Relative 모드로 MotionTarget 위치까지 이동.</summary>
+        private async System.Threading.Tasks.Task MotionMoveAsync()
+        {
+            var ax = SelectedMotionAxis;
+            if (ax == null)
+            {
+                _mainVM.AddLog("[PATTERN] Move — 대상 축을 찾을 수 없습니다.", LogLevel.Warning);
+                return;
+            }
+            ax.IsAbsMode      = (_motionModeIndex == 0); // 0=Absolute, 1=Relative
+            ax.TargetPosition = MotionTarget;
+            await ax.MoveAsync();
         }
 
         /// <summary>현재 X/Y/Z 축 위치를 인쇄 원점으로 캡처한다.</summary>

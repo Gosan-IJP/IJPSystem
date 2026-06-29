@@ -3,71 +3,65 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignHeight="780" d:DesignWidth="1200"
+             xmlns:ctl="clr-namespace:IJPSystem.Platform.HMI.Common.Controls"
+             mc:Ignorable="d" d:DesignHeight="780" d:DesignWidth="1280"
              Background="#0B0F1A">
 
     <UserControl.Resources>
         <!-- 카드 컨테이너 -->
         <Style x:Key="CardBorder" TargetType="Border">
             <Setter Property="Background"      Value="#111827"/>
-            <Setter Property="CornerRadius"    Value="12"/>
+            <Setter Property="CornerRadius"    Value="10"/>
             <Setter Property="BorderBrush"     Value="#334155"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
 
-        <!-- 섹션 라벨 -->
-        <Style x:Key="SectionLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#3B82F6"/>
-            <Setter Property="FontSize"   Value="11"/>
+        <!-- 섹션 타이틀 -->
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#E2E8F0"/>
+            <Setter Property="FontSize"   Value="14"/>
             <Setter Property="FontWeight" Value="Bold"/>
         </Style>
 
-        <!-- 필드 라벨 -->
-        <Style x:Key="FieldLabel" TargetType="TextBlock">
+        <!-- 작은 라벨 -->
+        <Style x:Key="MutedLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#94A3B8"/>
-            <Setter Property="FontSize"   Value="14"/>
+            <Setter Property="FontSize"   Value="11"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
-        <!-- 어두운 입력 박스 -->
-        <Style x:Key="DarkInputBox" TargetType="TextBox">
-            <Setter Property="Background"      Value="#0D1520"/>
-            <Setter Property="Foreground"      Value="White"/>
-            <Setter Property="BorderBrush"     Value="#1E293B"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding"         Value="10,6"/>
-            <Setter Property="FontFamily"      Value="Consolas"/>
-            <Setter Property="FontSize"        Value="16"/>
-            <Setter Property="FontWeight"      Value="Bold"/>
-            <Setter Property="TextAlignment"   Value="Right"/>
-            <Setter Property="Height"          Value="40"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </Style>
-
-        <!-- 읽기 전용 표시 박스 -->
-        <Style x:Key="ReadOnlyBox" TargetType="Border">
-            <Setter Property="Background"      Value="#0D1520"/>
-            <Setter Property="BorderBrush"     Value="#1E293B"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius"    Value="6"/>
-            <Setter Property="Padding"         Value="10,6"/>
-        </Style>
-
-        <Style x:Key="ReadOnlyText" TargetType="TextBlock">
-            <Setter Property="Foreground"      Value="#3B82F6"/>
-            <Setter Property="FontFamily"      Value="Consolas"/>
-            <Setter Property="FontSize"        Value="13"/>
-            <Setter Property="FontWeight"      Value="Bold"/>
-            <Setter Property="TextAlignment"   Value="Right"/>
+        <!-- 툴바 아이콘 버튼 -->
+        <Style x:Key="ToolbarBtn" TargetType="Button">
+            <Setter Property="Width"  Value="30"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Foreground" Value="#CBD5E1"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- 액션 버튼 -->
         <Style x:Key="ActionBtn" TargetType="Button">
             <Setter Property="Foreground"      Value="White"/>
+            <Setter Property="Background"      Value="#1E293B"/>
+            <Setter Property="BorderBrush"     Value="#334155"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontWeight"      Value="Bold"/>
-            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="FontSize"        Value="12"/>
             <Setter Property="Cursor"          Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -75,8 +69,8 @@
                         <Border Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="6,0"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -90,386 +84,753 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- 조그 D-패드 버튼 -->
+        <!-- 작은 +/- 증감 버튼 (셋팅값 박스 옆) — 글리프가 잘 보이도록 전용 템플릿 -->
+        <Style x:Key="StepBtn" TargetType="Button">
+            <Setter Property="Foreground"      Value="White"/>
+            <Setter Property="Background"      Value="#1E293B"/>
+            <Setter Property="BorderBrush"     Value="#334155"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight"      Value="Bold"/>
+            <Setter Property="FontSize"        Value="15"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3">
+                            <TextBlock Text="{TemplateBinding Content}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       TextAlignment="Center" LineHeight="15" Margin="0,-2,0,0"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#334155"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="JogBtn" TargetType="Button" BasedOn="{StaticResource ActionBtn}">
+            <Setter Property="Width"  Value="62"/>
+            <Setter Property="Height" Value="56"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="Background" Value="#1E293B"/>
+            <Setter Property="BorderBrush" Value="#3B82F6"/>
+        </Style>
+
+        <!-- 위치 표시 박스 -->
+        <Style x:Key="PosBox" TargetType="Border">
+            <Setter Property="Background"      Value="#0D1520"/>
+            <Setter Property="BorderBrush"     Value="#1E293B"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius"    Value="4"/>
+            <Setter Property="Padding"         Value="6,4"/>
+        </Style>
+        <Style x:Key="PosText" TargetType="TextBlock">
+            <Setter Property="Foreground"    Value="#E2E8F0"/>
+            <Setter Property="FontFamily"    Value="Consolas"/>
+            <Setter Property="FontSize"      Value="13"/>
+            <Setter Property="FontWeight"    Value="Bold"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+        </Style>
+
+        <!-- ── 노즐 SPIT 스트림 애니메이션 (P&ID PnidView와 동일 구현) ──
+             Tag(IsSpitting)=True 일 때 StrokeDashOffset 순환으로 잉크가 흘러내리는 점선 -->
+        <Style x:Key="NozzleSpitStream" TargetType="Line">
+            <Setter Property="Stroke"          Value="#FFFFFF"/>
+            <Setter Property="StrokeThickness" Value="1.4"/>
+            <Setter Property="StrokeDashArray" Value="1 1.5"/>
+            <Setter Property="StrokeDashCap"   Value="Round"/>
+            <Setter Property="X1" Value="0"/>
+            <Setter Property="Y1" Value="0"/>
+            <Setter Property="X2" Value="0"/>
+            <Setter Property="Y2" Value="30"/>
+            <Setter Property="Opacity" Value="0"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="True">
+                    <Setter Property="Opacity" Value="1"/>
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="NozzleSpitStreamSb">
+                            <Storyboard RepeatBehavior="Forever">
+                                <DoubleAnimation Storyboard.TargetProperty="StrokeDashOffset"
+                                              From="2.5" To="0" Duration="0:0:0.14"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <StopStoryboard BeginStoryboardName="NozzleSpitStreamSb"/>
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- UNIT / SPEED 선택 토글 (라디오, 선택 시 파란 테두리) -->
+        <Style x:Key="SelectorBtn" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#94A3B8"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize"   Value="14"/>
+            <Setter Property="Height"     Value="40"/>
+            <Setter Property="Cursor"     Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="bd" Background="#0D1520" BorderBrush="#334155"
+                                BorderThickness="1.5" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="#475569"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="#3B82F6"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
-    <Grid Margin="20">
+    <Grid Margin="14">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="2*"/>
+            <ColumnDefinition Width="1.05*"/>
             <ColumnDefinition Width="12"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- ══ 좌측: 파라미터 입력 ════════════════════════════════════════ -->
+        <!-- ══════════ 좌측 운전부 (1단계) ══════════ -->
         <Grid Grid.Column="0">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>     <!-- Motion State (세로) -->
+                <RowDefinition Height="12"/>
+                <RowDefinition Height="Auto"/>  <!-- Jog Control -->
             </Grid.RowDefinitions>
 
-            <!-- 헤더: 타이틀 + 상태 배지 -->
-            <Border Grid.Row="0" Style="{StaticResource CardBorder}" Padding="16,12" Margin="0,0,0,10">
+            <!-- ── Visual Monitor (기존 비전 화면 유지) ── -->
+            <Border Grid.Row="0" Style="{StaticResource CardBorder}" Padding="12">
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="🖨" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="PATTERN GENERATOR" Foreground="White"
-                                       FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="8"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 헤더 + 툴바 -->
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Visual Monitor"
+                                   Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
+                        <!-- 도구 (zoom / select / pan) -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <Button Style="{StaticResource ToolbarBtn}" Content="🔍" Margin="0,0,4,0"/>
+                            <Button Style="{StaticResource ToolbarBtn}" Content="⤢"  Margin="0,0,4,0"/>
+                            <Button Style="{StaticResource ToolbarBtn}" Content="✋"/>
                         </StackPanel>
-                        <TextBlock Text="헤드팩 선택 · 영역(W×L) · 원점 · 인쇄 속도"
-                                   Foreground="#64748B" FontSize="10" Margin="0,4,0,0"/>
-                    </StackPanel>
+                        <!-- 우측: Toggle Cross line + Glass View -->
+                        <StackPanel Grid.Column="4" Orientation="Horizontal">
+                            <Button Style="{StaticResource ActionBtn}" Content="Toggle Cross line"
+                                    Height="28" Margin="0,0,6,0"/>
+                            <ComboBox Width="120" Height="28" Background="#0D1520" Foreground="Black"
+                                      BorderBrush="#334155" VerticalContentAlignment="Center" FontWeight="Bold">
+                                <ComboBoxItem Content="Glass View" IsSelected="True"/>
+                                <ComboBoxItem Content="NJI View"/>
+                                <ComboBoxItem Content="Drop Watcher"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
 
-                    <Border Grid.Column="1" CornerRadius="8" Padding="14,8" VerticalAlignment="Center">
-                        <Border.Style>
-                            <Style TargetType="Border">
-                                <Setter Property="Background" Value="#475569"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsOriginSet}" Value="True">
-                                        <Setter Property="Background" Value="#1D4ED8"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Border.Style>
-                        <TextBlock Foreground="White" FontWeight="Bold" FontSize="12">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Text" Value="● ORIGIN NOT SET"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsOriginSet}" Value="True">
-                                            <Setter Property="Text" Value="● READY"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </Border>
+                    <!-- 카메라 이미지 영역 (스크롤바 룩) -->
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="14"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="14"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Grid.Column="0" Background="Black"
+                                BorderBrush="#1E293B" BorderThickness="1" CornerRadius="2">
+                            <TextBlock Text="NO IMAGE" Foreground="#1E293B" FontSize="20" FontWeight="Bold"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ScrollBar Grid.Row="0" Grid.Column="1" Orientation="Vertical" IsEnabled="False" Opacity="0.5"/>
+                        <ScrollBar Grid.Row="1" Grid.Column="0" Orientation="Horizontal" IsEnabled="False" Opacity="0.5"/>
+                    </Grid>
                 </Grid>
             </Border>
 
-            <!-- 파라미터 카드 -->
-            <Border Grid.Row="1" Style="{StaticResource CardBorder}" Padding="20" Margin="0,0,0,10">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="20"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-
-                    <!-- 좌: Head Pack / nz / Using Head -->
-                    <StackPanel Grid.Column="0">
-
-                        <TextBlock Text="HEAD PACK"
-                                   Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
-                        <ComboBox ItemsSource="{Binding HeadPacks}"
-                                  SelectedItem="{Binding SelectedHeadPack, Mode=TwoWay}"
-                                  HorizontalAlignment="Stretch" Height="40"
-                                  Background="#0D1520" Foreground="Black"
-                                  BorderBrush="#1E293B" FontWeight="Bold" FontSize="16"
-                                  VerticalContentAlignment="Center" Margin="0,0,0,18"/>
-
-                        <TextBlock Text="OVERLAP (nz)"
-                                   Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
-                        <Grid Margin="0,0,0,18">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="44"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Style="{StaticResource DarkInputBox}"
-                                     Text="{Binding NOverlapNz, UpdateSourceTrigger=PropertyChanged}"/>
-                            <TextBlock Grid.Column="1" Text="nz" Style="{StaticResource FieldLabel}"
-                                       HorizontalAlignment="Center"/>
-                        </Grid>
-
-                        <TextBlock Text="USING HEAD"
-                                   Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
-                        <Grid Margin="0,0,0,18">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="44"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Style="{StaticResource DarkInputBox}"
-                                     Text="{Binding UsingHead, UpdateSourceTrigger=PropertyChanged}"/>
-                            <TextBlock Grid.Column="1" Text="ea" Style="{StaticResource FieldLabel}"
-                                       HorizontalAlignment="Center"/>
-                        </Grid>
-
-                        <TextBlock Text="DPI (RESOLUTION)"
-                                   Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="44"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Style="{StaticResource DarkInputBox}"
-                                     Text="{Binding Dpi, UpdateSourceTrigger=PropertyChanged}"/>
-                            <TextBlock Grid.Column="1" Text="dpi" Style="{StaticResource FieldLabel}"
-                                       HorizontalAlignment="Center"/>
-                        </Grid>
-                        <Border Background="#0D1520" CornerRadius="8" Padding="12,10"
-                                BorderBrush="#1D4ED8" BorderThickness="1.5"
-                                Margin="0,8,0,0">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="DROP PITCH"
-                                           Foreground="#64748B" FontSize="10" FontWeight="Bold"
-                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding DropPitchMm, StringFormat=F4}"
-                                           Foreground="#475569" FontFamily="Consolas"
-                                           FontSize="22" FontWeight="Black"
-                                           HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="2" Text="mm"
-                                           Foreground="#475569" FontFamily="Consolas"
-                                           FontSize="11" FontWeight="Bold"
-                                           VerticalAlignment="Bottom" Margin="4,0,0,4"/>
-                            </Grid>
-                        </Border>
-                    </StackPanel>
-
-                    <!-- 우: Width / Length -->
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Text="WIDTH"
-                                   Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
-                        <Grid Margin="0,0,0,18">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="44"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Style="{StaticResource DarkInputBox}"
-                                     Text="{Binding WidthMm, StringFormat=F3, UpdateSourceTrigger=PropertyChanged}"/>
-                            <TextBlock Grid.Column="1" Text="mm" Style="{StaticResource FieldLabel}"
-                                       HorizontalAlignment="Center"/>
-                        </Grid>
-
-                        <TextBlock Text="LENGTH"
-                                   Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
-                        <Grid Margin="0,0,0,18">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="44"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Style="{StaticResource DarkInputBox}"
-                                     Text="{Binding LengthMm, StringFormat=F3, UpdateSourceTrigger=PropertyChanged}"/>
-                            <TextBlock Grid.Column="1" Text="mm" Style="{StaticResource FieldLabel}"
-                                       HorizontalAlignment="Center"/>
-                        </Grid>
-
-                        <!-- 영역 미리보기 박스 (가시적인 비례 표시는 단순 정보 패널) -->
-                        <Border Background="#0D1520" CornerRadius="8" Padding="12"
-                                BorderBrush="#1E293B" BorderThickness="1">
-                            <StackPanel>
-                                <TextBlock Text="PRINT AREA" Foreground="#64748B"
-                                           FontSize="10" FontWeight="Bold" Margin="0,0,0,4"/>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding WidthMm, StringFormat={}{0:F1}}"
-                                               Foreground="#3B82F6" FontFamily="Consolas"
-                                               FontSize="20" FontWeight="Bold"/>
-                                    <TextBlock Text=" × "
-                                               Foreground="#475569" FontFamily="Consolas"
-                                               FontSize="20" FontWeight="Bold" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding LengthMm, StringFormat={}{0:F1}}"
-                                               Foreground="#3B82F6" FontFamily="Consolas"
-                                               FontSize="20" FontWeight="Bold"/>
-                                    <TextBlock Text=" mm" Foreground="#64748B" FontFamily="Consolas"
-                                               FontSize="11" VerticalAlignment="Bottom" Margin="4,0,0,3"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- 하단 액션 -->
+            <!-- ── 하단: Jog Control + Motion State (가로 배치) ── -->
             <Grid Grid.Row="2">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="12"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <Button Grid.Column="0" Command="{Binding PrintCommand}"
-                        Style="{StaticResource ActionBtn}"
-                        Background="#059669" BorderBrush="#10B981"
-                        Height="50" Margin="0,0,8,0">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🖨" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="{DynamicResource Btn_Print}" FontSize="15" FontWeight="Black" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
+                <Border Grid.Column="0" Style="{StaticResource CardBorder}" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="Jog Control" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
 
-                <Button Grid.Column="1" Command="{Binding AbortCommand}"
-                        Style="{StaticResource ActionBtn}"
-                        Background="#DC2626" BorderBrush="#EF4444"
-                        Height="50" Margin="8,0,0,0">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="⊘" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="{DynamicResource Btn_Abort}" FontSize="15" FontWeight="Black" VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <!-- X-Y D-패드 -->
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Row="0" Grid.Column="1" Style="{StaticResource JogBtn}" Content="↑"
+                                        Tag="Y" IsEnabled="{Binding AxisY.CanJog, FallbackValue=False}"
+                                        PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
+                                <Button Grid.Row="1" Grid.Column="0" Style="{StaticResource JogBtn}" Content="←"
+                                        Tag="X" IsEnabled="{Binding AxisX.CanJog, FallbackValue=False}"
+                                        PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
+                                <Border Grid.Row="1" Grid.Column="1" Width="62" Height="56"
+                                        Background="#0D1520" BorderBrush="#334155" BorderThickness="1" CornerRadius="6">
+                                    <TextBlock Text="X, Y" Foreground="#94A3B8" FontWeight="Bold" FontSize="13"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <Button Grid.Row="1" Grid.Column="2" Style="{StaticResource JogBtn}" Content="→"
+                                        Tag="X" IsEnabled="{Binding AxisX.CanJog, FallbackValue=False}"
+                                        PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
+                                <Button Grid.Row="2" Grid.Column="1" Style="{StaticResource JogBtn}" Content="↓"
+                                        Tag="Y" IsEnabled="{Binding AxisY.CanJog, FallbackValue=False}"
+                                        PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
+                            </Grid>
+
+                            <!-- Z + DW (조그 단위 콤보박스를 두 축 가운데 위에 배치) -->
+                            <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                                <ComboBox Width="92" Height="26" Margin="0,0,0,8" HorizontalAlignment="Center"
+                                          Background="#0D1520" Foreground="Black" BorderBrush="#334155"
+                                          VerticalContentAlignment="Center" FontWeight="Bold"
+                                          SelectedIndex="{Binding JogUnitIndex, Mode=TwoWay}">
+                                    <ComboBoxItem Content="Continuous"/>
+                                    <ComboBoxItem Content="10µm"/>
+                                    <ComboBoxItem Content="100µm"/>
+                                    <ComboBoxItem Content="1000µm"/>
+                                </ComboBox>
+
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <!-- Z 축 -->
+                                    <StackPanel>
+                                        <Button Style="{StaticResource JogBtn}" Content="⤊"  Margin="0,0,0,6"
+                                                Tag="Z" IsEnabled="{Binding AxisZ.CanJog, FallbackValue=False}"
+                                                PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
+                                        <TextBlock Text="Z" Foreground="#F59E0B" FontWeight="Bold" FontSize="13"
+                                                   HorizontalAlignment="Center"/>
+                                        <Button Style="{StaticResource JogBtn}" Content="⤋" Margin="0,6,0,0"
+                                                Tag="Z" IsEnabled="{Binding AxisZ.CanJog, FallbackValue=False}"
+                                                PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
+                                    </StackPanel>
+
+                                    <!-- DW 축 -->
+                                    <StackPanel Margin="10,0,0,0">
+                                        <Button Style="{StaticResource JogBtn}" Content="↑" Margin="0,0,0,6"
+                                                Tag="DW" IsEnabled="{Binding AxisDW.CanJog, FallbackValue=False}"
+                                                PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
+                                        <TextBlock Text="DW" Foreground="#C084FC" FontWeight="Bold" FontSize="13"
+                                                   HorizontalAlignment="Center"/>
+                                        <Button Style="{StaticResource JogBtn}" Content="↓" Margin="0,6,0,0"
+                                                Tag="DW" IsEnabled="{Binding AxisDW.CanJog, FallbackValue=False}"
+                                                PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
                     </StackPanel>
-                </Button>
+                </Border>
+
+                <!-- Motion State (세로 배열) -->
+                <Border Grid.Column="2" Style="{StaticResource CardBorder}" Padding="14">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Motion State" Style="{StaticResource SectionTitle}" Margin="0,0,0,12"/>
+
+                        <!-- Axis X -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Axis X" Foreground="#CBD5E1" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <Border Grid.Column="1" Style="{StaticResource PosBox}" Padding="10,8">
+                                <TextBlock Style="{StaticResource PosText}" FontSize="16"
+                                           Text="{Binding AxisX.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"/>
+                            </Border>
+                        </Grid>
+
+                        <!-- Axis Y -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Axis Y" Foreground="#CBD5E1" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <Border Grid.Column="1" Style="{StaticResource PosBox}" Padding="10,8">
+                                <TextBlock Style="{StaticResource PosText}" FontSize="16"
+                                           Text="{Binding AxisY.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"/>
+                            </Border>
+                        </Grid>
+
+                        <!-- Axis Z -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Axis Z" Foreground="#CBD5E1" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <Border Grid.Column="1" Style="{StaticResource PosBox}" Padding="10,8">
+                                <TextBlock Style="{StaticResource PosText}" FontSize="16"
+                                           Text="{Binding AxisZ.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"/>
+                            </Border>
+                        </Grid>
+
+                        <!-- Axis DW -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Axis DW" Foreground="#CBD5E1" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <Border Grid.Column="1" Style="{StaticResource PosBox}" Padding="10,8">
+                                <TextBlock Style="{StaticResource PosText}" FontSize="16"
+                                           Text="{Binding AxisDW.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"/>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </Border>
             </Grid>
+
         </Grid>
 
-        <!-- ══ 우측: 원점/속도/요약 ═══════════════════════════════════════ -->
+        <!-- ══════════ 우측: Process / Print (게이지·Open Drop Watcher 제외) ══════════ -->
         <Grid Grid.Column="2">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>  <!-- Fluidics + Pressure + Lamps -->
+                <RowDefinition Height="10"/>
+                <RowDefinition Height="*"/>     <!-- Print / Voltage / Nozzle -->
             </Grid.RowDefinitions>
 
-            <!-- Print Origin -->
-            <Border Grid.Row="0" Style="{StaticResource CardBorder}" Padding="16" Margin="0,0,0,10">
-                <StackPanel>
-                    <Grid Margin="0,0,0,12">
-                        <TextBlock Text="PRINT ORIGIN" Style="{StaticResource SectionLabel}"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center"
-                                   FontSize="10" FontWeight="Bold">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Foreground" Value="#475569"/>
-                                    <Setter Property="Text" Value="NOT SET"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsOriginSet}" Value="True">
-                                            <Setter Property="Foreground" Value="#22C55E"/>
-                                            <Setter Property="Text" Value="● CAPTURED"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </Grid>
+            <!-- ── 상단: Fluidics / Pressure / Status ── -->
+            <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>  <!-- Fluidics -->
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="*"/>     <!-- Purge/Meniscus -->
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="Auto"/>  <!-- Pressure ctrl + lamps -->
+                </Grid.ColumnDefinitions>
 
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="40"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="X" Foreground="#64748B"
-                                   FontFamily="Consolas" FontSize="13" FontWeight="Bold"
-                                   VerticalAlignment="Center"/>
-                        <Border Grid.Column="1" Style="{StaticResource ReadOnlyBox}">
-                            <TextBlock Style="{StaticResource ReadOnlyText}"
-                                       Text="{Binding XOrigin, StringFormat={}{0:F3} mm}"/>
-                        </Border>
-                    </Grid>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="40"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Y" Foreground="#64748B"
-                                   FontFamily="Consolas" FontSize="13" FontWeight="Bold"
-                                   VerticalAlignment="Center"/>
-                        <Border Grid.Column="1" Style="{StaticResource ReadOnlyBox}">
-                            <TextBlock Style="{StaticResource ReadOnlyText}"
-                                       Text="{Binding YOrigin, StringFormat={}{0:F3} mm}"/>
-                        </Border>
-                    </Grid>
-                    <Grid Margin="0,0,0,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="40"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Z" Foreground="#64748B"
-                                   FontFamily="Consolas" FontSize="13" FontWeight="Bold"
-                                   VerticalAlignment="Center"/>
-                        <Border Grid.Column="1" Style="{StaticResource ReadOnlyBox}">
-                            <TextBlock Style="{StaticResource ReadOnlyText}"
-                                       Text="{Binding ZOrigin, StringFormat={}{0:F3} mm}"/>
-                        </Border>
-                    </Grid>
+                <!-- Fluidics State (barrel / 주사기 / 밸브 / Head / 퍼지 bath 박스 다이어그램) -->
+                <Border Grid.Column="0" Style="{StaticResource CardBorder}" Padding="12" Width="220"
+                        VerticalAlignment="Top">
+                    <StackPanel>
+                        <TextBlock Text="Fluidics State" Style="{StaticResource SectionTitle}"
+                                   FontSize="13" HorizontalAlignment="Center" Margin="0,0,0,8"/>
 
-                    <Button Command="{Binding SetPrintOriginCommand}"
-                            Style="{StaticResource ActionBtn}"
-                            Background="#1D4ED8" BorderBrush="#3B82F6"
-                            Height="40">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="◎" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Btn_SetPrintOrigin}" FontSize="12"
-                                       FontWeight="Bold" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </Border>
+                        <!-- 명시적 Height 로 다이어그램 높이를 고정 → Row0 축소(하단 패널 공간 확보) -->
+                        <Viewbox Stretch="Uniform" Height="250">
+                            <Canvas Width="290" Height="462">
+                                <!-- ── 배관(파이프) — 박스/컨트롤 뒤에 그려짐 ── -->
+                                <!-- barrel/주사기 → 밸브 -->
+                                <Line X1="90"  Y1="234" X2="90"  Y2="302" Stroke="#2C7A8C" StrokeThickness="5"/>
+                                <Line X1="200" Y1="246" X2="200" Y2="302" Stroke="#2C7A8C" StrokeThickness="5"/>
+                                <!-- 밸브 → H1 헤드 -->
+                                <Line X1="90"  Y1="336" X2="90"  Y2="362" Stroke="#2C7A8C" StrokeThickness="5"/>
+                                <Line X1="200" Y1="336" X2="200" Y2="362" Stroke="#2C7A8C" StrokeThickness="5"/>
 
-            <!-- Print Velocity -->
-            <Border Grid.Row="1" Style="{StaticResource CardBorder}" Padding="16" Margin="0,0,0,10">
-                <StackPanel>
-                    <TextBlock Text="PRINT VELOCITY" Style="{StaticResource SectionLabel}"
-                               Margin="0,0,0,6"/>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding PrintVelocity, StringFormat={}{0:F2}}"
-                                   Foreground="#3B82F6" FontFamily="Consolas"
-                                   FontSize="28" FontWeight="Black" VerticalAlignment="Center"/>
-                        <TextBlock Text="mm/s" Foreground="#475569" FontFamily="Consolas"
-                                   FontSize="11" FontWeight="Bold"
-                                   VerticalAlignment="Bottom" Margin="6,0,0,8"/>
+                                <!-- ── 어두운 패널(컨트롤 배경) ── -->
+                                <Border Canvas.Left="40"  Canvas.Top="6" Width="100" Height="232"
+                                        Background="#0A0E14" CornerRadius="4"/>
+                                <Border Canvas.Left="150" Canvas.Top="6" Width="100" Height="232"
+                                        Background="#0A0E14" CornerRadius="4"/>
+
+                                <!-- ── Barrel 컨트롤 (출력 팁 ≈ x90,y234) ── -->
+                                <ctl:Barrel Canvas.Left="55" Canvas.Top="14"
+                                            TagId="BARREL" SensorHigh="True" SensorLow="False"/>
+
+                                <!-- ── Syringe 10cc 컨트롤 (니들 ≈ x200,y246) ── -->
+                                <ctl:Syringe10cc Canvas.Left="155" Canvas.Top="4"
+                                                 TagId="SYRINGE" VolumeCc="5"/>
+
+                                <!-- ── Valve L / Valve R (토글 스위치 + 라벨) ── -->
+                                <!-- 라벨 (파이프 위에 카드색 배경으로 마스킹) -->
+                                <Border Canvas.Left="58" Canvas.Top="248" Background="#0F1A24" Padding="4,1" CornerRadius="2">
+                                    <TextBlock Text="Valve L" Foreground="#CBD5E1" FontSize="13" FontWeight="Bold"/>
+                                </Border>
+                                <Border Canvas.Left="168" Canvas.Top="248" Background="#0F1A24" Padding="4,1" CornerRadius="2">
+                                    <TextBlock Text="Valve R" Foreground="#64748B" FontSize="13" FontWeight="Bold"/>
+                                </Border>
+                                <!-- 토글 스위치 (좌: ON-회색노브 / 우: OFF) -->
+                                <Border Canvas.Left="62" Canvas.Top="300" Width="56" Height="34"
+                                        Background="#0F1A24" BorderBrush="#94A3B8" BorderThickness="1.5" CornerRadius="6">
+                                    <Border Width="22" Height="24" Margin="3,0,0,0" HorizontalAlignment="Left"
+                                            Background="#94A3B8" CornerRadius="4"/>
+                                </Border>
+                                <Border Canvas.Left="172" Canvas.Top="300" Width="56" Height="34"
+                                        Background="#0F1A24" BorderBrush="#475569" BorderThickness="1.5" CornerRadius="6">
+                                    <Border Width="22" Height="24" Margin="3,0,0,0" HorizontalAlignment="Left"
+                                            Background="#334155" CornerRadius="4"/>
+                                </Border>
+
+                                <!-- ── Head (프린트 헤드) ── -->
+                                <Border Canvas.Left="35" Canvas.Top="362" Width="220" Height="56"
+                                        Background="#0D1726" BorderBrush="#3B82F6" BorderThickness="2" CornerRadius="6">
+                                    <TextBlock Text="Head" Foreground="#93C5FD" FontSize="20" FontWeight="Bold"
+                                               FontFamily="Consolas"
+                                               HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20,0,0,0"/>
+                                </Border>
+                                <!-- 노즐 플레이트(매니폴드 면) -->
+                                <Border Canvas.Left="55" Canvas.Top="418" Width="180" Height="8"
+                                        Background="#0D1726" BorderBrush="#3B82F6" BorderThickness="2,0,2,2" CornerRadius="0,0,3,3"/>
+
+                                <!-- ── 노즐 8개 + SPIT 스트림 (P&ID와 동일하게 여러 노즐 토출) ── -->
+                                <Rectangle Canvas.Left="68"  Canvas.Top="424" Width="4" Height="4" Fill="#1E3A5F"/>
+                                <Rectangle Canvas.Left="90"  Canvas.Top="424" Width="4" Height="4" Fill="#1E3A5F"/>
+                                <Rectangle Canvas.Left="112" Canvas.Top="424" Width="4" Height="4" Fill="#1E3A5F"/>
+                                <Rectangle Canvas.Left="134" Canvas.Top="424" Width="4" Height="4" Fill="#1E3A5F"/>
+                                <Rectangle Canvas.Left="156" Canvas.Top="424" Width="4" Height="4" Fill="#1E3A5F"/>
+                                <Rectangle Canvas.Left="178" Canvas.Top="424" Width="4" Height="4" Fill="#1E3A5F"/>
+                                <Rectangle Canvas.Left="200" Canvas.Top="424" Width="4" Height="4" Fill="#1E3A5F"/>
+                                <Rectangle Canvas.Left="222" Canvas.Top="424" Width="4" Height="4" Fill="#1E3A5F"/>
+
+                                <Line Canvas.Left="70"  Canvas.Top="428" Style="{StaticResource NozzleSpitStream}" Tag="{Binding IsSpitting}"/>
+                                <Line Canvas.Left="92"  Canvas.Top="428" Style="{StaticResource NozzleSpitStream}" Tag="{Binding IsSpitting}"/>
+                                <Line Canvas.Left="114" Canvas.Top="428" Style="{StaticResource NozzleSpitStream}" Tag="{Binding IsSpitting}"/>
+                                <Line Canvas.Left="136" Canvas.Top="428" Style="{StaticResource NozzleSpitStream}" Tag="{Binding IsSpitting}"/>
+                                <Line Canvas.Left="158" Canvas.Top="428" Style="{StaticResource NozzleSpitStream}" Tag="{Binding IsSpitting}"/>
+                                <Line Canvas.Left="180" Canvas.Top="428" Style="{StaticResource NozzleSpitStream}" Tag="{Binding IsSpitting}"/>
+                                <Line Canvas.Left="202" Canvas.Top="428" Style="{StaticResource NozzleSpitStream}" Tag="{Binding IsSpitting}"/>
+                                <Line Canvas.Left="224" Canvas.Top="428" Style="{StaticResource NozzleSpitStream}" Tag="{Binding IsSpitting}"/>
+                            </Canvas>
+                        </Viewbox>
                     </StackPanel>
-                    <TextBlock Text="* 활성 레시피의 X축 Print 속도"
-                               Foreground="#475569" FontSize="9" FontStyle="Italic"
-                               Margin="0,4,0,0"/>
-                </StackPanel>
-            </Border>
+                </Border>
 
-            <!-- Summary -->
-            <Border Grid.Row="2" Style="{StaticResource CardBorder}" Padding="16">
-                <StackPanel>
-                    <TextBlock Text="SUMMARY" Style="{StaticResource SectionLabel}"
-                               Margin="0,0,0,10"/>
+                <!-- Purge / Meniscus (게이지 없이 값 + 토글) -->
+                <Grid Grid.Column="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
 
-                    <Grid Margin="0,0,0,6">
-                        <TextBlock Text="Head Pack" Style="{StaticResource FieldLabel}"/>
-                        <TextBlock Text="{Binding SelectedHeadPack}"
-                                   Foreground="White" FontFamily="Consolas" FontSize="11"
-                                   FontWeight="Bold" HorizontalAlignment="Right"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,6">
-                        <TextBlock Text="Overlap" Style="{StaticResource FieldLabel}"/>
-                        <TextBlock Foreground="White" FontFamily="Consolas" FontSize="11"
-                                   FontWeight="Bold" HorizontalAlignment="Right"
-                                   Text="{Binding NOverlapNz, StringFormat={}{0} nz}"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,6">
-                        <TextBlock Text="Using Head" Style="{StaticResource FieldLabel}"/>
-                        <TextBlock Foreground="White" FontFamily="Consolas" FontSize="11"
-                                   FontWeight="Bold" HorizontalAlignment="Right"
-                                   Text="{Binding UsingHead, StringFormat={}{0} ea}"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,6">
-                        <TextBlock Text="Width × Length" Style="{StaticResource FieldLabel}"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <TextBlock Foreground="White" FontFamily="Consolas" FontSize="11"
-                                       FontWeight="Bold"
-                                       Text="{Binding WidthMm, StringFormat={}{0:F2}}"/>
-                            <TextBlock Foreground="#475569" Text=" × " FontFamily="Consolas" FontSize="11"/>
-                            <TextBlock Foreground="White" FontFamily="Consolas" FontSize="11"
-                                       FontWeight="Bold"
-                                       Text="{Binding LengthMm, StringFormat={}{0:F2} mm}"/>
+                    <!-- Purge -->
+                    <Border Grid.Column="0" Style="{StaticResource CardBorder}" Padding="10">
+                        <StackPanel>
+                            <TextBlock Text="Purge" Style="{StaticResource SectionTitle}" FontSize="12"
+                                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                            <!-- 현재값(읽기 전용) -->
+                            <Border Style="{StaticResource PosBox}" Margin="0,0,0,5">
+                                <TextBlock Style="{StaticResource PosText}"
+                                           Text="{Binding PurgeCurrent, StringFormat={}{0:F3} kPa}"/>
+                            </Border>
+                            <!-- 셋팅값(입력 + 증감) -->
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="22"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Style="{StaticResource PosBox}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0" Background="Transparent" BorderThickness="0"
+                                                 Foreground="#E2E8F0" CaretBrush="#E2E8F0"
+                                                 FontFamily="Consolas" FontSize="13" FontWeight="Bold"
+                                                 TextAlignment="Right" VerticalContentAlignment="Center"
+                                                 Text="{Binding PurgeSetpoint, StringFormat=F3, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <TextBlock Grid.Column="1" Text=" kPa" Foreground="#94A3B8"
+                                                   FontFamily="Consolas" FontSize="11" FontWeight="Bold"
+                                                   VerticalAlignment="Center" Margin="2,0,0,0"/>
+                                    </Grid>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="3,0,0,0">
+                                    <Button Style="{StaticResource StepBtn}" Height="18" Content="+" Margin="0,0,0,2"
+                                            Command="{Binding PurgeStepUpCommand}"/>
+                                    <Button Style="{StaticResource StepBtn}" Height="18" Content="–"
+                                            Command="{Binding PurgeStepDownCommand}"/>
+                                </StackPanel>
+                            </Grid>
+                            <Button Style="{StaticResource ActionBtn}" Height="26" Margin="0,0,0,5" Content="Set Value"
+                                    Command="{Binding SetPurgeCommand}"/>
+                            <Button Height="40" Content="Toggle Purge"
+                                    Command="{Binding TogglePurgeCommand}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ActionBtn}">
+                                        <Setter Property="Background"  Value="#1D4ED8"/>
+                                        <Setter Property="BorderBrush" Value="#3B82F6"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsPurgeOn}" Value="True">
+                                                <Setter Property="Background"  Value="#059669"/>
+                                                <Setter Property="BorderBrush" Value="#10B981"/>
+                                                <Setter Property="Content"     Value="Purge ON"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </StackPanel>
-                    </Grid>
-                    <Grid Margin="0,0,0,6">
-                        <TextBlock Text="DPI" Style="{StaticResource FieldLabel}"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <TextBlock Foreground="White" FontFamily="Consolas" FontSize="11"
-                                       FontWeight="Bold"
-                                       Text="{Binding Dpi, StringFormat={}{0} dpi}"/>
-                            <TextBlock Foreground="#475569" Text=" / " FontFamily="Consolas" FontSize="11"/>
-                            <TextBlock Foreground="#3B82F6" FontFamily="Consolas" FontSize="11"
-                                       FontWeight="Bold"
-                                       Text="{Binding DropPitchMm, StringFormat={}{0:F4} mm}"/>
+                    </Border>
+
+                    <!-- Meniscus -->
+                    <Border Grid.Column="2" Style="{StaticResource CardBorder}" Padding="10">
+                        <StackPanel>
+                            <TextBlock Text="Meniscus" Style="{StaticResource SectionTitle}" FontSize="12"
+                                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                            <!-- 현재값(읽기 전용) -->
+                            <Border Style="{StaticResource PosBox}" Margin="0,0,0,5">
+                                <TextBlock Style="{StaticResource PosText}"
+                                           Text="{Binding MeniscusCurrent, StringFormat={}{0:F0} Pa}"/>
+                            </Border>
+                            <!-- 셋팅값(입력 + 증감) -->
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="22"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Style="{StaticResource PosBox}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0" Background="Transparent" BorderThickness="0"
+                                                 Foreground="#E2E8F0" CaretBrush="#E2E8F0"
+                                                 FontFamily="Consolas" FontSize="13" FontWeight="Bold"
+                                                 TextAlignment="Right" VerticalContentAlignment="Center"
+                                                 Text="{Binding MeniscusSetpoint, StringFormat=F0, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <TextBlock Grid.Column="1" Text=" Pa" Foreground="#94A3B8"
+                                                   FontFamily="Consolas" FontSize="11" FontWeight="Bold"
+                                                   VerticalAlignment="Center" Margin="2,0,0,0"/>
+                                    </Grid>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="3,0,0,0">
+                                    <Button Style="{StaticResource StepBtn}" Height="18" Content="+" Margin="0,0,0,2"
+                                            Command="{Binding MeniscusStepUpCommand}"/>
+                                    <Button Style="{StaticResource StepBtn}" Height="18" Content="–"
+                                            Command="{Binding MeniscusStepDownCommand}"/>
+                                </StackPanel>
+                            </Grid>
+                            <Button Style="{StaticResource ActionBtn}" Height="26" Margin="0,0,0,5" Content="Set Value"
+                                    Command="{Binding SetMeniscusCommand}"/>
+                            <Button Height="40" Content="Toggle Meniscus"
+                                    Command="{Binding ToggleMeniscusCommand}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ActionBtn}">
+                                        <Setter Property="Background"  Value="#1D4ED8"/>
+                                        <Setter Property="BorderBrush" Value="#3B82F6"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMeniscusOn}" Value="True">
+                                                <Setter Property="Background"  Value="#059669"/>
+                                                <Setter Property="BorderBrush" Value="#10B981"/>
+                                                <Setter Property="Content"     Value="Meniscus ON"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </StackPanel>
-                    </Grid>
-                </StackPanel>
-            </Border>
+                    </Border>
+                </Grid>
+
+                <!-- Pressure control + Status lamps -->
+                <Border Grid.Column="4" Style="{StaticResource CardBorder}" Padding="10" Width="150">
+                    <StackPanel>
+                        <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,4"
+                                Background="#1D4ED8" BorderBrush="#3B82F6" Content="Final VV"/>
+                        <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,4"
+                                Background="#1D4ED8" BorderBrush="#3B82F6" Content="Switching Pressure"/>
+                        <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,6"
+                                IsEnabled="False" Content="Pump Control"/>
+
+                        <!-- 상태 램프 -->
+                        <ItemsControl>
+                            <ItemsControl.Resources>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="#CBD5E1"/>
+                                    <Setter Property="FontSize"   Value="11"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                </Style>
+                            </ItemsControl.Resources>
+                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="1" Text="Meni"/></Grid>
+                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Width="26" Height="14" Background="#22C55E" CornerRadius="2" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="1" Text="Purge"/></Grid>
+                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="1" Text="Final VV"/></Grid>
+                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="1" Text="Over Flow"/></Grid>
+                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="1" Text="Purge"/></Grid>
+                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="1" Text="Meniscus"/></Grid>
+                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="1" Text="Pump"/></Grid>
+                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
+                                <TextBlock Grid.Column="1" Text="MPC AL"/></Grid>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- ── 하단: Motion(Home/Move) | Voltage·Nozzle·Print설정 | Print 실행 ── -->
+            <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>      <!-- Motion (Home/Move) -->
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="1.25*"/>  <!-- Voltage / Nozzle / Print 설정 -->
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>      <!-- Print 실행 -->
+                    </Grid.ColumnDefinitions>
+
+                    <!-- ① Motion (Home / Absolute / Axis / Move) -->
+                    <Border Grid.Column="0" Style="{StaticResource CardBorder}" Padding="12">
+                        <StackPanel>
+                            <Button Style="{StaticResource ActionBtn}" Height="40" Margin="0,0,0,6"
+                                    Background="#1D4ED8" BorderBrush="#3B82F6" Content="🏠  Home"
+                                    Command="{Binding MotionHomeCommand}"
+                                    IsEnabled="{Binding SelectedMotionAxis.CanMove, FallbackValue=False}"/>
+                            <ComboBox Height="30" Background="#0D1520" Foreground="Black" BorderBrush="#334155"
+                                      VerticalContentAlignment="Center" FontWeight="Bold" Margin="0,0,0,5"
+                                      SelectedIndex="{Binding MotionModeIndex, Mode=TwoWay}">
+                                <ComboBoxItem Content="Absolute"/>
+                                <ComboBoxItem Content="Relative"/>
+                            </ComboBox>
+                            <ComboBox Height="30" Background="#0D1520" Foreground="Black" BorderBrush="#334155"
+                                      VerticalContentAlignment="Center" FontWeight="Bold" Margin="0,0,0,5"
+                                      SelectedIndex="{Binding MotionAxisIndex, Mode=TwoWay}">
+                                <ComboBoxItem Content="Axis X"/>
+                                <ComboBoxItem Content="Axis Y"/>
+                                <ComboBoxItem Content="Axis Z"/>
+                                <ComboBoxItem Content="Axis DW"/>
+                            </ComboBox>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="26"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Style="{StaticResource PosBox}" Padding="8,5">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0" Background="Transparent" BorderThickness="0"
+                                                 Foreground="#E2E8F0" CaretBrush="#E2E8F0"
+                                                 FontFamily="Consolas" FontSize="16" FontWeight="Bold"
+                                                 TextAlignment="Right" VerticalContentAlignment="Center"
+                                                 Text="{Binding MotionTarget, StringFormat=F3, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <TextBlock Grid.Column="1" Text=" mm" Foreground="#94A3B8"
+                                                   FontFamily="Consolas" FontSize="13" FontWeight="Bold"
+                                                   VerticalAlignment="Center" Margin="2,0,0,0"/>
+                                    </Grid>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="3,0,0,0">
+                                    <Button Style="{StaticResource StepBtn}" Height="18" Content="+" Margin="0,0,0,2"
+                                            Command="{Binding MotionStepUpCommand}"/>
+                                    <Button Style="{StaticResource StepBtn}" Height="18" Content="–"
+                                            Command="{Binding MotionStepDownCommand}"/>
+                                </StackPanel>
+                            </Grid>
+                            <Button Style="{StaticResource ActionBtn}" Height="40"
+                                    Background="#475569" BorderBrush="#64748B" Content="Move"
+                                    Command="{Binding MotionMoveCommand}"
+                                    IsEnabled="{Binding SelectedMotionAxis.CanMove, FallbackValue=False}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ② Voltage / Nozzle / Print 설정 -->
+                    <Border Grid.Column="2" Style="{StaticResource CardBorder}" Padding="12">
+                        <StackPanel>
+                            <TextBlock Margin="0,0,0,4" Style="{StaticResource MutedLabel}">
+                                <Run Text="Voltage offset "/><Run Text="-25~25" Foreground="#EF4444" FontSize="9"/>
+                            </TextBlock>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Style="{StaticResource PosBox}">
+                                    <TextBlock Style="{StaticResource PosText}" Text="0.00 %"/>
+                                </Border>
+                                <Button Grid.Column="2" Style="{StaticResource ActionBtn}" Height="28" Width="100"
+                                        Background="#1D4ED8" BorderBrush="#3B82F6" Content="Set Voltage"/>
+                            </Grid>
+                            <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,5" Content="Nozzle Select"/>
+                            <Button Height="28" Margin="0,0,0,5" Content="Spit"
+                                    Command="{Binding SpitCommand}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ActionBtn}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsSpitting}" Value="True">
+                                                <Setter Property="Background"  Value="#059669"/>
+                                                <Setter Property="BorderBrush"  Value="#10B981"/>
+                                                <Setter Property="Content"      Value="Spit ON"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <TextBlock Text="Print data Path" Style="{StaticResource MutedLabel}" Margin="0,0,0,2"/>
+                            <TextBox Style="{x:Null}" Height="26" Background="#0D1520" Foreground="White"
+                                     BorderBrush="#334155" BorderThickness="1" VerticalContentAlignment="Center"
+                                     Padding="6,0" Margin="0,0,0,5"/>
+                            <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,5"
+                                    Background="#1D4ED8" BorderBrush="#3B82F6" Content="Set Print Origin"/>
+                            <Button Style="{StaticResource ActionBtn}" Height="28"
+                                    Background="#1D4ED8" BorderBrush="#3B82F6" Content="Print Image Design"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ③ Print 실행 -->
+                    <Border Grid.Column="4" Style="{StaticResource CardBorder}" Padding="12">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource MutedLabel}" Margin="0,0,0,2">
+                                <Run Text="Print Velocity "/><Run Text="50~200" Foreground="#EF4444" FontSize="9"/>
+                            </TextBlock>
+                            <Border Style="{StaticResource PosBox}" Padding="8,6" Margin="0,0,0,10">
+                                <TextBlock Style="{StaticResource PosText}" FontSize="15" Text="100.0 mm/s"/>
+                            </Border>
+                            <Button Style="{StaticResource ActionBtn}" Height="46" Margin="0,0,0,8" Content="Load Image"/>
+                            <Button Style="{StaticResource ActionBtn}" Height="64" FontSize="22"
+                                    Background="#059669" BorderBrush="#10B981" Content="Print"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
         </Grid>
     </Grid>
 </UserControl>

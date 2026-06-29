@@ -23,12 +23,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set => SetProperty(ref _selectedAxis, value);
         }
 
-        // D-패드 조그 버튼(X/Y/Z/T)의 IsEnabled 바인딩용 — 코드비하인드 ResolveAxis와 동일하게
+        // D-패드 조그 버튼(X/Y/Z/DW)의 IsEnabled 바인딩용 — 코드비하인드 ResolveAxis와 동일하게
         // 이름에 해당 축 문자가 포함된 축을 찾는다. (각 축의 CanMove로 활성화 제어)
         public AxisViewModel? AxisX => ResolveByTag("X");
         public AxisViewModel? AxisY => ResolveByTag("Y");
         public AxisViewModel? AxisZ => ResolveByTag("Z");
-        public AxisViewModel? AxisT => ResolveByTag("T");
+        public AxisViewModel? AxisDW => ResolveByTag("DW");
         private AxisViewModel? ResolveByTag(string tag) =>
             AxisList.FirstOrDefault(a => a.Info?.Name != null &&
                 a.Info.Name.IndexOf(tag, StringComparison.OrdinalIgnoreCase) >= 0);

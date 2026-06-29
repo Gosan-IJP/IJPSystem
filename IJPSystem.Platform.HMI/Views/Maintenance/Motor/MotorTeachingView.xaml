@@ -238,15 +238,15 @@
 
                         <Border Grid.Column="6" Background="#1A0C2E" CornerRadius="8" Padding="10,7" BorderBrush="#6D28D9" BorderThickness="1">
                             <StackPanel>
-                                <TextBlock Text="T AXIS" Foreground="#C084FC" FontSize="8" FontWeight="Bold" Opacity="0.7"/>
-                                <TextBlock Text="{Binding TActualPosition, StringFormat={}{0:F3}}"
+                                <TextBlock Text="DW AXIS" Foreground="#C084FC" FontSize="8" FontWeight="Bold" Opacity="0.7"/>
+                                <TextBlock Text="{Binding DWActualPosition, StringFormat={}{0:F3}}"
                                            Foreground="#C084FC" FontSize="16" FontWeight="Bold" FontFamily="Consolas"/>
-                                <TextBlock Text="°" Foreground="#C084FC" FontSize="7" Opacity="0.5" HorizontalAlignment="Right"/>
+                                <TextBlock Text="mm" Foreground="#C084FC" FontSize="7" Opacity="0.5" HorizontalAlignment="Right"/>
                             </StackPanel>
                         </Border>
                     </Grid>
 
-                    <!-- Z / T buttons row: 4 buttons full-width at bottom -->
+                    <!-- Z / DW buttons row: 4 buttons full-width at bottom -->
                     <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -278,23 +278,23 @@
                             </StackPanel>
                         </Button>
 
-                        <Button Grid.Column="4" Tag="T" Width="Auto" Height="52"
+                        <Button Grid.Column="4" Tag="DW" Width="Auto" Height="52"
                                 Style="{StaticResource JogControlStyle}"
                                 Background="#3B0764" BorderBrush="#C084FC"
                                 PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="Jog_MouseUp">
                             <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="T" Foreground="#C084FC" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="↺" Foreground="White" FontSize="19" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
+                                <TextBlock Text="DW" Foreground="#C084FC" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="▼" Foreground="White" FontSize="17" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
                             </StackPanel>
                         </Button>
 
-                        <Button Grid.Column="6" Tag="T" Width="Auto" Height="52"
+                        <Button Grid.Column="6" Tag="DW" Width="Auto" Height="52"
                                 Style="{StaticResource JogControlStyle}"
                                 Background="#3B0764" BorderBrush="#C084FC"
                                 PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="Jog_MouseUp">
                             <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="T" Foreground="#C084FC" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="↻" Foreground="White" FontSize="19" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
+                                <TextBlock Text="DW" Foreground="#C084FC" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="▲" Foreground="White" FontSize="17" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
                             </StackPanel>
                         </Button>
                     </Grid>

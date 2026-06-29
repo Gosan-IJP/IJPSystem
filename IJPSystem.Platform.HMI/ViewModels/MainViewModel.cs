@@ -592,6 +592,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     AddLog(T("Log_PatternPrint"), LogLevel.Info);
                     break;
 
+                case "PRINT_DROP_WATCHER":
+                    IsPrintSubMenuVisible = true;
+                    SelectedMenu    = "PRINT";
+                    SelectedSubMenu = "PRINT_DROP_WATCHER";
+                    CurrentView = new DropWatcherViewModel(this);
+                    AddLog(T("Log_MoveDropWatcher"), LogLevel.Info);
+                    break;
+
+                case "PRINT_INITIALIZE":
+                    IsPrintSubMenuVisible = true;
+                    SelectedMenu    = "PRINT";
+                    SelectedSubMenu = "PRINT_INITIALIZE";
+                    CurrentView = new InitializeView { DataContext = new InitializeViewModel(this) };
+                    AddLog(T("Log_MoveInitialize"), LogLevel.Info);
+                    break;
+
                 case "MAINTENANCE":
                 case "IO":
                     CollapseAllSubMenus();

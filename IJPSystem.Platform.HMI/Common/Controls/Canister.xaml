@@ -43,7 +43,7 @@
         <!-- LEAK (받침대 영역, 누액 감지 — 알람) -->
         <Ellipse Canvas.Left="-20" Canvas.Top="164" Width="8" Height="8"
                  Fill="{Binding ElementName=root, Path=SensorLeak, Converter={StaticResource BoolToSensorBrush}, ConverterParameter=Alarm}"/>
-        <TextBlock Canvas.Left="-40" Canvas.Top="161" Text="LEAK" Foreground="#64748B" FontSize="8"/>
+        <TextBlock Canvas.Left="-42" Canvas.Top="161" Text="LEAK" Foreground="#64748B" FontSize="8" HorizontalAlignment="Left" VerticalAlignment="Center"/>
 
         <!-- Tag + caption (받침대 아래) -->
         <Border Canvas.Left="0" Canvas.Top="182"

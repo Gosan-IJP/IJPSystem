@@ -15,13 +15,6 @@
       "AxisNo": "Z",
       "Name": "Z AXIS",
       "Unit": "mm"
-    },
-
-  {
-      "AxisNo": "DW",
-      "Name": "DW AXIS",
-      "Unit": "mm"
     }
-
   ]
 }

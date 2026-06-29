@@ -1,0 +1,61 @@
+<UserControl x:Class="IJPSystem.Platform.HMI.Common.Controls.Syringe10cc"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="root">
+    <!-- Syringe 10cc: 의료용 주사기 형상 (플런저 + 핑거플랜지 + 배럴 + 눈금 + 루어팁/니들).
+         VolumeCc(0~10) 로 플런저 위치와 액량 표시.
+         배럴 내부 y=40~200(높이 160). x<0/우측 = 눈금·태그 영역. -->
+    <Canvas>
+        <!-- 핑거 플랜지(배럴 상단 좌우 귀) -->
+        <Rectangle Canvas.Left="-6" Canvas.Top="36" Width="102" Height="8"
+                   Stroke="#3B82F6" StrokeThickness="2" Fill="#1E293B" RadiusX="3" RadiusY="3"/>
+
+        <!-- 배럴 배경 -->
+        <Rectangle Canvas.Left="20" Canvas.Top="40" Width="50" Height="160"
+                   Fill="#0D1520"/>
+
+        <!-- 액체(플런저 씰 아래 ~ 팁) -->
+        <Rectangle x:Name="Liquid" Canvas.Left="22" Canvas.Top="120" Width="46" Height="80"
+                   Fill="#3B82F6" Opacity="0.55"/>
+
+        <!-- 배럴 외곽선 -->
+        <Rectangle Canvas.Left="20" Canvas.Top="40" Width="50" Height="160"
+                   Stroke="#3B82F6" StrokeThickness="2" Fill="Transparent" RadiusX="3" RadiusY="3"/>
+
+        <!-- 눈금 (2cc 간격) -->
+        <Line X1="58" Y1="40"    X2="68" Y2="40"    Stroke="#64748B" StrokeThickness="0.8"/>
+        <Line X1="58" Y1="72.8"  X2="68" Y2="72.8"  Stroke="#64748B" StrokeThickness="0.8"/>
+        <Line X1="58" Y1="105.6" X2="68" Y2="105.6" Stroke="#64748B" StrokeThickness="0.8"/>
+        <Line X1="58" Y1="120"   X2="68" Y2="120"   Stroke="#94A3B8" StrokeThickness="1"/>
+        <Line X1="58" Y1="138.4" X2="68" Y2="138.4" Stroke="#64748B" StrokeThickness="0.8"/>
+        <Line X1="58" Y1="171.2" X2="68" Y2="171.2" Stroke="#64748B" StrokeThickness="0.8"/>
+        <Line X1="58" Y1="200"   X2="68" Y2="200"   Stroke="#94A3B8" StrokeThickness="1"/>
+        <!-- 눈금 숫자 -->
+        <TextBlock Canvas.Left="72" Canvas.Top="34"  Text="10" Foreground="#94A3B8" FontSize="9" FontFamily="Consolas"/>
+        <TextBlock Canvas.Left="72" Canvas.Top="114" Text="5"  Foreground="#94A3B8" FontSize="9" FontFamily="Consolas"/>
+        <TextBlock Canvas.Left="72" Canvas.Top="194" Text="0"  Foreground="#94A3B8" FontSize="9" FontFamily="Consolas"/>
+        <TextBlock Canvas.Left="74" Canvas.Top="76"  Text="cc" Foreground="#475569" FontSize="8" FontFamily="Consolas"/>
+
+        <!-- 플런저 씰(고무) -->
+        <Rectangle x:Name="Seal" Canvas.Left="21" Canvas.Top="116" Width="48" Height="8"
+                   Fill="#64748B" Stroke="#94A3B8" StrokeThickness="0.6"/>
+
+        <!-- 플런저 로드(씰 ~ 썸레스트) -->
+        <Rectangle x:Name="PlungerRod" Canvas.Left="42" Canvas.Top="10" Width="6" Height="110"
+                   Fill="#475569"/>
+
+        <!-- 썸 레스트(엄지 받침) -->
+        <Rectangle Canvas.Left="22" Canvas.Top="0" Width="46" Height="10"
+                   Stroke="#3B82F6" StrokeThickness="2" Fill="#1E293B" RadiusX="3" RadiusY="3"/>
+
+        <!-- 팁 콘(테이퍼) -->
+        <Path Stroke="#3B82F6" StrokeThickness="2" Fill="#1E293B"
+              Data="M 20,200 L 70,200 L 52,216 L 38,216 Z"/>
+        <!-- 루어 팁 -->
+        <Rectangle Canvas.Left="40" Canvas.Top="216" Width="10" Height="10"
+                   Stroke="#3B82F6" StrokeThickness="1.5" Fill="#1E293B"/>
+        <!-- 니들 -->
+        <Line X1="45" Y1="226" X2="45" Y2="250" Stroke="#94A3B8" StrokeThickness="1.5"/>
+
+    </Canvas>
+</UserControl>

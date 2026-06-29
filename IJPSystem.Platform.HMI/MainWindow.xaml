@@ -213,9 +213,15 @@
                 <Button Content="{DynamicResource SubMenu_PatternPrint}"
                         Style="{StaticResource PrintSubButtonStyle}"
                         Command="{Binding MoveWindowCommand}" CommandParameter="PATTERN_PRINT"/>
+                <Button Content="{DynamicResource SubMenu_PrintDropWatcher}"
+                        Style="{StaticResource PrintSubButtonStyle}"
+                        Command="{Binding MoveWindowCommand}" CommandParameter="PRINT_DROP_WATCHER"/>
                 <Button Content="{DynamicResource SubMenu_Waveform}"
                         Style="{StaticResource PrintSubButtonStyle}"
                         Command="{Binding MoveWindowCommand}" CommandParameter="WAVEFORM"/>
+                <Button Content="{DynamicResource SubMenu_Initialize}"
+                        Style="{StaticResource PrintSubButtonStyle}"
+                        Command="{Binding MoveWindowCommand}" CommandParameter="PRINT_INITIALIZE"/>
                 
                 <!-- ── RECIPE 메뉴 선택 시에만 표시 ── -->
                 <Button Content="{DynamicResource SubMenu_MotorInfo}"

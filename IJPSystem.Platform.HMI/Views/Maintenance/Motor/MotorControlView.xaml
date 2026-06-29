@@ -347,7 +347,7 @@
                                 <RadioButton Content="×1.0"  IsChecked="{Binding IsJogSpeedNormal, Mode=TwoWay}" GroupName="JogSpeed" Style="{StaticResource ModernModeButtonStyle}" Margin="4,0"/>
                                 <RadioButton Content="×2.0"  IsChecked="{Binding IsJogSpeedFast,   Mode=TwoWay}" GroupName="JogSpeed" Style="{StaticResource ModernModeButtonStyle}"/>
                             </StackPanel>
-                            <!-- 조그 패드 : X-Y D-패드 / Z / T  (Viewbox로 패널 너비에 맞게 스케일) -->
+                            <!-- 조그 패드 : X-Y D-패드 / Z / DW  (Viewbox로 패널 너비에 맞게 스케일) -->
                         <Viewbox Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Grid.ColumnDefinitions>
@@ -441,23 +441,23 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- ── T (Theta) 축 ── -->
+                            <!-- ── DW 축 ── -->
                             <Border Grid.Column="2" Background="#111827" Padding="6" CornerRadius="8" BorderBrush="#1F2937" BorderThickness="1">
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="T" Foreground="#64748B" FontSize="10" FontWeight="Bold"
+                                    <TextBlock Text="DW" Foreground="#64748B" FontSize="10" FontWeight="Bold"
                                                HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                        <Button Tag="T" FontSize="15"
+                                        <Button Tag="DW" FontSize="15"
                                             PreviewMouseDown="JogBackward_MouseDown"
                                             PreviewMouseUp="JogStop_MouseUp"
                                             Style="{StaticResource JogControlStyle}"
-                                            IsEnabled="{Binding AxisT.CanJog, FallbackValue=False}"
-                                            Content="↺  -T"/>
-                                        <Button Tag="T" FontSize="15"
+                                            IsEnabled="{Binding AxisDW.CanJog, FallbackValue=False}"
+                                            Content="▼  -DW"/>
+                                        <Button Tag="DW" FontSize="15"
                                             PreviewMouseDown="JogForward_MouseDown"
                                             PreviewMouseUp="JogStop_MouseUp"
                                             Style="{StaticResource JogControlStyle}"
-                                            IsEnabled="{Binding AxisT.CanJog, FallbackValue=False}"
-                                            Content="↻  +T"/>
+                                            IsEnabled="{Binding AxisDW.CanJog, FallbackValue=False}"
+                                            Content="▲  +DW"/>
                                 </StackPanel>
                             </Border>
                         </Grid>

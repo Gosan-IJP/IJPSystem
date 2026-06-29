@@ -64,7 +64,18 @@
       "Bash(powershell.exe -NoProfile -Command \"Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue | Stop-Process -Force; dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -nologo 2>&1 | Select-Object -Last 3\")",
       "Bash(powershell.exe -NoProfile -Command \"Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue | Stop-Process -Force; dotnet build IJPSystem.slnx -nologo 2>&1 | Select-Object -Last 5\")",
       "Bash(powershell.exe -NoProfile -Command \"Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue | Stop-Process -Force; dotnet build IJPSystem.slnx -nologo 2>&1 | Select-Object -Last 3\")",
-      "Bash(git switch *)"
+      "Bash(git switch *)",
+      "Bash(xargs -n1 basename)",
+      "Bash(powershell.exe -NoProfile -Command \"Get-Process IJPSystem.Platform.HMI -ErrorAction SilentlyContinue | Stop-Process -Force; dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -nologo 2>&1 | Select-String -Pattern 'error|오류|CS\\\\\\\\d|MC\\\\\\\\d' | Select-Object -First 15\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -nologo 2>&1 | Select-Object -Last 3\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -nologo -v q 2>&1 | Select-String -Pattern 'error|오류|Build succeeded|빌드했습니다|경과'\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -nologo 2>&1 | Select-Object -Last 8\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -nologo 2>&1 | Select-Object -Last 4\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -nologo 2>&1 | Select-Object -Last 5\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet restore IJPSystem.Drivers.Meniscus/IJPSystem.Drivers.Meniscus.csproj 2>&1 | Select-Object -Last 8\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Drivers.Meniscus/IJPSystem.Drivers.Meniscus.csproj -nologo 2>&1 | Select-Object -Last 8\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -nologo 2>&1 | Select-Object -Last 6\")",
+      "Bash(powershell.exe -NoProfile -Command \"\\(Get-Content 'd:\\\\IJP\\\\IJPSystem\\\\IJPSystem.Platform.HMI\\\\ViewModels\\\\PatternPrintViewModel.cs' -Raw\\) -replace 'Mizar\\\\.Meniscus\\\\.','IJPSystem.Drivers.Meniscus.' | Set-Content 'd:\\\\IJP\\\\IJPSystem\\\\IJPSystem.Platform.HMI\\\\ViewModels\\\\PatternPrintViewModel.cs' -NoNewline; Select-String -Path 'd:\\\\IJP\\\\IJPSystem\\\\IJPSystem.Platform.HMI\\\\ViewModels\\\\PatternPrintViewModel.cs' -Pattern 'Meniscus\\\\.\\(DmdModbusClient|MeniscusController\\)' | Select-Object -ExpandProperty Line\")"
     ],
     "additionalDirectories": [
       "d:\\tmp",
