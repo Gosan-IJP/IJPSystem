@@ -49,5 +49,15 @@ namespace IJPSystem.Platform.HMI.Views
             var axis = ResolveAxis(sender);
             if (axis != null) _ = axis.StopAsync();
         }
+
+        // ── Nozzle Select (모달 창) ───────────────────────────────────
+        private void NozzleSelect_Click(object sender, System.Windows.RoutedEventArgs e)
+        {
+            var win = new IJPSystem.Platform.HMI.Nozzle.NozzleSelectWindow
+            {
+                Owner = System.Windows.Window.GetWindow(this)
+            };
+            win.ShowDialog();
+        }
     }
 }

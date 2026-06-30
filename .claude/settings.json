@@ -75,13 +75,16 @@
       "Bash(powershell.exe -NoProfile -Command \"dotnet restore IJPSystem.Drivers.Meniscus/IJPSystem.Drivers.Meniscus.csproj 2>&1 | Select-Object -Last 8\")",
       "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Drivers.Meniscus/IJPSystem.Drivers.Meniscus.csproj -nologo 2>&1 | Select-Object -Last 8\")",
       "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -nologo 2>&1 | Select-Object -Last 6\")",
-      "Bash(powershell.exe -NoProfile -Command \"\\(Get-Content 'd:\\\\IJP\\\\IJPSystem\\\\IJPSystem.Platform.HMI\\\\ViewModels\\\\PatternPrintViewModel.cs' -Raw\\) -replace 'Mizar\\\\.Meniscus\\\\.','IJPSystem.Drivers.Meniscus.' | Set-Content 'd:\\\\IJP\\\\IJPSystem\\\\IJPSystem.Platform.HMI\\\\ViewModels\\\\PatternPrintViewModel.cs' -NoNewline; Select-String -Path 'd:\\\\IJP\\\\IJPSystem\\\\IJPSystem.Platform.HMI\\\\ViewModels\\\\PatternPrintViewModel.cs' -Pattern 'Meniscus\\\\.\\(DmdModbusClient|MeniscusController\\)' | Select-Object -ExpandProperty Line\")"
+      "Bash(powershell.exe -NoProfile -Command \"\\(Get-Content 'd:\\\\IJP\\\\IJPSystem\\\\IJPSystem.Platform.HMI\\\\ViewModels\\\\PatternPrintViewModel.cs' -Raw\\) -replace 'Mizar\\\\.Meniscus\\\\.','IJPSystem.Drivers.Meniscus.' | Set-Content 'd:\\\\IJP\\\\IJPSystem\\\\IJPSystem.Platform.HMI\\\\ViewModels\\\\PatternPrintViewModel.cs' -NoNewline; Select-String -Path 'd:\\\\IJP\\\\IJPSystem\\\\IJPSystem.Platform.HMI\\\\ViewModels\\\\PatternPrintViewModel.cs' -Pattern 'Meniscus\\\\.\\(DmdModbusClient|MeniscusController\\)' | Select-Object -ExpandProperty Line\")",
+      "Read(//c/Users/bluey/.claude/**)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, ensure_ascii=False, indent=1\\)\\)\")"
     ],
     "additionalDirectories": [
       "d:\\tmp",
       "D:\\tmp",
       "D:\\IJP\\IJPSystem",
-      "C:\\Users\\bluey\\OneDrive\\바탕 화면"
+      "C:\\Users\\bluey\\OneDrive\\바탕 화면",
+      "C:\\Users\\bluey\\.claude"
     ]
   }
 }

@@ -158,6 +158,34 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private bool _meniscusConnected;
         private const double PaPerKpa = 1000.0;
 
+        // ── Valve L / R (Fluidics 다이어그램 토글 → 디지털 출력) ──────
+        // Valve L = Y100(DO_HEAD1_LEFT_VALVE), Valve R = Y101(DO_HEAD1_RIGHT_VALVE)
+        private const string DoValveL = "DO_HEAD1_LEFT_VALVE";
+        private const string DoValveR = "DO_HEAD1_RIGHT_VALVE";
+
+        private bool _isValveLOn;
+        public bool IsValveLOn { get => _isValveLOn; private set => SetProperty(ref _isValveLOn, value); }
+        private bool _isValveROn;
+        public bool IsValveROn { get => _isValveROn; private set => SetProperty(ref _isValveROn, value); }
+
+        public ICommand ToggleValveLCommand { get; private set; } = null!;
+        public ICommand ToggleValveRCommand { get; private set; } = null!;
+
+        // ── Voltage offset (%) : -25 ~ 25 (빨간 범위) ─────────────────
+        private const double VoltageOffsetMin = -25.0;
+        private const double VoltageOffsetMax =  25.0;
+        private double _voltageOffset;
+        public double VoltageOffset
+        {
+            get => _voltageOffset;
+            set => SetProperty(ref _voltageOffset, Math.Clamp(value, VoltageOffsetMin, VoltageOffsetMax));
+        }
+        public ICommand SetVoltageCommand { get; private set; } = null!;
+
+        // Print Velocity 범위 (50 ~ 200 mm/s, 빨간 범위)
+        private const double PrintVelocityMin = 50.0;
+        private const double PrintVelocityMax = 200.0;
+
         // ── 헤드팩 선택 ───────────────────────────────────────────────
         public ObservableCollection<string> HeadPacks { get; } = new()
         {
@@ -232,7 +260,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public double PrintVelocity
         {
             get => _printVelocity;
-            private set => SetProperty(ref _printVelocity, value);
+            set => SetProperty(ref _printVelocity, Math.Clamp(value, PrintVelocityMin, PrintVelocityMax));
         }
 
         // ── Commands ─────────────────────────────────────────────────
@@ -267,8 +295,51 @@ namespace IJPSystem.Platform.HMI.ViewModels
             MeniscusStepUpCommand   = new RelayCommand(_ => MeniscusSetpoint = Math.Round(MeniscusSetpoint + MeniscusStep, 0));
             MeniscusStepDownCommand = new RelayCommand(_ => MeniscusSetpoint = Math.Round(MeniscusSetpoint - MeniscusStep, 0));
 
+            // Valve L/R (디지털 출력 토글)
+            ToggleValveLCommand = new RelayCommand(_ => ToggleValve(DoValveL, !IsValveLOn, v => IsValveLOn = v, "Valve L"));
+            ToggleValveRCommand = new RelayCommand(_ => ToggleValve(DoValveR, !IsValveROn, v => IsValveROn = v, "Valve R"));
+
+            SetVoltageCommand = new RelayCommand(_ =>
+                _mainVM.AddLog($"[PRINT] Voltage offset = {VoltageOffset:F2} % (범위 {VoltageOffsetMin}~{VoltageOffsetMax})", LogLevel.Info));
+
             RefreshPrintVelocity();
+            RefreshValveStates();
             InitMeniscusDevice();
+        }
+
+        // ── Valve L / R 출력 제어 ─────────────────────────────────────
+        /// <summary>지정 밸브 출력(Y100/Y101)을 on/off 하고 UI 상태를 갱신.</summary>
+        private void ToggleValve(string index, bool on, Action<bool> setState, string label)
+        {
+            var io = _mainVM.GetController()?.GetMachine()?.IO;
+            if (io == null)
+            {
+                _mainVM.AddLog($"[VALVE] {label} — IO 미연결", LogLevel.Warning);
+                return;
+            }
+            try
+            {
+                io.SetOutput(index, on);
+                setState(on);
+                _mainVM.AddLog($"[VALVE] {label} ({index}) {(on ? "ON" : "OFF")}", LogLevel.Info);
+            }
+            catch (Exception ex)
+            {
+                _mainVM.AddLog($"[VALVE] {label} 출력 실패: {ex.Message}", LogLevel.Warning);
+            }
+        }
+
+        /// <summary>현재 출력 상태를 읽어 밸브 토글 표시를 초기화(IO 연결 시).</summary>
+        private void RefreshValveStates()
+        {
+            var io = _mainVM.GetController()?.GetMachine()?.IO;
+            if (io == null) return;
+            try
+            {
+                IsValveLOn = io.GetOutput(DoValveL);
+                IsValveROn = io.GetOutput(DoValveR);
+            }
+            catch { /* IO 미연결/미초기화 시 무시 */ }
         }
 
         /// <summary>Spit — 클릭할 때마다 노즐 토출 애니메이션을 ON/OFF 토글한다.</summary>

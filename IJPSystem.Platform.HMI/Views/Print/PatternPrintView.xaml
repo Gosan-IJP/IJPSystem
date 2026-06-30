@@ -481,17 +481,47 @@
                                 <Border Canvas.Left="168" Canvas.Top="248" Background="#0F1A24" Padding="4,1" CornerRadius="2">
                                     <TextBlock Text="Valve R" Foreground="#64748B" FontSize="13" FontWeight="Bold"/>
                                 </Border>
-                                <!-- 토글 스위치 (좌: ON-회색노브 / 우: OFF) -->
-                                <Border Canvas.Left="62" Canvas.Top="300" Width="56" Height="34"
-                                        Background="#0F1A24" BorderBrush="#94A3B8" BorderThickness="1.5" CornerRadius="6">
-                                    <Border Width="22" Height="24" Margin="3,0,0,0" HorizontalAlignment="Left"
-                                            Background="#94A3B8" CornerRadius="4"/>
-                                </Border>
-                                <Border Canvas.Left="172" Canvas.Top="300" Width="56" Height="34"
-                                        Background="#0F1A24" BorderBrush="#475569" BorderThickness="1.5" CornerRadius="6">
-                                    <Border Width="22" Height="24" Margin="3,0,0,0" HorizontalAlignment="Left"
-                                            Background="#334155" CornerRadius="4"/>
-                                </Border>
+                                <!-- 토글 스위치 (클릭 → 출력 Y100/Y101, OFF=좌측 회색 / ON=우측 녹색) -->
+                                <Button Canvas.Left="62" Canvas.Top="300" Width="56" Height="34" Cursor="Hand"
+                                        Command="{Binding ToggleValveLCommand}" ToolTip="Valve L (Y100 / DO_HEAD1_LEFT_VALVE)">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="trackL" Background="#0F1A24" BorderBrush="#475569"
+                                                    BorderThickness="1.5" CornerRadius="6">
+                                                <Border x:Name="knobL" Width="22" Height="24" Margin="3,0,0,0"
+                                                        HorizontalAlignment="Left" Background="#334155" CornerRadius="4"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsValveLOn}" Value="True">
+                                                    <Setter TargetName="knobL" Property="HorizontalAlignment" Value="Right"/>
+                                                    <Setter TargetName="knobL" Property="Margin" Value="0,0,3,0"/>
+                                                    <Setter TargetName="knobL" Property="Background" Value="#22C55E"/>
+                                                    <Setter TargetName="trackL" Property="BorderBrush" Value="#22C55E"/>
+                                                </DataTrigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                <Button Canvas.Left="172" Canvas.Top="300" Width="56" Height="34" Cursor="Hand"
+                                        Command="{Binding ToggleValveRCommand}" ToolTip="Valve R (Y101 / DO_HEAD1_RIGHT_VALVE)">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="trackR" Background="#0F1A24" BorderBrush="#475569"
+                                                    BorderThickness="1.5" CornerRadius="6">
+                                                <Border x:Name="knobR" Width="22" Height="24" Margin="3,0,0,0"
+                                                        HorizontalAlignment="Left" Background="#334155" CornerRadius="4"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsValveROn}" Value="True">
+                                                    <Setter TargetName="knobR" Property="HorizontalAlignment" Value="Right"/>
+                                                    <Setter TargetName="knobR" Property="Margin" Value="0,0,3,0"/>
+                                                    <Setter TargetName="knobR" Property="Background" Value="#22C55E"/>
+                                                    <Setter TargetName="trackR" Property="BorderBrush" Value="#22C55E"/>
+                                                </DataTrigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
 
                                 <!-- ── Head (프린트 헤드) ── -->
                                 <Border Canvas.Left="35" Canvas.Top="362" Width="220" Height="56"
@@ -784,12 +814,27 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <Border Grid.Column="0" Style="{StaticResource PosBox}">
-                                    <TextBlock Style="{StaticResource PosText}" Text="0.00 %"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0" Background="Transparent" BorderThickness="0"
+                                                 Foreground="#E2E8F0" CaretBrush="#E2E8F0"
+                                                 FontFamily="Consolas" FontSize="13" FontWeight="Bold"
+                                                 TextAlignment="Right" VerticalContentAlignment="Center"
+                                                 Text="{Binding VoltageOffset, StringFormat=F2, UpdateSourceTrigger=LostFocus}"/>
+                                        <TextBlock Grid.Column="1" Text=" %" Foreground="#94A3B8"
+                                                   FontFamily="Consolas" FontSize="11" FontWeight="Bold"
+                                                   VerticalAlignment="Center" Margin="2,0,0,0"/>
+                                    </Grid>
                                 </Border>
                                 <Button Grid.Column="2" Style="{StaticResource ActionBtn}" Height="28" Width="100"
-                                        Background="#1D4ED8" BorderBrush="#3B82F6" Content="Set Voltage"/>
+                                        Background="#1D4ED8" BorderBrush="#3B82F6" Content="Set Voltage"
+                                        Command="{Binding SetVoltageCommand}"/>
                             </Grid>
-                            <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,5" Content="Nozzle Select"/>
+                            <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,5" Content="Nozzle Select"
+                                    Click="NozzleSelect_Click"/>
                             <Button Height="28" Margin="0,0,0,5" Content="Spit"
                                     Command="{Binding SpitCommand}">
                                 <Button.Style>
@@ -823,7 +868,20 @@
                                 <Run Text="Print Velocity "/><Run Text="50~200" Foreground="#EF4444" FontSize="9"/>
                             </TextBlock>
                             <Border Style="{StaticResource PosBox}" Padding="8,6" Margin="0,0,0,10">
-                                <TextBlock Style="{StaticResource PosText}" FontSize="15" Text="100.0 mm/s"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Background="Transparent" BorderThickness="0"
+                                             Foreground="#E2E8F0" CaretBrush="#E2E8F0"
+                                             FontFamily="Consolas" FontSize="15" FontWeight="Bold"
+                                             TextAlignment="Right" VerticalContentAlignment="Center"
+                                             Text="{Binding PrintVelocity, StringFormat=F1, UpdateSourceTrigger=LostFocus}"/>
+                                    <TextBlock Grid.Column="1" Text=" mm/s" Foreground="#94A3B8"
+                                               FontFamily="Consolas" FontSize="13" FontWeight="Bold"
+                                               VerticalAlignment="Center" Margin="2,0,0,0"/>
+                                </Grid>
                             </Border>
                             <Button Style="{StaticResource ActionBtn}" Height="46" Margin="0,0,0,8" Content="Load Image"/>
                             <Button Style="{StaticResource ActionBtn}" Height="64" FontSize="22"
