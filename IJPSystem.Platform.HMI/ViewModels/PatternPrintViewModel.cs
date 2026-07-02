@@ -1,6 +1,8 @@
+using IJPSystem.Platform.Application.Sequences;
 using IJPSystem.Platform.Common.Enums;
 using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Common;
+using IJPSystem.Platform.HMI.Services;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -171,6 +173,35 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand ToggleValveLCommand { get; private set; } = null!;
         public ICommand ToggleValveRCommand { get; private set; } = null!;
 
+        // ── Barrel 액위 센서 (X100=LOW, X101=HIGH) ───────────────────
+        // 디지털 입력을 주기적으로 읽어 배럴 비주얼(LevelStatus)·센서 점에 반영.
+        private const string DiLevelLow  = "DI_LEVEL_LOW";   // X100
+        private const string DiLevelHigh = "DI_LEVEL_HIGH";  // X101
+        private System.Threading.Timer? _levelPollTimer;
+
+        private bool _levelSensorLow;
+        /// <summary>LOW 액위 센서(X100) 감지 상태.</summary>
+        public bool LevelSensorLow
+        {
+            get => _levelSensorLow;
+            private set { if (SetProperty(ref _levelSensorLow, value)) OnPropertyChanged(nameof(BarrelLevel)); }
+        }
+
+        private bool _levelSensorHigh;
+        /// <summary>HIGH 액위 센서(X101) 감지 상태.</summary>
+        public bool LevelSensorHigh
+        {
+            get => _levelSensorHigh;
+            private set { if (SetProperty(ref _levelSensorHigh, value)) OnPropertyChanged(nameof(BarrelLevel)); }
+        }
+
+        /// <summary>두 센서 조합으로 배럴 액위 비주얼을 결정.
+        /// HIGH 감지=가득, LOW만 감지=중간, 둘 다 미감지=부족.</summary>
+        public IJPSystem.Platform.Domain.Enums.LevelStatus BarrelLevel =>
+            _levelSensorHigh ? IJPSystem.Platform.Domain.Enums.LevelStatus.HH
+            : _levelSensorLow ? IJPSystem.Platform.Domain.Enums.LevelStatus.Set
+            : IJPSystem.Platform.Domain.Enums.LevelStatus.Low;
+
         // ── Voltage offset (%) : -25 ~ 25 (빨간 범위) ─────────────────
         private const double VoltageOffsetMin = -25.0;
         private const double VoltageOffsetMax =  25.0;
@@ -252,8 +283,116 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private double _zOrigin;
         public double ZOrigin { get => _zOrigin; private set => SetProperty(ref _zOrigin, value); }
 
-        private bool _isOriginSet;
-        public bool IsOriginSet { get => _isOriginSet; private set => SetProperty(ref _isOriginSet, value); }
+        private bool _isOriginSet = true;
+        public bool IsOriginSet
+        {
+            get => _isOriginSet;
+            private set
+            {
+                if (SetProperty(ref _isOriginSet, value))
+                    (PrintCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+
+        // ── Pattern Print 시퀀스 실행 상태 ────────────────────────────
+        private System.Threading.CancellationTokenSource? _printCts;
+        private bool _isPrinting;
+        public bool IsPrinting
+        {
+            get => _isPrinting;
+            private set
+            {
+                if (SetProperty(ref _isPrinting, value))
+                {
+                    (PrintCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                    (AbortCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                }
+            }
+        }
+
+        // ── 인쇄 진행 상태 표시(Status) ───────────────────────────────
+        public enum PrintState { Idle, Running, Done, Stopped, Failed }
+
+        private PrintState _statusState = PrintState.Idle;
+        /// <summary>현재 인쇄 상태(Idle/Running/Done/Stopped/Failed). UI 색상/뱃지 바인딩.</summary>
+        public PrintState StatusState
+        {
+            get => _statusState;
+            private set
+            {
+                if (SetProperty(ref _statusState, value))
+                {
+                    OnPropertyChanged(nameof(StatusText));
+                    OnPropertyChanged(nameof(StatusBrush));
+                }
+            }
+        }
+
+        /// <summary>상태 뱃지 텍스트(READY/PRINTING/DONE/STOPPED/FAILED).</summary>
+        public string StatusText => _statusState switch
+        {
+            PrintState.Running => "PRINTING",
+            PrintState.Done    => "DONE",
+            PrintState.Stopped => "STOPPED",
+            PrintState.Failed  => "FAILED",
+            _                  => "READY",
+        };
+
+        /// <summary>상태 색상(녹/회/적).</summary>
+        public System.Windows.Media.Brush StatusBrush => _statusState switch
+        {
+            PrintState.Running => MakeBrush("#10B981"),
+            PrintState.Done    => MakeBrush("#22C55E"),
+            PrintState.Stopped => MakeBrush("#F59E0B"),
+            PrintState.Failed  => MakeBrush("#EF4444"),
+            _                  => MakeBrush("#64748B"),
+        };
+
+        private static System.Windows.Media.Brush MakeBrush(string hex)
+        {
+            var b = new System.Windows.Media.SolidColorBrush(
+                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex));
+            b.Freeze();
+            return b;
+        }
+
+        private string _statusMessage = "대기 중";
+        /// <summary>현재 진행 단계 설명(번역된 step 이름 또는 결과 메시지).</summary>
+        public string StatusMessage
+        {
+            get => _statusMessage;
+            private set => SetProperty(ref _statusMessage, value);
+        }
+
+        private int _currentStep;
+        /// <summary>현재 단계 번호(1-base, 미실행 시 0).</summary>
+        public int CurrentStep
+        {
+            get => _currentStep;
+            private set { if (SetProperty(ref _currentStep, value)) OnPropertyChanged(nameof(StepLabel)); }
+        }
+
+        private int _totalSteps;
+        /// <summary>전체 단계 수.</summary>
+        public int TotalSteps
+        {
+            get => _totalSteps;
+            private set
+            {
+                if (SetProperty(ref _totalSteps, value))
+                {
+                    OnPropertyChanged(nameof(StepLabel));
+                    OnPropertyChanged(nameof(ProgressPercent));
+                }
+            }
+        }
+
+        /// <summary>"3 / 17" 형태의 단계 라벨.</summary>
+        public string StepLabel => _totalSteps > 0 ? $"{_currentStep} / {_totalSteps}" : "-";
+
+        /// <summary>진행률 0~100(%).</summary>
+        public double ProgressPercent =>
+            _totalSteps > 0 ? (double)_currentStep / _totalSteps * 100.0 : 0;
 
         // ── Print Velocity (활성 레시피의 X축 Print.Vel) ────────────────
         private double _printVelocity;
@@ -261,6 +400,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             get => _printVelocity;
             set => SetProperty(ref _printVelocity, Math.Clamp(value, PrintVelocityMin, PrintVelocityMax));
+        }
+
+        // ── Print data Path (DXF Rasterizer 창에 초기 경로로 전달) ────
+        private string _printDataPath = "";
+        /// <summary>Print data Path 입력창 (인쇄할 이미지/DXF 파일 경로).</summary>
+        public string PrintDataPath
+        {
+            get => _printDataPath;
+            set => SetProperty(ref _printDataPath, value);
         }
 
         // ── Commands ─────────────────────────────────────────────────
@@ -273,8 +421,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _mainVM = mainVM;
 
             SetPrintOriginCommand = new RelayCommand(_ => CaptureCurrentOrigin());
-            PrintCommand          = new RelayCommand(_ => StartPrint(),  _ => IsOriginSet);
-            AbortCommand          = new RelayCommand(_ => AbortPrint());
+            PrintCommand          = new RelayCommand(async _ => await RunPatternPrintAsync(),
+                                                     _ => IsOriginSet && !IsPrinting);
+            AbortCommand          = new RelayCommand(_ => _printCts?.Cancel(), _ => IsPrinting);
 
             // Motion 패널 (활성화는 버튼 IsEnabled="SelectedMotionAxis.CanMove" 바인딩으로 처리)
             MotionHomeCommand     = new RelayCommand(async _ => await MotionHomeAsync());
@@ -305,6 +454,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             RefreshPrintVelocity();
             RefreshValveStates();
             InitMeniscusDevice();
+
+            // 배럴 액위 센서(X100/X101) 주기 폴링 시작 (300ms)
+            _levelPollTimer = new System.Threading.Timer(_ => PollLevelSensors(), null, 0, 300);
         }
 
         // ── Valve L / R 출력 제어 ─────────────────────────────────────
@@ -340,6 +492,27 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 IsValveROn = io.GetOutput(DoValveR);
             }
             catch { /* IO 미연결/미초기화 시 무시 */ }
+        }
+
+        // ── Barrel 액위 센서 폴링 ─────────────────────────────────────
+        /// <summary>X100/X101 디지털 입력을 주기적으로 읽어 배럴 액위 비주얼에 반영.</summary>
+        private void PollLevelSensors()
+        {
+            var io = _mainVM.GetController()?.GetMachine()?.IO;
+            if (io == null) return;
+            bool low, high;
+            try
+            {
+                low  = io.GetInput(DiLevelLow);
+                high = io.GetInput(DiLevelHigh);
+            }
+            catch { return; }   // IO 미연결/미초기화 시 무시
+
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                LevelSensorLow  = low;
+                LevelSensorHigh = high;
+            });
         }
 
         /// <summary>Spit — 클릭할 때마다 노즐 토출 애니메이션을 ON/OFF 토글한다.</summary>
@@ -542,19 +715,111 @@ namespace IJPSystem.Platform.HMI.ViewModels
             PrintVelocity = cfg?.Printing?.Velocity ?? 200.0;
         }
 
-        private void StartPrint()
+        /// <summary>
+        /// Print 버튼 → Pattern Print 시퀀스(PatternPrintSequence) 실행.
+        /// 사전조건(머신 초기화·적용 레시피·알람 없음·원점복귀) 확인 후 단계별 실행.
+        /// Abort(=_printCts.Cancel)로 중단 가능.
+        /// </summary>
+        private async System.Threading.Tasks.Task RunPatternPrintAsync()
         {
-            // 실제 인쇄 시퀀스 트리거는 추후 연결.
-            _mainVM.AddLog(
-                $"[PATTERN] Print start — {SelectedHeadPack}, " +
-                $"W={WidthMm:F2}mm × L={LengthMm:F2}mm, nz={NOverlapNz}, head={UsingHead}, " +
-                $"{Dpi}dpi (pitch={DropPitchMm:F4}mm)",
-                LogLevel.Info);
-        }
+            if (IsPrinting) return;
 
-        private void AbortPrint()
-        {
-            _mainVM.AddLog("[PATTERN] Print aborted", LogLevel.Warning);
+            var machine = _mainVM.GetController()?.GetMachine();
+            if (machine == null)
+            {
+                _mainVM.AddLog("[SEQ] PATTERN PRINT — 중단 (머신 미초기화)", LogLevel.Warning);
+                return;
+            }
+            // 시퀀스는 활성 레시피의 티칭 포인트(PRINT START/END 등)를 참조
+            if (string.IsNullOrEmpty(_mainVM.RecipeVM?.ActiveRecipeName))
+            {
+                _mainVM.AddLog("[SEQ] PATTERN PRINT — 중단 (적용된 레시피 없음)", LogLevel.Warning);
+                return;
+            }
+            if (_mainVM.HasActiveAlarm)
+            {
+                _mainVM.AddLog("[SEQ] PATTERN PRINT — 중단 (미해제 알람 존재)", LogLevel.Warning);
+                return;
+            }
+            var allAxes = machine.Motion?.GetAllStatus();
+            if (allAxes == null || allAxes.Count == 0)
+            {
+                _mainVM.AddLog("[SEQ] PATTERN PRINT — 중단 (축 정보 없음 — 모션 드라이버 확인)", LogLevel.Error);
+                return;
+            }
+            var notHomed = allAxes.Where(a => !a.IsHomeDone).Select(a => a.AxisNo).ToList();
+            if (notHomed.Count > 0)
+            {
+                _mainVM.AddLog($"[SEQ] PATTERN PRINT — 중단 (INITIALIZE 미수행, 미원점 축: {string.Join(", ", notHomed)})", LogLevel.Warning);
+                return;
+            }
+
+            IsPrinting = true;
+            _mainVM.SetSequenceRunning(true);   // 실행 중 화면 전환 차단
+
+            var motion = new MotionServiceAdapter(_mainVM);
+            var steps  = PatternPrintSequence.Build(machine, motion);
+            _printCts  = new System.Threading.CancellationTokenSource();
+            var token  = _printCts.Token;
+
+            // 진행 상태 초기화
+            TotalSteps    = steps.Count;
+            CurrentStep   = 0;
+            StatusState   = PrintState.Running;
+            StatusMessage = "인쇄 준비 중…";
+
+            _mainVM.AddLog(
+                $"[SEQ] PATTERN PRINT — 시작 ({steps.Count} 단계, {SelectedHeadPack}, " +
+                $"W={WidthMm:F1}×L={LengthMm:F1}mm, {Dpi}dpi)", LogLevel.Info);
+
+            try
+            {
+                for (int i = 0; i < steps.Count; i++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var step = steps[i];
+
+                    // 상태 업데이트 (step.Name 은 번역 키 → Loc.T 로 번역)
+                    CurrentStep   = i + 1;
+                    StatusMessage = IJPSystem.Platform.HMI.Common.Loc.T(step.Name);
+                    OnPropertyChanged(nameof(ProgressPercent));
+
+                    _mainVM.AddLog($"[SEQ] PATTERN PRINT — step {i + 1}/{steps.Count} {step.Name}", LogLevel.Info);
+                    await step.Action(token);
+                }
+                CurrentStep   = steps.Count;
+                OnPropertyChanged(nameof(ProgressPercent));
+                StatusState   = PrintState.Done;
+                StatusMessage = "인쇄 완료";
+                _mainVM.AddLog("[SEQ] PATTERN PRINT — 완료", LogLevel.Success);
+            }
+            catch (OperationCanceledException)
+            {
+                StatusState   = PrintState.Stopped;
+                StatusMessage = "사용자 STOP 으로 중단됨";
+                _mainVM.AddLog("[SEQ] PATTERN PRINT — 사용자 STOP 으로 중단됨", LogLevel.Warning);
+            }
+            catch (TimeoutException ex)
+            {
+                StatusState   = PrintState.Failed;
+                StatusMessage = $"타임아웃: {ex.Message}";
+                _mainVM.AddLog($"[SEQ] PATTERN PRINT — 타임아웃: {ex.Message}", LogLevel.Error);
+                _mainVM.AlarmVM?.RaiseAlarm("SEQ-MOTION-TIMEOUT");
+            }
+            catch (Exception ex)
+            {
+                StatusState   = PrintState.Failed;
+                StatusMessage = $"실패: {ex.Message}";
+                _mainVM.AddLog($"[SEQ] PATTERN PRINT — 실패: {ex.Message}", LogLevel.Error);
+                _mainVM.AlarmVM?.RaiseAlarm("SEQ-STEP-FAIL");
+            }
+            finally
+            {
+                _printCts?.Dispose();
+                _printCts = null;
+                IsPrinting = false;
+                _mainVM.SetSequenceRunning(false);
+            }
         }
     }
 }

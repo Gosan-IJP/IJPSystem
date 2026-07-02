@@ -283,6 +283,25 @@
     <system:String x:Key="Step_DropWatcher_Move">Move to DROP WATCHER position</system:String>
     <system:String x:Key="Step_DropWatcher_MoveDone">Confirm InPosition at DROP WATCHER</system:String>
 
+    <!-- Pattern Print (Meteor PCC) steps -->
+    <system:String x:Key="Step_PatternPrint_OpenPrinter">Open printer (OpenPrinter — Meteor PCC)</system:String>
+    <system:String x:Key="Step_PatternPrint_CheckStatus">Check status (GetPccStatus/GetHeadStatus — Ready)</system:String>
+    <system:String x:Key="Step_PatternPrint_SetParam">Set print parameters (resolution/speed/encoder/PD)</system:String>
+    <system:String x:Key="Step_PatternPrint_SendConfig">Send head config/waveform (ReSendPCCConfiguration)</system:String>
+    <system:String x:Key="Step_PatternPrint_HeadPowerOn">Head power ON (SetHeadPower)</system:String>
+    <system:String x:Key="Step_PatternPrint_AlignHead">Align head / X offsets (SetHome/UpdateXoffsets)</system:String>
+    <system:String x:Key="Step_PatternPrint_DownloadImage">Download image (DownloadIMG_ScanMODE → PCC buffer)</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveStart">Move to PRINT START position</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveStartDone">Confirm InPosition at PRINT START</system:String>
+    <system:String x:Key="Step_PatternPrint_ArmTrigger">Arm print trigger (SetSignal / PrintGo)</system:String>
+    <system:String x:Key="Step_PatternPrint_ScanPrint">Scan printing — eject to end (PRINT END)</system:String>
+    <system:String x:Key="Step_PatternPrint_ScanPrintDone">Confirm InPosition after print scan</system:String>
+    <system:String x:Key="Step_PatternPrint_WaitPrintDone">Wait print done (poll isBusy/GetPrnStatus)</system:String>
+    <system:String x:Key="Step_PatternPrint_HeadPowerOff">Head power OFF (SetHeadPower)</system:String>
+    <system:String x:Key="Step_PatternPrint_ClosePrinter">Close printer (ClosePrinter)</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveReady">Move to READY position</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveReadyDone">Confirm InPosition at READY</system:String>
+
     <!-- Sequence display names / descriptions (matching SequenceRegistry keys) -->
     <system:String x:Key="Seq_Init_Name">INITIALIZE</system:String>
     <system:String x:Key="Seq_Init_Desc">Servo ON → Home → Move to READY → wait for glass detection</system:String>
@@ -298,6 +317,8 @@
     <system:String x:Key="Seq_DropWatcher_Desc">Move to drop watcher position</system:String>
     <system:String x:Key="Seq_AutoPrint_Name">AUTO PRINT</system:String>
     <system:String x:Key="Seq_AutoPrint_Desc">Glass detection → vacuum clamp → Move to PRINT START → Head DOWN → printing → Head UP → vacuum release → return</system:String>
+    <system:String x:Key="Seq_PatternPrint_Name">PATTERN PRINT</system:String>
+    <system:String x:Key="Seq_PatternPrint_Desc">Open printer → check status → send params/config → head power·align → download image → move to PRINT START → arm trigger → scan print → wait done → head OFF/close → return (Meteor PCC)</system:String>
     <system:String x:Key="Seq_HeadUp_Name">HEAD UP</system:String>
     <system:String x:Key="Seq_HeadUp_Desc">Move print head up (separate from glass)</system:String>
     <system:String x:Key="Seq_HeadDown_Name">HEAD DOWN</system:String>

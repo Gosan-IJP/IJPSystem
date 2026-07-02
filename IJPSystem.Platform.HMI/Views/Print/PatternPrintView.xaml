@@ -466,8 +466,11 @@
                                         Background="#0A0E14" CornerRadius="4"/>
 
                                 <!-- ── Barrel 컨트롤 (출력 팁 ≈ x90,y234) ── -->
-                                <ctl:Barrel Canvas.Left="55" Canvas.Top="14"
-                                            TagId="BARREL" SensorHigh="True" SensorLow="False"/>
+                                <!-- 액위 센서 X100(LOW)/X101(HIGH) 에 따라 비주얼·센서 점이 실시간 변함 -->
+                                <ctl:Barrel Canvas.Left="55" Canvas.Top="14" TagId="BARREL"
+                                            LevelStatus="{Binding BarrelLevel}"
+                                            SensorHigh="{Binding LevelSensorHigh}"
+                                            SensorLow="{Binding LevelSensorLow}"/>
 
                                 <!-- ── Syringe 10cc 컨트롤 (니들 ≈ x200,y246) ── -->
                                 <ctl:Syringe10cc Canvas.Left="155" Canvas.Top="4"
@@ -853,16 +856,20 @@
                             <TextBlock Text="Print data Path" Style="{StaticResource MutedLabel}" Margin="0,0,0,2"/>
                             <TextBox Style="{x:Null}" Height="26" Background="#0D1520" Foreground="White"
                                      BorderBrush="#334155" BorderThickness="1" VerticalContentAlignment="Center"
-                                     Padding="6,0" Margin="0,0,0,5"/>
+                                     Padding="6,0" Margin="0,0,0,5"
+                                     Text="{Binding PrintDataPath, UpdateSourceTrigger=PropertyChanged}"/>
                             <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,5"
-                                    Background="#1D4ED8" BorderBrush="#3B82F6" Content="Set Print Origin"/>
+                                    Background="#1D4ED8" BorderBrush="#3B82F6" Content="Set Print Origin"
+                                    Command="{Binding SetPrintOriginCommand}"/>
                             <Button Style="{StaticResource ActionBtn}" Height="28"
-                                    Background="#1D4ED8" BorderBrush="#3B82F6" Content="Print Image Design"/>
+                                    Background="#1D4ED8" BorderBrush="#3B82F6" Content="Print Image Design"
+                                    Click="PrintImageDesign_Click"/>
                         </StackPanel>
                     </Border>
 
                     <!-- ③ Print 실행 -->
                     <Border Grid.Column="4" Style="{StaticResource CardBorder}" Padding="12">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel>
                             <TextBlock Style="{StaticResource MutedLabel}" Margin="0,0,0,2">
                                 <Run Text="Print Velocity "/><Run Text="50~200" Foreground="#EF4444" FontSize="9"/>
@@ -883,10 +890,78 @@
                                                VerticalAlignment="Center" Margin="2,0,0,0"/>
                                 </Grid>
                             </Border>
-                            <Button Style="{StaticResource ActionBtn}" Height="46" Margin="0,0,0,8" Content="Load Image"/>
-                            <Button Style="{StaticResource ActionBtn}" Height="64" FontSize="22"
-                                    Background="#059669" BorderBrush="#10B981" Content="Print"/>
+                            <Button Style="{StaticResource ActionBtn}" Height="40" Margin="0,0,0,8" Content="Load Image"/>
+                            <Button Height="54" FontSize="22" Command="{Binding PrintCommand}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ActionBtn}">
+                                        <Setter Property="Content"     Value="Print"/>
+                                        <Setter Property="Background"  Value="#059669"/>
+                                        <Setter Property="BorderBrush" Value="#10B981"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsPrinting}" Value="True">
+                                                <Setter Property="Content"     Value="Printing…"/>
+                                                <Setter Property="Background"   Value="#475569"/>
+                                                <Setter Property="BorderBrush"  Value="#64748B"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            <Button Height="42" FontSize="18" Margin="0,8,0,0"
+                                    Content="Stop" Command="{Binding AbortCommand}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ActionBtn}">
+                                        <Setter Property="Background"  Value="#DC2626"/>
+                                        <Setter Property="BorderBrush" Value="#EF4444"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter Property="Background"   Value="#3A3F4B"/>
+                                                <Setter Property="BorderBrush"  Value="#4B5563"/>
+                                                <Setter Property="Foreground"   Value="#6B7280"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- ── 인쇄 진행 상태(Status) ───────────────────── -->
+                            <Border Margin="0,10,0,0" Padding="12,10" CornerRadius="8"
+                                    Background="#1E293B" BorderBrush="#334155" BorderThickness="1">
+                                <StackPanel>
+                                    <!-- 상태 뱃지 + 단계 카운터 -->
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" CornerRadius="4" Padding="8,2"
+                                                Background="{Binding StatusBrush}">
+                                            <TextBlock Text="{Binding StatusText}" FontWeight="Bold"
+                                                       FontSize="12" Foreground="White"/>
+                                        </Border>
+                                        <TextBlock Grid.Column="1" Text="Print Status" Margin="8,0,0,0"
+                                                   VerticalAlignment="Center" Foreground="#94A3B8"
+                                                   FontSize="12" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding StepLabel}"
+                                                   VerticalAlignment="Center" Foreground="#E2E8F0"
+                                                   FontFamily="Consolas" FontSize="13" FontWeight="Bold"/>
+                                    </Grid>
+
+                                    <!-- 진행률 바 -->
+                                    <ProgressBar Height="10" Margin="0,8,0,0" Minimum="0" Maximum="100"
+                                                 Value="{Binding ProgressPercent, Mode=OneWay}"
+                                                 Background="#0F172A" BorderThickness="0"
+                                                 Foreground="{Binding StatusBrush}"/>
+
+                                    <!-- 현재 단계 메시지 -->
+                                    <TextBlock Text="{Binding StatusMessage}" Margin="0,8,0,0"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="#CBD5E1" FontSize="13"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
+                        </ScrollViewer>
                     </Border>
                 </Grid>
         </Grid>

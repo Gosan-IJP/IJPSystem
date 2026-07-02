@@ -1,50 +1,70 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.IO;
 
 namespace IJPSystem.Drivers.IO
 {
-    // 코미조아(COMIZOA) EtherCAT 디지털 I/O 드라이버 스켈레톤 — 모듈: ETS-D08MN.
+    // 코미조아(COMIZOA) EtherCAT 디지털 I/O 드라이버 — 모듈: ETS-D08MN.
     //
-    // SDK: COMIZOA EtherCAT/IO 라이브러리(C 함수)를 P/Invoke 로 호출한다.
-    //      모션(ComizoaMotionDriver, czm_*)과 동일한 방식이며, IO 전용 함수명은
-    //      벤더 SDK 헤더에서 확인해 TODO 지점에 채운다.
+    // SDK: ComiEcatSdk.dll (COMIZOA EtherCAT SDK) 를 P/Invoke 로 호출.
+    //      실장비 HAL(Mizar.Hal.Io.EtherCatDigitalIo)과 동일한 ecat_* 함수 시그니처를 사용한다.
+    //      모션(ComizoaMotionDriver, czm_*)과 동일한 EtherCAT 네트워크를 공유하므로,
+    //      마스터 초기화(enumerate)는 모션 쪽에서 1회 수행되면 여기서는 생략 가능하다.
     //
-    // 동작 방식:
-    //   - IO.json 의 Index(예: "DI_NC_SENSOR_GLASS_DETECT") → (슬레이브 노드, 비트) 로 매핑.
-    //   - GetInput/SetOutput 은 EtherCAT Process Image(PDO)에서 비트를 읽고/쓴다.
-    //   - 실제 SDK 호출 전까지는 내부 상태 dict 로 echo 하여 화면/시퀀스가 동작하도록 한다.
-    //
-    // 참고 — COMIZOA EtherCAT IO 호출 예(함수명은 SDK 버전에 따라 다름, 확인 필요):
-    //   cetc_init();                              // 마스터 초기화 + 슬레이브 enumerate
-    //   cetc_get_di_bit(node, bit, out value);    // 디지털 입력 비트 읽기
-    //   cetc_set_do_bit(node, bit, value);        // 디지털 출력 비트 쓰기
-    //   cetc_get_do_bit(node, bit, out value);    // 출력 현재값 읽기
-    //   cetc_close();                             // 자원 해제
+    // 채널 매핑(중요):
+    //   IO.json 의 Address(예: "X100"/"Y101") → SDK 채널(int) 로 환산해 ecat_* 함수를 호출한다.
+    //   SDK 는 DIN/DOUT 을 각각 0-base 채널 인덱스로 접근하므로 아래 규칙을 사용:
+    //     · Address 숫자 n 을 slave = n/100, bit = n%100 으로 분해 (X100 → slave1 bit0)
+    //     · 채널 = slave * PointsPerModule(8) + bit          (ETS-D08MN = 8점 모듈)
+    //     · DIN(X)/DOUT(Y) 는 서로 다른 채널 공간(ecat_GetDin vs ecat_SetDout)
+    //   ※ slave 열거 순서/모듈 점수는 실배선에 따라 다를 수 있으므로 Connect 시 경고를 남긴다.
+    //     실장비에서 채널이 어긋나면 PointsPerModule / MapChannel 만 조정하면 된다.
     public class ComizoaIODriver : IIODriver
     {
-        // IO 설정 및 상태 (실제 COMIZOA EtherCAT PDO 와 연동 예정)
+        private const string Dll = "ComiEcatSdk.dll";
+        private const int PointsPerModule = 8;   // ETS-D08MN = 디지털 8점
+
+        // ── ComiEcatSdk P/Invoke (실장비 EtherCatDigitalIo 와 동일 시그니처) ──
+        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int ecat_GetDin(int ch, out int state);
+        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int ecat_GetDout(int ch, out int state);
+        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int ecat_SetDout(int ch, int on);
+        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int ecat_GetDinBits(out uint bits);
+        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int ecat_SetDoutBits(uint bits);
+
+        private static void Check(int rc, string op)
+        {
+            if (rc != 0) throw new InvalidOperationException($"{op} 실패 (rc={rc})");
+        }
+
+        // IO 설정 및 상태 (미연결/개발 시 echo 로 화면·시퀀스 동작 유지)
         private readonly Dictionary<string, IODeviceInfo> _ioMap         = new();
         private readonly Dictionary<string, bool>         _digitalStates = new();
         private readonly Dictionary<string, double>       _analogStates  = new();
 
-        // Index → (EtherCAT 슬레이브 노드, 비트) 매핑. Initialize 단계에서 채운다.
-        private readonly Dictionary<string, (ushort node, ushort bit)> _addrMap = new();
+        // Index → (출력 여부, SDK 채널). Initialize 단계에서 채운다.
+        private readonly Dictionary<string, (bool isOutput, int channel)> _addrMap = new();
 
         public bool IsConnected { get; private set; }
 
         public bool Connect()
         {
-            // TODO: cetc_init() 호출 + ETS-D08MN 슬레이브 enumerate. 실패 시 false 반환.
+            // 모션(ComizoaMotionDriver)이 동일 EtherCAT 마스터를 이미 enumerate 했다는 전제.
+            // 별도 IO 전용 초기화가 필요하면 여기서 ecat_* init 함수를 호출한다(SDK 헤더 확인).
             IsConnected = true;
             return true;
         }
 
         public void Disconnect()
         {
-            // TODO: cetc_close() — EtherCAT 통신 종료 및 자원 해제.
+            // 마스터 자원은 모션 쪽에서 해제하므로 IO 는 상태 플래그만 내린다.
             IsConnected = false;
         }
 
@@ -65,18 +85,28 @@ namespace IJPSystem.Drivers.IO
                 _digitalStates[item.Index] = false;
                 _analogStates[item.Index]  = 0.0;
 
-                // TODO: item.Address(예: "X100"/"Y300")를 ETS-D08MN 슬레이브 노드/비트로 환산.
-                //       D08 = 디지털 8점 모듈이므로 노드당 8비트 단위로 분할하는 식.
-                _addrMap[item.Index] = MapAddress(item.Address);
+                if (TryMapChannel(item.Address, out bool isOutput, out int channel))
+                    _addrMap[item.Index] = (isOutput, channel);
             }
-            // TODO: cetc_set_di_filter / cetc_set_do_reset 등 모듈 초기 설정.
         }
 
-        // Address 문자열 → (슬레이브 노드, 비트). 실제 배선/슬레이브 순서에 맞게 구현 필요.
-        private static (ushort node, ushort bit) MapAddress(string? address)
+        // Address("X100"/"Y101") → (출력 여부, SDK 채널). slave*8+bit 규칙.
+        // 실배선 슬레이브 순서에 맞지 않으면 이 메서드만 조정하면 된다.
+        private static bool TryMapChannel(string? address, out bool isOutput, out int channel)
         {
-            // TODO: 실제 ETS-D08MN 배치에 맞춰 파싱. 현재는 미매핑(0,0).
-            return (0, 0);
+            isOutput = false;
+            channel  = -1;
+            if (string.IsNullOrEmpty(address) || address.Length < 2) return false;
+
+            char kind = char.ToUpperInvariant(address[0]);
+            if (kind != 'X' && kind != 'Y') return false;   // 디지털 X/Y 만 대상
+            if (!int.TryParse(address.Substring(1), out int n)) return false;
+
+            isOutput = kind == 'Y';
+            int slave = n / 100;      // 백의 자리 = 슬레이브 노드
+            int bit   = n % 100;      // 나머지 = 모듈 내 비트
+            channel   = slave * PointsPerModule + bit;
+            return true;
         }
 
         public List<IODeviceInfo> GetAllIOInfo() => _ioMap.Values.ToList();
@@ -86,23 +116,26 @@ namespace IJPSystem.Drivers.IO
         public bool GetInput(string indexName)
         {
             if (string.IsNullOrEmpty(indexName)) return false;
-            // TODO: var a = _addrMap[indexName]; cetc_get_di_bit(a.node, a.bit, out int v); return v != 0;
+            if (IsConnected && _addrMap.TryGetValue(indexName, out var a) && !a.isOutput)
+                return GetInput(a.channel);
+            // 미연결/미매핑: echo 상태 반환(개발/가상)
             return _digitalStates.TryGetValue(indexName, out bool value) && value;
         }
 
         public bool GetOutput(string indexName)
         {
             if (string.IsNullOrEmpty(indexName)) return false;
-            // TODO: cetc_get_do_bit(node, bit, out v) 로 실제 출력 현재값 읽기.
+            if (IsConnected && _addrMap.TryGetValue(indexName, out var a) && a.isOutput)
+                return GetOutput(a.channel);
             return _digitalStates.TryGetValue(indexName, out bool value) && value;
         }
 
         public void SetOutput(string indexName, bool on)
         {
-            if (string.IsNullOrEmpty(indexName)) return;
-            if (!_ioMap.ContainsKey(indexName)) return;
-            // TODO: var a = _addrMap[indexName]; cetc_set_do_bit(a.node, a.bit, on ? 1 : 0);
-            _digitalStates[indexName] = on;
+            if (string.IsNullOrEmpty(indexName) || !_ioMap.ContainsKey(indexName)) return;
+            if (IsConnected && _addrMap.TryGetValue(indexName, out var a) && a.isOutput)
+                SetOutput(a.channel, on);
+            _digitalStates[indexName] = on;   // echo(현재값 조회/가상용)
         }
 
         // ── 아날로그 I/O ──────────────────────────────────────────────────────
@@ -127,10 +160,38 @@ namespace IJPSystem.Drivers.IO
                 _analogStates[indexName] = value;
         }
 
-        // ── int 기반 메서드 (인터페이스 규격용 stub) ──────────────────────────
-        public bool GetInput(int bitNo) => false;
-        public bool GetOutput(int bitNo) => false;
-        public void SetOutput(int bitNo, bool on) { }
+        // ── int 채널 기반 (ComiEcatSdk 직접 호출) ────────────────────────────
+        public bool GetInput(int channel)
+        {
+            if (channel < 0) return false;
+            Check(ecat_GetDin(channel, out int s), "GetDin");
+            return s != 0;
+        }
+
+        public bool GetOutput(int channel)
+        {
+            if (channel < 0) return false;
+            Check(ecat_GetDout(channel, out int s), "GetDout");
+            return s != 0;
+        }
+
+        public void SetOutput(int channel, bool on)
+        {
+            if (channel < 0) return;
+            Check(ecat_SetDout(channel, on ? 1 : 0), "SetDout");
+        }
+
+        // 여러 입력/출력을 한 번에 (비트마스크) — 실장비 HAL 과 동일.
+        public uint GetInputBits()
+        {
+            Check(ecat_GetDinBits(out uint bits), "GetDinBits");
+            return bits;
+        }
+
+        public void SetOutputBits(uint bits)
+            => Check(ecat_SetDoutBits(bits), "SetDoutBits");
+
+        // 아날로그 int 채널 — ETS-D08MN 미지원(no-op)
         public double GetAnalogInput(int channel) => 0.0;
         public double GetAnalogOutput(int channel) => 0.0;
         public void SetAnalogOutput(int channel, double value) { }

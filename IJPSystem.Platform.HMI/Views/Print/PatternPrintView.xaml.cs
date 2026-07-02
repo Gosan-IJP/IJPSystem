@@ -59,5 +59,16 @@ namespace IJPSystem.Platform.HMI.Views
             };
             win.ShowDialog();
         }
+
+        // ── Print Image Design (DXF Rasterizer 모달 창) ───────────────
+        private void PrintImageDesign_Click(object sender, System.Windows.RoutedEventArgs e)
+        {
+            string? initialPath = (DataContext as PatternPrintViewModel)?.PrintDataPath;
+            var win = new IJPSystem.Platform.HMI.Print.DxfRasterizerWindow(initialPath)
+            {
+                Owner = System.Windows.Window.GetWindow(this)
+            };
+            win.ShowDialog();
+        }
     }
 }

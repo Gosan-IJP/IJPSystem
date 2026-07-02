@@ -283,6 +283,25 @@
     <system:String x:Key="Step_DropWatcher_Move">드랍와처 위치(DROP WATCHER) 이동</system:String>
     <system:String x:Key="Step_DropWatcher_MoveDone">드랍와처 위치 InPosition 확인</system:String>
 
+    <!-- Pattern Print (Meteor PCC) 단계 -->
+    <system:String x:Key="Step_PatternPrint_OpenPrinter">프린터 연결 (OpenPrinter — Meteor PCC)</system:String>
+    <system:String x:Key="Step_PatternPrint_CheckStatus">상태 확인 (GetPccStatus/GetHeadStatus — Ready)</system:String>
+    <system:String x:Key="Step_PatternPrint_SetParam">인쇄 파라미터 설정 (해상도·속도·엔코더/PD)</system:String>
+    <system:String x:Key="Step_PatternPrint_SendConfig">헤드 구성·파형 전송 (ReSendPCCConfiguration)</system:String>
+    <system:String x:Key="Step_PatternPrint_HeadPowerOn">헤드 전원 ON (SetHeadPower)</system:String>
+    <system:String x:Key="Step_PatternPrint_AlignHead">헤드 정렬·X오프셋 (SetHome/UpdateXoffsets)</system:String>
+    <system:String x:Key="Step_PatternPrint_DownloadImage">이미지 다운로드 (DownloadIMG_ScanMODE → PCC 버퍼)</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveStart">인쇄 시작 위치(PRINT START) 이동</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveStartDone">인쇄 시작 위치 InPosition 확인</system:String>
+    <system:String x:Key="Step_PatternPrint_ArmTrigger">인쇄 트리거 ARM (SetSignal / PrintGo)</system:String>
+    <system:String x:Key="Step_PatternPrint_ScanPrint">스캔 주행 인쇄 — 종점(PRINT END)까지 토출</system:String>
+    <system:String x:Key="Step_PatternPrint_ScanPrintDone">인쇄 주행 완료 InPosition 확인</system:String>
+    <system:String x:Key="Step_PatternPrint_WaitPrintDone">인쇄 완료 대기 (isBusy/GetPrnStatus 폴링)</system:String>
+    <system:String x:Key="Step_PatternPrint_HeadPowerOff">헤드 전원 OFF (SetHeadPower)</system:String>
+    <system:String x:Key="Step_PatternPrint_ClosePrinter">프린터 연결 종료 (ClosePrinter)</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveReady">대기 위치(READY) 이동</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveReadyDone">READY 위치 InPosition 확인</system:String>
+
     <!-- 시퀀스 표시명 / 설명 (SequenceRegistry 의 Name/Description 키) -->
     <system:String x:Key="Seq_Init_Name">INITIALIZE</system:String>
     <system:String x:Key="Seq_Init_Desc">전체 축 서보ON → 원점복귀 → 대기위치 이동 → GLASS 감지 대기</system:String>
@@ -298,6 +317,8 @@
     <system:String x:Key="Seq_DropWatcher_Desc">드랍와처 위치로 이동</system:String>
     <system:String x:Key="Seq_AutoPrint_Name">AUTO PRINT</system:String>
     <system:String x:Key="Seq_AutoPrint_Desc">글래스 감지 → 진공 고정 → PRINT START 이동 → 헤드 DOWN → 인쇄 진행 → 헤드 UP → 진공 해제 → 복귀</system:String>
+    <system:String x:Key="Seq_PatternPrint_Name">PATTERN PRINT</system:String>
+    <system:String x:Key="Seq_PatternPrint_Desc">프린터 연결 → 상태확인 → 파라미터/구성 전송 → 헤드 전원·정렬 → 이미지 다운로드 → PRINT START 이동 → 트리거 ARM → 스캔 인쇄 → 완료대기 → 헤드 OFF/종료 → 복귀 (Meteor PCC)</system:String>
     <system:String x:Key="Seq_HeadUp_Name">HEAD UP</system:String>
     <system:String x:Key="Seq_HeadUp_Desc">프린트 헤드를 위로 이동 (글래스에서 분리)</system:String>
     <system:String x:Key="Seq_HeadDown_Name">HEAD DOWN</system:String>

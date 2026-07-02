@@ -38,6 +38,14 @@ namespace IJPSystem.Platform.Application.Sequences
             },
             new SequenceDefinition
             {
+                Id             = "PATTERN_PRINT",
+                Icon           = "🟦",
+                NameKey        = "Seq_PatternPrint_Name",
+                DescriptionKey = "Seq_PatternPrint_Desc",
+                BuildSteps     = PatternPrintSequence.Build,
+            },
+            new SequenceDefinition
+            {
                 Id             = "DROP_WATCHER",
                 Icon           = "🔬",
                 NameKey        = "Seq_DropWatcher_Name",
