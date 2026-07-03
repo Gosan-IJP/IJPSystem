@@ -1,42 +1,71 @@
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.Motion;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace IJPSystem.Drivers.Motion
 {
-    // 코미조아(Comizoa) 모션 드라이버 스켈레톤.
-    //
-    // SDK: ComizoaIF.dll 등 C 함수를 P/Invoke 로 호출 (czm_init / czm_move_a ...).
-    // 모든 메서드 본문은 placeholder — 실제 SDK 호출은 TODO 표시 지점에 채운다.
-    //
-    // 참고 — Comizoa 일반 호출 예:
-    //   czm_init();
-    //   czm_set_servo_on(axis, 1);
-    //   czm_set_max_velo(axis, vel);
-    //   czm_set_acc(axis, acc);
-    //   czm_set_dec(axis, dec);
-    //   czm_move_a(axis, pos);
-    //   czm_get_pos(axis, out current);
+    /// <summary>
+    /// 코미조아(Comizoa) EtherCAT 모션 드라이버.
+    /// 프로젝트 공용 <see cref="IMotionDriver"/> 계약을, Comizoa EtherCAT SDK 래퍼(<see cref="IComiMotion"/>) 위에 얹은 어댑터.
+    /// - 문자열 AxisNo ↔ <see cref="AxisId"/>(enum) 매핑(설정 순서 기준)
+    /// - 동기 SDK 호출을 Task 로 감싸 IMotionDriver(async) 계약에 맞춤
+    /// </summary>
     public class ComizoaMotionDriver : IMotionDriver
     {
+        private const int DefaultMoveTimeoutMs = 60000;
+
         private readonly Dictionary<string, AxisStatus> _axisStates = new();
-        // string AxisNo → ushort Comizoa axis index 매핑 (Initialize 단계에서 채움)
-        private readonly Dictionary<string, ushort> _axisIndex = new();
+        private readonly Dictionary<string, AxisId> _axisMap = new();
+        private List<AxisDeviceInfo> _configs = new();
+
+        private IComiMotion? _comi;
+
+        /// <summary>ComiEcatLib ini 경로(없으면 기본값 사용).</summary>
+        public string IniPath { get; set; } = "ComiEcatLibCfg.ini";
 
         public bool IsConnected { get; private set; }
 
         public bool Connect()
         {
-            // TODO: czm_init() 호출 + 보드 enumerate. 실패 시 false 반환.
-            IsConnected = true;
-            return true;
+            try
+            {
+                var cfg = ComiEcatConfig.Load(IniPath);
+                var comi = new ComiEcatMotion();
+                comi.Init(cfg);
+                _comi = comi;
+
+                // 축별 기본 속도 프로파일 적용(Move 기준)
+                foreach (var c in _configs)
+                {
+                    if (!_axisMap.TryGetValue(c.AxisNo, out var ax)) continue;
+                    var mv = c.MotionConfig?.Move;
+                    if (mv != null)
+                        comi.SetVelocity(ax, new VelocityProfile
+                        {
+                            Velocity = mv.Velocity,
+                            Acceleration = mv.Acceleration,
+                            Deceleration = mv.Deceleration
+                        });
+                }
+
+                IsConnected = true;
+                return true;
+            }
+            catch
+            {
+                IsConnected = false;
+                return false;
+            }
         }
 
         public void Disconnect()
         {
-            // TODO: czm_exit() — DLL 자원 해제
+            try { _comi?.Unload(); } catch { /* 해제 오류 무시 */ }
+            _comi?.Dispose();
+            _comi = null;
             IsConnected = false;
         }
 
@@ -44,90 +73,139 @@ namespace IJPSystem.Drivers.Motion
         {
             if (axisConfigs == null) return;
             _axisStates.Clear();
-            _axisIndex.Clear();
+            _axisMap.Clear();
+            _configs = axisConfigs;
 
-            ushort idx = 0;
+            int idx = 0;
             foreach (var cfg in axisConfigs)
             {
                 if (string.IsNullOrEmpty(cfg.AxisNo)) continue;
-
                 _axisStates[cfg.AxisNo] = new AxisStatus
                 {
                     AxisNo = cfg.AxisNo,
                     Name   = cfg.Name ?? "Unknown Axis",
                     Unit   = cfg.Unit ?? "mm",
                 };
-                _axisIndex[cfg.AxisNo] = idx++;
+                _axisMap[cfg.AxisNo] = (AxisId)idx++;   // 설정 순서 → AxisId(0=X,1=Y,…)
             }
-            // TODO: czm_set_pulse_out_mode / czm_set_enc_input_mode 등 펄스/엔코더 모드 셋업
         }
 
+        // ── 상태 조회 ──
         public AxisStatus GetStatus(string axisNo)
         {
-            // TODO:
-            //   czm_get_motion_status(idx, ...) → IsMoving / IsInPosition / IsAlarm
-            //   czm_get_pos(idx, out pos)       → CurrentPos
-            //   czm_is_home_done(idx, ...)      → IsHomeDone
-            return _axisStates.TryGetValue(axisNo, out var s) ? s : new AxisStatus { AxisNo = axisNo };
+            if (!_axisStates.TryGetValue(axisNo, out var s))
+                return new AxisStatus { AxisNo = axisNo };
+            RefreshStatus(axisNo, s);
+            return s;
         }
 
-        public double GetActualPosition(string axisNo)
-        {
-            // TODO: czm_get_pos(MapAxis(axisNo), out double pos); return pos;
-            return GetStatus(axisNo).CurrentPos;
-        }
+        public double GetActualPosition(string axisNo) => GetStatus(axisNo).CurrentPos;
 
         public List<AxisStatus> GetAllStatus()
-            => _axisStates.Values.OrderBy(s => s.AxisNo).ToList();
+        {
+            foreach (var kv in _axisStates) RefreshStatus(kv.Key, kv.Value);
+            return _axisStates.Values.OrderBy(s => s.AxisNo).ToList();
+        }
 
+        /// <summary>하드웨어 상태를 읽어 캐시된 AxisStatus 에 반영.</summary>
+        private void RefreshStatus(string axisNo, AxisStatus s)
+        {
+            if (_comi == null || !_axisMap.TryGetValue(axisNo, out var ax)) return;
+            try
+            {
+                var st = _comi.GetState(ax);
+                s.CurrentPos   = st.Position;
+                s.IsMoving     = st.IsMoving;
+                s.IsServoOn    = st.ServoOn;
+                s.IsHomeDone   = st.IsHomed;
+                s.IsAlarm      = st.Alarm;
+                s.CwLimit      = st.PositiveLimit;
+                s.CcwLimit     = st.NegativeLimit;
+                s.IsInPosition = !st.IsMoving;
+            }
+            catch { /* 통신 오류 시 마지막 상태 유지 */ }
+        }
+
+        // ── 구동 명령 ──
         public Task<bool> ServoOn(string axisNo, bool isOn)
         {
-            // TODO: czm_set_servo_on(MapAxis(axisNo), isOn ? 1 : 0);
-            if (_axisStates.TryGetValue(axisNo, out var s))
-                s.IsServoOn = isOn;
-            return Task.FromResult(true);
+            if (!TryAxis(axisNo, out var ax)) return Task.FromResult(false);
+            try
+            {
+                _comi!.ServoOn(ax, isOn);
+                if (_axisStates.TryGetValue(axisNo, out var s)) s.IsServoOn = isOn;
+                return Task.FromResult(true);
+            }
+            catch { return Task.FromResult(false); }
         }
 
         public Task<bool> MoveAbs(string axisNo, double pos, double vel, double acc, double dec)
-        {
-            // TODO:
-            //   czm_set_max_velo(idx, vel);
-            //   czm_set_acc(idx, acc);
-            //   czm_set_dec(idx, dec);
-            //   czm_move_a(idx, pos);
-            return Task.FromResult(false);
-        }
+            => RunMove(axisNo, vel, acc, dec, ax => _comi!.MoveAbsolute(ax, pos));
 
         public Task<bool> MoveRel(string axisNo, double distance, double vel, double acc, double dec)
+            => RunMove(axisNo, vel, acc, dec, ax => _comi!.MoveRelative(ax, distance));
+
+        private Task<bool> RunMove(string axisNo, double vel, double acc, double dec, Action<AxisId> move)
         {
-            // TODO: czm_move_r(idx, distance) — 속도/가감속은 MoveAbs 와 동일 셋업
-            return Task.FromResult(false);
+            if (!TryAxis(axisNo, out var ax)) return Task.FromResult(false);
+            return Task.Run(() =>
+            {
+                try
+                {
+                    _comi!.SetVelocity(ax, new VelocityProfile { Velocity = vel, Acceleration = acc, Deceleration = dec });
+                    move(ax);
+                    return _comi.WaitForDone(ax, DefaultMoveTimeoutMs);
+                }
+                catch { return false; }
+            });
         }
 
         public Task<bool> MoveJog(string axisNo, bool isForward, double vel, double acc, double dec)
         {
-            // TODO: czm_jog_start(idx, isForward ? +1 : -1) — Stop 으로 종료
-            return Task.FromResult(false);
+            if (!TryAxis(axisNo, out var ax)) return Task.FromResult(false);
+            try
+            {
+                _comi!.SetVelocity(ax, new VelocityProfile { Velocity = vel, Acceleration = acc, Deceleration = dec });
+                _comi.Jog(ax, isForward ? +1 : -1);   // 종료는 Stop 으로
+                return Task.FromResult(true);
+            }
+            catch { return Task.FromResult(false); }
         }
 
         public Task<bool> Stop(string axisNo)
         {
-            // TODO: czm_stop(idx) — 부드러운 감속 정지. 비상정지는 czm_emergency_stop.
-            return Task.FromResult(false);
+            if (!TryAxis(axisNo, out var ax)) return Task.FromResult(false);
+            try { _comi!.Stop(ax); return Task.FromResult(true); }
+            catch { return Task.FromResult(false); }
         }
 
         public Task<bool> Home(string axisNo)
         {
-            // TODO: czm_home_start(idx) 호출 + czm_is_home_done 폴링 (또는 ManualResetEvent)
-            return Task.FromResult(false);
+            if (!TryAxis(axisNo, out var ax)) return Task.FromResult(false);
+            return Task.Run(() =>
+            {
+                try { _comi!.Home(ax); return _comi.WaitForDone(ax, DefaultMoveTimeoutMs); }
+                catch { return false; }
+            });
         }
 
         public Task<bool> ResetAlarm(string axisNo)
         {
-            // TODO: czm_reset_alarm(idx)
-            if (_axisStates.TryGetValue(axisNo, out var s))
-                s.IsAlarm = false;
-            return Task.FromResult(true);
+            if (!TryAxis(axisNo, out var ax)) return Task.FromResult(false);
+            try
+            {
+                _comi!.SetAlarmState(ax, reset: true);
+                if (_axisStates.TryGetValue(axisNo, out var s)) s.IsAlarm = false;
+                return Task.FromResult(true);
+            }
+            catch { return Task.FromResult(false); }
+        }
+
+        /// <summary>연결됨 + 매핑 존재 시에만 AxisId 반환.</summary>
+        private bool TryAxis(string axisNo, out AxisId ax)
+        {
+            ax = default;
+            return _comi != null && _axisMap.TryGetValue(axisNo, out ax);
         }
     }
 }

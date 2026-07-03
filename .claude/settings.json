@@ -79,7 +79,8 @@
       "Read(//c/Users/bluey/.claude/**)",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, ensure_ascii=False, indent=1\\)\\)\")",
       "Bash(grep -iv \"interface\\\\|:.*IIODriver$\")",
-      "Bash(rm -f IJPSystem.Drivers.Meniscus/DmdModbusClient.cs IJPSystem.Drivers.Meniscus/MeniscusController.cs IJPSystem.Drivers.Meniscus/DmdRegisterMap.cs && echo \"삭제 완료\" && ls IJPSystem.Drivers.Meniscus/*.cs 2>/dev/null)"
+      "Bash(rm -f IJPSystem.Drivers.Meniscus/DmdModbusClient.cs IJPSystem.Drivers.Meniscus/MeniscusController.cs IJPSystem.Drivers.Meniscus/DmdRegisterMap.cs && echo \"삭제 완료\" && ls IJPSystem.Drivers.Meniscus/*.cs 2>/dev/null)",
+      "Bash(grep -viE \"Drivers/Motion|Drivers\\\\\\\\\\\\\\\\Motion|: IMotionDriver|interface\")"
     ],
     "additionalDirectories": [
       "d:\\tmp",
