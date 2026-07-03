@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace IJPSystem.Drivers.Motion
+namespace IJPSystem.Drivers.Motion.Comizoa
 {
     /// <summary>
     /// 코미조아(Comizoa) EtherCAT 모션 드라이버.

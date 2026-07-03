@@ -90,7 +90,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public double XActualPosition => GetAxisCurrentPos("X");
         public double YActualPosition => GetAxisCurrentPos("Y");
         public double ZActualPosition => GetAxisCurrentPos("Z");
-        public double DWActualPosition => GetAxisCurrentPos("DW");
+        public double TActualPosition => GetAxisCurrentPos("T");
 
         private double GetAxisCurrentPos(string axisNo) =>
             AxisList.FirstOrDefault(a => a.Info.AxisNo == axisNo)?.Status?.CurrentPos ?? 0.0;
@@ -179,7 +179,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             OnPropertyChanged(nameof(XActualPosition));
             OnPropertyChanged(nameof(YActualPosition));
             OnPropertyChanged(nameof(ZActualPosition));
-            OnPropertyChanged(nameof(DWActualPosition));
+            OnPropertyChanged(nameof(TActualPosition));
         }
 
         private void OnRecipeVmPropertyChanged(object? _, PropertyChangedEventArgs e)

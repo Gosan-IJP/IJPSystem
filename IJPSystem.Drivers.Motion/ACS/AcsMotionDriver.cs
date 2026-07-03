@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace IJPSystem.Drivers.Motion
+namespace IJPSystem.Drivers.Motion.ACS
 {
     // ACS Motion Control (SPiiPlus 시리즈) 드라이버 스켈레톤.
     //

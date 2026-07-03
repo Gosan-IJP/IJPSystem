@@ -1,4 +1,4 @@
-namespace IJPSystem.Drivers.Motion
+namespace IJPSystem.Drivers.Motion.Comizoa
 {
     /// <summary>모션 축. 실제 축 구성에 맞게 확장.</summary>
     public enum AxisId { X = 0, Y = 1, Z = 2, Theta = 3 }

@@ -22,11 +22,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 공유 축 리스트. Motion State 위치 표시 및 조그 대상.
         public ObservableCollection<AxisViewModel> AxisList => _mainVM.SharedAxisList;
 
-        // 이름 부분일치로 축을 찾는다 (예: "DW AXIS" → "DW")
+        // 이름 부분일치로 축을 찾는다 (예: "T AXIS" → "T")
         public AxisViewModel? AxisX  => ResolveByTag("X");
         public AxisViewModel? AxisY  => ResolveByTag("Y");
         public AxisViewModel? AxisZ  => ResolveByTag("Z");
-        public AxisViewModel? AxisDW => ResolveByTag("DW");
+        public AxisViewModel? AxisT => ResolveByTag("T");
         private AxisViewModel? ResolveByTag(string tag) =>
             AxisList.FirstOrDefault(a => a.Info?.Name != null &&
                 a.Info.Name.IndexOf(tag, StringComparison.OrdinalIgnoreCase) >= 0);
@@ -70,9 +70,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public bool IsJogSpeedFast   { get => _jogSpeedScale == 2.0;  set { if (value) JogSpeedScale = 2.0; } }
 
         // ── Motion 패널 (Home / Absolute·Relative / Axis / Target / Move) ──
-        private static readonly string[] _motionAxisTags = { "X", "Y", "Z", "DW" };
+        private static readonly string[] _motionAxisTags = { "X", "Y", "Z", "T" };
 
-        // Axis 콤보 선택(0=X,1=Y,2=Z,3=DW)
+        // Axis 콤보 선택(0=X,1=Y,2=Z,3=T)
         private int _motionAxisIndex = 0;
         public int MotionAxisIndex
         {

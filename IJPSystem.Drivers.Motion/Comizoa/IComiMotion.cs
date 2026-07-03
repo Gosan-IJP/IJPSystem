@@ -1,6 +1,6 @@
 using System;
 
-namespace IJPSystem.Drivers.Motion
+namespace IJPSystem.Drivers.Motion.Comizoa
 {
     /// <summary>
     /// LabVIEW "Comi_Motion_lib" (Comizoa EtherCAT 모션) 전체 함수 인터페이스.

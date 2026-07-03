@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace IJPSystem.Drivers.Motion
+namespace IJPSystem.Drivers.Motion.Comizoa
 {
     /// <summary>
     /// Comizoa EtherCAT 모션 구현 (ComiEcatSdk.dll 래퍼).

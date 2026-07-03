@@ -319,7 +319,7 @@
                                         PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
                             </Grid>
 
-                            <!-- Z + DW (조그 단위 콤보박스를 두 축 가운데 위에 배치) -->
+                            <!-- Z + T (조그 단위 콤보박스를 두 축 가운데 위에 배치) -->
                             <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
                                 <ComboBox Width="92" Height="26" Margin="0,0,0,8" HorizontalAlignment="Center"
                                           Background="#0D1520" Foreground="Black" BorderBrush="#334155"
@@ -344,15 +344,15 @@
                                                 PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
                                     </StackPanel>
 
-                                    <!-- DW 축 -->
+                                    <!-- T 축 -->
                                     <StackPanel Margin="10,0,0,0">
                                         <Button Style="{StaticResource JogBtn}" Content="↑" Margin="0,0,0,6"
-                                                Tag="DW" IsEnabled="{Binding AxisDW.CanJog, FallbackValue=False}"
+                                                Tag="T" IsEnabled="{Binding AxisT.CanJog, FallbackValue=False}"
                                                 PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
-                                        <TextBlock Text="DW" Foreground="#C084FC" FontWeight="Bold" FontSize="13"
+                                        <TextBlock Text="T" Foreground="#C084FC" FontWeight="Bold" FontSize="13"
                                                    HorizontalAlignment="Center"/>
                                         <Button Style="{StaticResource JogBtn}" Content="↓" Margin="0,6,0,0"
-                                                Tag="DW" IsEnabled="{Binding AxisDW.CanJog, FallbackValue=False}"
+                                                Tag="T" IsEnabled="{Binding AxisT.CanJog, FallbackValue=False}"
                                                 PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
                                     </StackPanel>
                                 </StackPanel>
@@ -405,16 +405,16 @@
                             </Border>
                         </Grid>
 
-                        <!-- Axis DW -->
+                        <!-- Axis T -->
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="80"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Axis DW" Foreground="#CBD5E1" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <TextBlock Text="Axis T" Foreground="#CBD5E1" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
                             <Border Grid.Column="1" Style="{StaticResource PosBox}" Padding="10,8">
                                 <TextBlock Style="{StaticResource PosText}" FontSize="16"
-                                           Text="{Binding AxisDW.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"/>
+                                           Text="{Binding AxisT.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"/>
                             </Border>
                         </Grid>
                     </StackPanel>
@@ -800,7 +800,7 @@
                                 <ComboBoxItem Content="Axis X"/>
                                 <ComboBoxItem Content="Axis Y"/>
                                 <ComboBoxItem Content="Axis Z"/>
-                                <ComboBoxItem Content="Axis DW"/>
+                                <ComboBoxItem Content="Axis T"/>
                             </ComboBox>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>

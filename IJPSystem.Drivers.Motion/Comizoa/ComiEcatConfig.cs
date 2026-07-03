@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace IJPSystem.Drivers.Motion
+namespace IJPSystem.Drivers.Motion.Comizoa
 {
     /// <summary>
     /// Comizoa EtherCAT 라이브러리 설정. LabVIEW "BIN_x64/ComiEcatLibCfg.ini" 대응.

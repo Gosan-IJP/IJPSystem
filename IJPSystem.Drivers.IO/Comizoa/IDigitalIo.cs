@@ -1,0 +1,22 @@
+namespace IJPSystem.Drivers.IO.Comizoa
+{
+    /// <summary>
+    /// LabVIEW "Comi_Motion_lib/3_IO_Con" (Comizoa EtherCAT DIO) 대응.
+    /// Get DIN State / Get DOUT State / Set DOUT 를 추상화한 저수준(채널 기반) 인터페이스.
+    /// 모션과 동일한 EtherCAT 네트워크의 DIO 슬레이브를 제어한다.
+    /// </summary>
+    public interface IDigitalIo
+    {
+        /// <summary>입력 1채널 읽기. (Get DIN State.vi)</summary>
+        bool GetInput(int channel);
+        /// <summary>출력 1채널 현재값 읽기. (Get DOUT State.vi)</summary>
+        bool GetOutput(int channel);
+        /// <summary>출력 1채널 설정. (Set DOUT.vi) — 밸브/스트링거 등.</summary>
+        void SetOutput(int channel, bool on);
+
+        /// <summary>입력 전체를 비트마스크로 읽기.</summary>
+        uint GetInputBits();
+        /// <summary>출력 전체를 비트마스크로 쓰기.</summary>
+        void SetOutputBits(uint bits);
+    }
+}

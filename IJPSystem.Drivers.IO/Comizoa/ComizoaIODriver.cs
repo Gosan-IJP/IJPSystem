@@ -1,11 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.IO;
 
-namespace IJPSystem.Drivers.IO
+namespace IJPSystem.Drivers.IO.Comizoa
 {
     // 코미조아(COMIZOA) EtherCAT 디지털 I/O 드라이버 — 모듈: ETS-D08MN.
     //
@@ -24,25 +22,10 @@ namespace IJPSystem.Drivers.IO
     //     실장비에서 채널이 어긋나면 PointsPerModule / MapChannel 만 조정하면 된다.
     public class ComizoaIODriver : IIODriver
     {
-        private const string Dll = "ComiEcatSdk.dll";
         private const int PointsPerModule = 8;   // ETS-D08MN = 디지털 8점
 
-        // ── ComiEcatSdk P/Invoke (실장비 EtherCatDigitalIo 와 동일 시그니처) ──
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int ecat_GetDin(int ch, out int state);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int ecat_GetDout(int ch, out int state);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int ecat_SetDout(int ch, int on);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int ecat_GetDinBits(out uint bits);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int ecat_SetDoutBits(uint bits);
-
-        private static void Check(int rc, string op)
-        {
-            if (rc != 0) throw new InvalidOperationException($"{op} 실패 (rc={rc})");
-        }
+        // 저수준 EtherCAT DIO (ComiEcatSdk.dll 래퍼) — 하드웨어 채널 접근을 위임한다.
+        private readonly IDigitalIo _dio = new ComiEcatDigitalIo();
 
         // IO 설정 및 상태 (미연결/개발 시 echo 로 화면·시퀀스 동작 유지)
         private readonly Dictionary<string, IODeviceInfo> _ioMap         = new();
@@ -160,36 +143,17 @@ namespace IJPSystem.Drivers.IO
                 _analogStates[indexName] = value;
         }
 
-        // ── int 채널 기반 (ComiEcatSdk 직접 호출) ────────────────────────────
-        public bool GetInput(int channel)
-        {
-            if (channel < 0) return false;
-            Check(ecat_GetDin(channel, out int s), "GetDin");
-            return s != 0;
-        }
+        // ── int 채널 기반 (저수준 ComiEcatDigitalIo 로 위임) ─────────────────
+        public bool GetInput(int channel) => channel >= 0 && _dio.GetInput(channel);
 
-        public bool GetOutput(int channel)
-        {
-            if (channel < 0) return false;
-            Check(ecat_GetDout(channel, out int s), "GetDout");
-            return s != 0;
-        }
+        public bool GetOutput(int channel) => channel >= 0 && _dio.GetOutput(channel);
 
-        public void SetOutput(int channel, bool on)
-        {
-            if (channel < 0) return;
-            Check(ecat_SetDout(channel, on ? 1 : 0), "SetDout");
-        }
+        public void SetOutput(int channel, bool on) { if (channel >= 0) _dio.SetOutput(channel, on); }
 
         // 여러 입력/출력을 한 번에 (비트마스크) — 실장비 HAL 과 동일.
-        public uint GetInputBits()
-        {
-            Check(ecat_GetDinBits(out uint bits), "GetDinBits");
-            return bits;
-        }
+        public uint GetInputBits() => _dio.GetInputBits();
 
-        public void SetOutputBits(uint bits)
-            => Check(ecat_SetDoutBits(bits), "SetDoutBits");
+        public void SetOutputBits(uint bits) => _dio.SetOutputBits(bits);
 
         // 아날로그 int 채널 — ETS-D08MN 미지원(no-op)
         public double GetAnalogInput(int channel) => 0.0;

@@ -13,7 +13,7 @@ namespace IJPSystem.Platform.HMI.Views
             InitializeComponent();
         }
 
-        /// <summary>버튼 Tag(X/Y/Z/DW)로 대상 축을 찾는다. 일치 축이 없으면 null(무동작).</summary>
+        /// <summary>버튼 Tag(X/Y/Z/T)로 대상 축을 찾는다. 일치 축이 없으면 null(무동작).</summary>
         private AxisViewModel? ResolveAxis(object sender)
         {
             if (DataContext is not PatternPrintViewModel vm) return null;
