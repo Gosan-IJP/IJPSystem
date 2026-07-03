@@ -1,6 +1,7 @@
 <Window x:Class="IJPSystem.Platform.HMI.Print.EditPanelWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:IJPSystem.Platform.HMI.Print"
         Title="Drawing Panel" Height="900" Width="1320"
         WindowStartupLocation="CenterOwner"
         Background="#E5E7EB" FontFamily="Segoe UI">
@@ -22,31 +23,28 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#4D5E7A"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter Property="Background" Value="#9AA3B2"/></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- 좌측 도구(라디오) -->
-        <Style x:Key="ToolBtn" TargetType="RadioButton">
-            <Setter Property="Width" Value="34"/>
-            <Setter Property="Height" Value="34"/>
-            <Setter Property="GroupName" Value="tool"/>
+        <!-- 모드 토글 버튼(Eraser/Fill): 활성 시 파란색 -->
+        <Style x:Key="ModeBtn" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#3E4C63"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="bd" Background="#F3F4F6" BorderBrush="#9CA3AF" BorderThickness="1">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="3">
+                            <ContentPresenter VerticalAlignment="Center" Margin="16,0"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#BFDBFE"/>
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#2563EB"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#E5E7EB"/>
-                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#4D5E7A"/></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -67,68 +65,64 @@
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
-        <!-- 본체: 도구 | 캔버스 | 액션 -->
+        <!-- 본체: 캔버스 | 액션 -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>   <!-- 좌측 도구 -->
                 <ColumnDefinition Width="*"/>       <!-- 캔버스 -->
                 <ColumnDefinition Width="250"/>     <!-- 우측 액션 -->
             </Grid.ColumnDefinitions>
 
-            <!-- 좌측 도구 스트립 -->
-            <StackPanel Grid.Column="0" Background="#D1D5DB" Margin="6,8,0,8">
-                <RadioButton Style="{StaticResource ToolBtn}" Tag="None"      Content="🔍" ToolTip="Zoom"/>
-                <RadioButton Style="{StaticResource ToolBtn}" Tag="None"      Content="➤"  ToolTip="Select"/>
-                <RadioButton Style="{StaticResource ToolBtn}" Tag="None"      Content="✋" ToolTip="Pan"/>
-                <RadioButton Style="{StaticResource ToolBtn}" Tag="None"      Content="✛"  ToolTip="Crosshair"/>
-                <RadioButton Style="{StaticResource ToolBtn}" Tag="Line"      Content="╱"  ToolTip="Line"      Checked="Tool_Checked"/>
-                <RadioButton Style="{StaticResource ToolBtn}" Tag="Rectangle" Content="▭"  ToolTip="Rectangle" Checked="Tool_Checked"/>
-                <RadioButton Style="{StaticResource ToolBtn}" Tag="Diamond"   Content="◇"  ToolTip="Diamond"   Checked="Tool_Checked"/>
-                <RadioButton Style="{StaticResource ToolBtn}" Tag="Pen"       Content="〰"  ToolTip="Curve / Free draw" IsChecked="True" Checked="Tool_Checked"/>
-                <RadioButton Style="{StaticResource ToolBtn}" Tag="Ellipse"   Content="◯"  ToolTip="Ellipse"   Checked="Tool_Checked"/>
-            </StackPanel>
-
-            <!-- 캔버스 영역 -->
-            <Border Grid.Column="1" Background="#C7CBD1" Margin="0,8" ClipToBounds="True">
-                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-                              HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
-                    <Border Background="White" BorderBrush="#9CA3AF" BorderThickness="1"
-                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
-                        <Canvas x:Name="DrawCanvas" Background="White"
-                                MouseDown="DrawCanvas_MouseDown" MouseMove="DrawCanvas_MouseMove"
-                                MouseUp="DrawCanvas_MouseUp"/>
-                    </Border>
-                </ScrollViewer>
+            <!-- 그리기 캔버스(그리드 비트맵) -->
+            <Border Grid.Column="0" Background="#C7CBD1" Margin="8" ClipToBounds="True">
+                <Border Background="White" BorderBrush="#9CA3AF" BorderThickness="1"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
+                    <local:DrawingPanelView x:Name="Panel"/>
+                </Border>
             </Border>
 
             <!-- 우측 액션 패널 -->
-            <StackPanel Grid.Column="2" Margin="8,8,8,8">
-                <Button Style="{StaticResource ActBtn}" Height="48" Margin="0,0,0,10" Content="✓   Apply Draw" Click="ApplyDraw_Click"/>
-                <RadioButton GroupName="tool" Tag="Eraser" Checked="Tool_Checked" Cursor="Hand" Margin="0,0,0,4">
-                    <RadioButton.Template>
-                        <ControlTemplate TargetType="RadioButton">
-                            <Border x:Name="bd" Background="#3E4C63" CornerRadius="3" Height="44">
-                                <TextBlock Text="⬚   Eraser" Foreground="White" FontSize="15" FontWeight="SemiBold"
-                                           VerticalAlignment="Center" Margin="16,0"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsChecked" Value="True"><Setter TargetName="bd" Property="Background" Value="#2563EB"/></Trigger>
-                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#4D5E7A"/></Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </RadioButton.Template>
-                </RadioButton>
-                <Button Style="{StaticResource ActBtn}" Height="44" Margin="0,0,0,12" Content="🗑   Clear Canvas" Click="ClearCanvas_Click"/>
+            <StackPanel Grid.Column="1" Margin="8,8,8,8">
+                <Button Style="{StaticResource ActBtn}" Height="48" Margin="0,0,0,10" Content="✓   Apply Draw"
+                        Command="{Binding ApplyDrawCommand}"/>
 
-                <Button Style="{StaticResource ActBtn}" Height="44" Margin="0,0,0,4" Content="⤓   Fill" Click="Fill_Click"/>
-                <Button Style="{StaticResource ActBtn}" Height="44" Margin="0,0,0,12" Content="⤓   Auto Fill" Click="AutoFill_Click"/>
+                <Button Height="44" Margin="0,0,0,4" Content="⬚   Eraser" Command="{Binding EraserCommand}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource ModeBtn}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Mode}" Value="Erase">
+                                    <Setter Property="Background" Value="#2563EB"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
 
-                <Button Style="{StaticResource ActBtn}" Height="44" Margin="0,0,0,4" Content="←   Undo" Click="Undo_Click"/>
-                <Button Style="{StaticResource ActBtn}" Height="44" Margin="0,0,0,12" Content="→   Redo" Click="Redo_Click"/>
+                <Button Style="{StaticResource ActBtn}" Height="44" Margin="0,0,0,12" Content="🗑   Clear Canvas"
+                        Command="{Binding ClearCanvasCommand}"/>
 
-                <Button Style="{StaticResource ActBtn}" Height="44" Margin="0,0,0,12" Content="💾   Save" Click="Save_Click"/>
+                <Button Height="44" Margin="0,0,0,4" Content="⤓   Fill" Command="{Binding FillCommand}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource ModeBtn}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Mode}" Value="RoiFill">
+                                    <Setter Property="Background" Value="#2563EB"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Style="{StaticResource ActBtn}" Height="44" Margin="0,0,0,12" Content="⤓   Auto Fill"
+                        Command="{Binding AutoFillCommand}"/>
 
-                <!-- 분할 -->
+                <Button Style="{StaticResource ActBtn}" Height="44" Margin="0,0,0,4" Content="←   Undo"
+                        Command="{Binding UndoCommand}"/>
+                <Button Style="{StaticResource ActBtn}" Height="44" Margin="0,0,0,12" Content="→   Redo"
+                        Command="{Binding RedoCommand}"/>
+
+                <Button Style="{StaticResource ActBtn}" Height="44" Margin="0,0,0,12" Content="💾   Save"
+                        Command="{Binding SaveCommand}"/>
+
+                <!-- NxN 크기: 스피너로 조절 → 그리드 재생성 -->
                 <Border Background="White" BorderBrush="#374151" BorderThickness="2" Width="64" Height="64"
                         HorizontalAlignment="Center" Margin="0,4,0,2">
                     <Grid>
@@ -136,10 +130,16 @@
                         <Line X1="0" Y1="32" X2="64" Y2="32" Stroke="#374151" StrokeThickness="2"/>
                     </Grid>
                 </Border>
-                <Border Background="#3E4C63" Width="90" Height="26" HorizontalAlignment="Center" Margin="0,0,0,12" CornerRadius="2">
-                    <TextBlock Text="2x2" Foreground="White" FontFamily="Consolas" FontWeight="Bold"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">
+                    <StackPanel Margin="0,0,4,0" VerticalAlignment="Center">
+                        <RepeatButton Content="▲" Width="20" Height="14" FontSize="8" Command="{Binding SizeUpCommand}"/>
+                        <RepeatButton Content="▼" Width="20" Height="14" FontSize="8" Command="{Binding SizeDownCommand}"/>
+                    </StackPanel>
+                    <Border Background="White" BorderBrush="#9CA3AF" BorderThickness="1" Width="120" Height="28">
+                        <TextBlock Text="{Binding SizeText}" Foreground="#1F2937" FontFamily="Consolas" FontWeight="Bold" FontSize="15"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </StackPanel>
 
                 <TextBlock Text="Boundary Thickness" Foreground="#1E3A5F" FontWeight="Bold" FontSize="13" Margin="0,0,0,3"/>
                 <TextBox x:Name="BoundaryBox" Height="26" Width="120" HorizontalAlignment="Left"
@@ -164,15 +164,16 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Background="#F9FAFB" BorderBrush="#9CA3AF" BorderThickness="1" Padding="6,2">
-                    <TextBlock x:Name="StatusInfo" FontFamily="Consolas" FontSize="12" Foreground="#1F2937"/>
+                    <TextBlock Text="{Binding StatusText}" FontFamily="Consolas" FontSize="12" Foreground="#1F2937"/>
                 </Border>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-                    <TextBlock Text="Line Width" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
+                    <TextBlock Text="Pen Width" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
                     <TextBox x:Name="LineWidthBox" Width="60" Height="26" Margin="8,0,0,0"
-                             VerticalContentAlignment="Center" FontFamily="Consolas" Text="7"
+                             VerticalContentAlignment="Center" FontFamily="Consolas"
+                             Text="{Binding PenWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              TextChanged="LineWidth_Changed"/>
                     <Border Background="#F9FAFB" BorderBrush="#9CA3AF" BorderThickness="1" Padding="6,2" Margin="8,0,0,0">
-                        <TextBlock x:Name="LineWidthMm" FontFamily="Consolas" FontSize="12" Text="0.2961 mm"/>
+                        <TextBlock x:Name="LineWidthMm" FontFamily="Consolas" FontSize="12" Text="0.0423 mm"/>
                     </Border>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,8,0">

@@ -150,15 +150,16 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand MeniscusStepDownCommand { get; private set; } = null!;
         private const double MeniscusStep = 10.0;   // Pa
 
-        // ── 메니스커스 DMD 실장치(Modbus TCP) ─────────────────────────
-        // 연결 성공 시 폴링/쓰기가 실제 장치로, 실패 시 mock 으로 동작.
-        // UI 는 Pa, 컨트롤러는 kPa → 1 kPa = 1000 Pa 환산.
-        private readonly object _meniscusLock = new();
-        private IJPSystem.Drivers.Meniscus.DmdModbusClient? _dmdClient;
-        private IJPSystem.Drivers.Meniscus.MeniscusController? _meniscusDev;
-        private System.Threading.Timer? _meniscusPollTimer;
+        // ── 메니스커스 DMD 실장치(Modbus RTU / 시리얼 상태머신) ────────
+        // 연결 성공 시 상태머신이 백그라운드 폴링/쓰기를 실제 장치로 수행, 실패 시 mock.
+        // UI 는 Pa, 상태머신은 kPa → 1 kPa = 1000 Pa 환산.
+        private IJPSystem.Drivers.Meniscus.MeniscusStateMachine? _meniscus;
         private bool _meniscusConnected;
+        private bool _meniscusErrLogged;
         private const double PaPerKpa = 1000.0;
+
+        /// <summary>VV Control 패널(Final VV/Switching Pressure/Pump + 상태 LED) 로직.</summary>
+        public IJPSystem.Platform.HMI.Print.VvControlViewModel Vv { get; }
 
         // ── Valve L / R (Fluidics 다이어그램 토글 → 디지털 출력) ──────
         // Valve L = Y100(DO_HEAD1_LEFT_VALVE), Valve R = Y101(DO_HEAD1_RIGHT_VALVE)
@@ -455,6 +456,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
             RefreshValveStates();
             InitMeniscusDevice();
 
+            // VV Control 패널(Final VV / Switching Pressure / Pump + 상태 LED) — 머신 IO 지연 바인딩
+            Vv = new IJPSystem.Platform.HMI.Print.VvControlViewModel(
+                     () => _mainVM.GetController()?.GetMachine()?.IO,
+                     msg => _mainVM.AddLog(msg, LogLevel.Info));
+
             // 배럴 액위 센서(X100/X101) 주기 폴링 시작 (300ms)
             _levelPollTimer = new System.Threading.Timer(_ => PollLevelSensors(), null, 0, 300);
         }
@@ -544,12 +550,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             _meniscusApplied = MeniscusSetpoint;
 
-            if (_meniscusConnected && _meniscusDev != null)
+            if (_meniscusConnected && _meniscus != null)
             {
                 double kpa = MeniscusSetpoint / PaPerKpa;
-                RunMeniscusWrite(dev => dev.SetPressureKpa(kpa), "setpoint 쓰기");
+                var sm = _meniscus;
+                System.Threading.Tasks.Task.Run(() => sm.SetPressure(kpa));
                 _mainVM.AddLog($"[MENISCUS] setpoint = {MeniscusSetpoint:F0} Pa ({kpa:F3} kPa)", LogLevel.Info);
-                // 현재값은 폴링이 실제 측정값으로 갱신
+                // 현재값은 상태머신 폴링(StateChanged)이 실제 측정값으로 갱신
             }
             else
             {
@@ -562,10 +569,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             IsMeniscusOn = !IsMeniscusOn;
 
-            if (_meniscusConnected && _meniscusDev != null)
+            if (_meniscusConnected && _meniscus != null)
             {
                 bool on = IsMeniscusOn;
-                RunMeniscusWrite(dev => dev.SetControlEnabled(on), "제어 쓰기");
+                var sm = _meniscus;
+                System.Threading.Tasks.Task.Run(() => sm.SetControl(on));
                 _mainVM.AddLog($"[MENISCUS] {(on ? "ON" : "OFF")}", LogLevel.Info);
             }
             else
@@ -575,8 +583,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
-        // ── 메니스커스 장치 연결 / 폴링 ───────────────────────────────
-        /// <summary>설정(AppConfig)에 따라 DMD Modbus TCP 연결을 백그라운드로 시도하고, 성공 시 500ms 폴링 시작.</summary>
+        // ── 메니스커스 장치 연결 / 폴링(상태머신) ─────────────────────
+        /// <summary>설정(AppConfig)에 따라 DMD Modbus RTU 상태머신을 백그라운드로 연결·폴링 시작.</summary>
         private void InitMeniscusDevice()
         {
             var cfg = IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Current;
@@ -586,21 +594,26 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 try
                 {
-                    // 잘못된 IP 에서 장시간 블로킹되지 않도록 1초 가용성 프로브
-                    if (!ProbeTcp(cfg.MeniscusIp, cfg.MeniscusPort, 1000))
+                    var dmdCfg = new IJPSystem.Drivers.Meniscus.DmdConfig
                     {
-                        _mainVM.AddLog($"[MENISCUS] DMD 미연결(mock) — {cfg.MeniscusIp}:{cfg.MeniscusPort}", LogLevel.Warning);
-                        return;
+                        ComPort  = cfg.MeniscusComPort,
+                        BaudRate = cfg.MeniscusBaudRate,
+                        UnitId   = cfg.MeniscusUnitId
+                    };
+                    var sm = new IJPSystem.Drivers.Meniscus.MeniscusStateMachine(dmdCfg);
+                    sm.StateChanged += OnMeniscusStateChanged;
+                    _meniscus = sm;
+
+                    sm.Init();                       // 시리얼 Modbus 연결
+                    if (sm.State.Connected)
+                    {
+                        _mainVM.AddLog($"[MENISCUS] DMD 연결됨 — {cfg.MeniscusComPort} @ {cfg.MeniscusBaudRate}", LogLevel.Info);
+                        sm.StartRead();              // 백그라운드 압력 폴링
                     }
-
-                    var dmd = new IJPSystem.Drivers.Meniscus.DmdModbusClient();
-                    dmd.ConnectTcp(cfg.MeniscusIp, cfg.MeniscusPort);
-                    _dmdClient = dmd;
-                    _meniscusDev = new IJPSystem.Drivers.Meniscus.MeniscusController(dmd);
-                    _meniscusConnected = true;
-                    _mainVM.AddLog($"[MENISCUS] DMD 연결됨 — {cfg.MeniscusIp}:{cfg.MeniscusPort}", LogLevel.Info);
-
-                    _meniscusPollTimer = new System.Threading.Timer(_ => PollMeniscus(), null, 0, 500);
+                    else
+                    {
+                        _mainVM.AddLog($"[MENISCUS] DMD 미연결(mock) — {sm.State.ErrorMessage}", LogLevel.Warning);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -610,53 +623,27 @@ namespace IJPSystem.Platform.HMI.ViewModels
             });
         }
 
-        /// <summary>500ms 주기 현재 압력 읽기. 실패 시 폴링 중단(스팸 방지).</summary>
-        private void PollMeniscus()
+        /// <summary>상태머신 상태 변경 알림 → 연결 플래그 갱신 + 현재 압력(Pa) UI 반영.</summary>
+        private void OnMeniscusStateChanged(IJPSystem.Drivers.Meniscus.DmdState st)
         {
-            double pa;
-            try
-            {
-                lock (_meniscusLock)
-                {
-                    if (_meniscusDev == null) return;
-                    pa = _meniscusDev.ReadPressureKpa() * PaPerKpa;
-                }
-            }
-            catch (Exception ex)
-            {
-                _meniscusConnected = false;
-                _meniscusPollTimer?.Dispose();
-                _meniscusPollTimer = null;
-                _mainVM.AddLog($"[MENISCUS] 읽기 실패 — 폴링 중단: {ex.Message}", LogLevel.Warning);
-                return;
-            }
-            System.Windows.Application.Current?.Dispatcher.Invoke(() => MeniscusCurrent = pa);
-        }
+            _meniscusConnected = st.Connected && !st.HasError;
 
-        /// <summary>쓰기 명령을 백그라운드에서 락 보호 하에 실행 (폴링 read 와 직렬화).</summary>
-        private void RunMeniscusWrite(Action<IJPSystem.Drivers.Meniscus.MeniscusController> action, string what)
-        {
-            var dev = _meniscusDev;
-            if (dev == null) return;
-            System.Threading.Tasks.Task.Run(() =>
+            // 에러는 발생 전이(edge)에서만 1회 로깅(폴링 스팸 방지)
+            if (st.HasError && !_meniscusErrLogged)
             {
-                try { lock (_meniscusLock) { action(dev); } }
-                catch (Exception ex) { _mainVM.AddLog($"[MENISCUS] {what} 실패: {ex.Message}", LogLevel.Warning); }
-            });
-        }
-
-        /// <summary>TCP 가용성 빠른 프로브(연결 전 타임아웃 보호).</summary>
-        private static bool ProbeTcp(string ip, int port, int timeoutMs)
-        {
-            try
-            {
-                using var probe = new System.Net.Sockets.TcpClient();
-                var ar = probe.BeginConnect(ip, port, null, null);
-                bool ok = ar.AsyncWaitHandle.WaitOne(timeoutMs);
-                if (ok) probe.EndConnect(ar);
-                return ok && probe.Connected;
+                _meniscusErrLogged = true;
+                _mainVM.AddLog($"[MENISCUS] {st.ErrorMessage}", LogLevel.Warning);
             }
-            catch { return false; }
+            else if (!st.HasError)
+            {
+                _meniscusErrLogged = false;
+            }
+
+            if (st.Connected && !st.HasError)
+            {
+                double pa = st.Pressure * PaPerKpa;
+                System.Windows.Application.Current?.Dispatcher.Invoke(() => MeniscusCurrent = pa);
+            }
         }
 
         /// <summary>선택 축 원점복귀(Home).</summary>

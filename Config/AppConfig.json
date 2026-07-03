@@ -6,6 +6,7 @@
   "LogSaveDays": 30,
   "IsDoorCheckEnabled": false,
   "MeniscusEnabled": false,
-  "MeniscusIp": "192.168.0.50",
-  "MeniscusPort": 502
+  "MeniscusComPort": "COM3",
+  "MeniscusBaudRate": 9600,
+  "MeniscusUnitId": 1
 }

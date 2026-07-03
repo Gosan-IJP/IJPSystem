@@ -4,7 +4,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:cvts="clr-namespace:IJPSystem.Platform.HMI.Common.Converters"
-             mc:Ignorable="d" d:DesignHeight="780" d:DesignWidth="1200"
+             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+             mc:Ignorable="d" d:DesignHeight="780" d:DesignWidth="1400"
              Background="#0B0F1A">
 
     <UserControl.Resources>
@@ -51,9 +52,11 @@
 
     <Grid Margin="16">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="14"/>
-            <ColumnDefinition Width="420"/>
+            <ColumnDefinition Width="1.4*"/>
+            <ColumnDefinition Width="12"/>
+            <ColumnDefinition Width="380"/>
+            <ColumnDefinition Width="12"/>
+            <ColumnDefinition Width="1*"/>
         </Grid.ColumnDefinitions>
 
         <!-- ══ 좌측: 카메라 이미지 패널 ════════════════════════════════════ -->
@@ -375,5 +378,46 @@
 
             </StackPanel>
         </ScrollViewer>
+
+        <!-- ══ 우측: 측정 그래프 3개 (Velocity / Drop Position / Side Spit Rate) ══ -->
+        <Grid Grid.Column="4">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="8"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="8"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Velocity (범례 표시) -->
+            <Border Grid.Row="0" Background="#111827" CornerRadius="12" Padding="8"
+                    BorderBrush="#334155" BorderThickness="1">
+                <lvc:CartesianChart Series="{Binding VelocitySeries}"
+                                    XAxes="{Binding VelocityXAxes}"
+                                    YAxes="{Binding VelocityYAxes}"
+                                    LegendPosition="Top" LegendTextSize="10"
+                                    Background="Transparent"/>
+            </Border>
+
+            <!-- Drop Position -->
+            <Border Grid.Row="2" Background="#111827" CornerRadius="12" Padding="8"
+                    BorderBrush="#334155" BorderThickness="1">
+                <lvc:CartesianChart Series="{Binding PositionSeries}"
+                                    XAxes="{Binding PositionXAxes}"
+                                    YAxes="{Binding PositionYAxes}"
+                                    LegendPosition="Hidden"
+                                    Background="Transparent"/>
+            </Border>
+
+            <!-- Side Spit Rate -->
+            <Border Grid.Row="4" Background="#111827" CornerRadius="12" Padding="8"
+                    BorderBrush="#334155" BorderThickness="1">
+                <lvc:CartesianChart Series="{Binding SpitRateSeries}"
+                                    XAxes="{Binding SpitRateXAxes}"
+                                    YAxes="{Binding SpitRateYAxes}"
+                                    LegendPosition="Hidden"
+                                    Background="Transparent"/>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

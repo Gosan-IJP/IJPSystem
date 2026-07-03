@@ -18,7 +18,7 @@ namespace IJPSystem.Drivers.IO
     //   IO.json 의 Address(예: "X100"/"Y101") → SDK 채널(int) 로 환산해 ecat_* 함수를 호출한다.
     //   SDK 는 DIN/DOUT 을 각각 0-base 채널 인덱스로 접근하므로 아래 규칙을 사용:
     //     · Address 숫자 n 을 slave = n/100, bit = n%100 으로 분해 (X100 → slave1 bit0)
-    //     · 채널 = slave * PointsPerModule(8) + bit          (ETS-D08MN = 8점 모듈)
+    //     · 채널 = slave * PointsPerModule(8) + bit          (ETS-D08MN = 8점 모듈) 
     //     · DIN(X)/DOUT(Y) 는 서로 다른 채널 공간(ecat_GetDin vs ecat_SetDout)
     //   ※ slave 열거 순서/모듈 점수는 실배선에 따라 다를 수 있으므로 Connect 시 경고를 남긴다.
     //     실장비에서 채널이 어긋나면 PointsPerModule / MapChannel 만 조정하면 된다.

@@ -59,15 +59,39 @@ namespace IJPSystem.Platform.HMI.Print
         public double RealYLengthMm { get => _realY; set { _realY = value; OnPropertyChanged(); } }
 
         // ---- Using Nozzles / Row 표시 ----
+        /// <summary>한 줄(Row)당 노즐 수.</summary>
+        public const int NozzlesPerRow = 400;
+
         private int _usingNozzleCount;
         public int UsingNozzleCount { get => _usingNozzleCount; set { _usingNozzleCount = value; OnPropertyChanged(); } }
         private IReadOnlyList<int> _usingNozzles = new List<int>();
+
+        /// <summary>Row 1 = 노즐 1~400, Row 2 = 노즐 401~800. 사용 노즐은 초록 표시.</summary>
+        public ObservableCollection<NozzleCell> Row1Nozzles { get; } = BuildRow(1);
+        public ObservableCollection<NozzleCell> Row2Nozzles { get; } = BuildRow(NozzlesPerRow + 1);
+
+        private static ObservableCollection<NozzleCell> BuildRow(int firstIndex)
+        {
+            var row = new ObservableCollection<NozzleCell>();
+            for (int i = 0; i < NozzlesPerRow; i++)
+                row.Add(new NozzleCell { Index = firstIndex + i });
+            return row;
+        }
 
         /// <summary>외부(전역 선택)에서 사용 노즐을 초기화한다(창 열 때).</summary>
         public void InitUsingNozzles(IReadOnlyList<int> nozzles)
         {
             _usingNozzles = nozzles ?? new List<int>();
             UsingNozzleCount = _usingNozzles.Count;
+            RefreshNozzleRows();
+        }
+
+        /// <summary>_usingNozzles 기준으로 두 Row 셀의 사용 여부(색)를 갱신.</summary>
+        private void RefreshNozzleRows()
+        {
+            var used = new HashSet<int>(_usingNozzles);
+            foreach (var cell in Row1Nozzles) cell.IsUsed = used.Contains(cell.Index);
+            foreach (var cell in Row2Nozzles) cell.IsUsed = used.Contains(cell.Index);
         }
 
         // ---- Length Measure ----
@@ -136,6 +160,7 @@ namespace IJPSystem.Platform.HMI.Print
         {
             _usingNozzles = NozzleSelectAction?.Invoke() ?? _usingNozzles;
             UsingNozzleCount = _usingNozzles.Count;
+            RefreshNozzleRows();
             StatusText = $"사용 노즐 {UsingNozzleCount}개";
         }
 

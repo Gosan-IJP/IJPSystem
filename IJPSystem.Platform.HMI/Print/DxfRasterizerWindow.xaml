@@ -50,6 +50,24 @@
             <Setter Property="Foreground" Value="#374151"/>
             <Setter Property="FontSize"   Value="12"/>
         </Style>
+        <!-- Using Nozzles Row 스트립: 노즐 1개 셀. 사용=초록, 미사용=연회색 -->
+        <ItemsPanelTemplate x:Key="NozzleRowPanel">
+            <UniformGrid Rows="1" Columns="400"/>
+        </ItemsPanelTemplate>
+        <DataTemplate x:Key="NozzleCellTemplate">
+            <Border>
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="#E5E7EB"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsUsed}" Value="True">
+                                <Setter Property="Background" Value="#22A341"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+            </Border>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -227,12 +245,20 @@
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <Grid Margin="0,0,0,5">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <Border Height="18" Background="#22A341" CornerRadius="2"/>
+                        <Border Height="18" CornerRadius="2" BorderBrush="#D1D5DB" BorderThickness="1" ClipToBounds="True">
+                            <ItemsControl ItemsSource="{Binding Row1Nozzles}"
+                                          ItemsPanel="{StaticResource NozzleRowPanel}"
+                                          ItemTemplate="{StaticResource NozzleCellTemplate}"/>
+                        </Border>
                         <TextBlock Grid.Column="1" Text="Row 1" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="#374151"/>
                     </Grid>
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <Border Height="18" Background="#22A341" CornerRadius="2"/>
+                        <Border Height="18" CornerRadius="2" BorderBrush="#D1D5DB" BorderThickness="1" ClipToBounds="True">
+                            <ItemsControl ItemsSource="{Binding Row2Nozzles}"
+                                          ItemsPanel="{StaticResource NozzleRowPanel}"
+                                          ItemTemplate="{StaticResource NozzleCellTemplate}"/>
+                        </Border>
                         <TextBlock Grid.Column="1" Text="Row 2" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="#374151"/>
                     </Grid>
                 </StackPanel>

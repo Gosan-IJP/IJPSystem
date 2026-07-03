@@ -3,8 +3,13 @@ using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.Domain.Enums;
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.Vision;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Painting;
+using SkiaSharp;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -101,6 +106,33 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private double _measureAreaXUm = 60.0;
         public double MeasureAreaXUm { get => _measureAreaXUm; set => SetProperty(ref _measureAreaXUm, value); }
 
+        // ── 측정 그래프 (Velocity / Drop Position / Side Spit Rate vs Time) ────
+        // Sample DW.vi 우측의 3개 그래프. 각 그래프는 Drop 1~5 시리즈로 구성된다.
+        // 실제 측정 알고리즘 연결 전까지는 대표 샘플 곡선으로 화면 형태를 보여준다.
+        public ISeries[] VelocitySeries { get; private set; } = Array.Empty<ISeries>();
+        public ISeries[] PositionSeries { get; private set; } = Array.Empty<ISeries>();
+        public ISeries[] SpitRateSeries { get; private set; } = Array.Empty<ISeries>();
+
+        public Axis[] VelocityXAxes { get; private set; } = Array.Empty<Axis>();
+        public Axis[] VelocityYAxes { get; private set; } = Array.Empty<Axis>();
+        public Axis[] PositionXAxes { get; private set; } = Array.Empty<Axis>();
+        public Axis[] PositionYAxes { get; private set; } = Array.Empty<Axis>();
+        public Axis[] SpitRateXAxes { get; private set; } = Array.Empty<Axis>();
+        public Axis[] SpitRateYAxes { get; private set; } = Array.Empty<Axis>();
+
+        // Drop 1~5 시리즈 이름/색상(범례 색과 일치)
+        private static readonly (string name, SKColor color)[] DropDefs =
+        {
+            ("Drop 1", SKColors.DodgerBlue),
+            ("Drop 2", SKColors.Red),
+            ("Drop 3", SKColors.LimeGreen),
+            ("Drop 4", new SKColor(0x84, 0xCC, 0x16)),
+            ("Drop 5", SKColors.Cyan),
+        };
+
+        private static readonly SKColor AxisText = new SKColor(0x94, 0xA3, 0xB8);
+        private static readonly SKColor AxisGrid = new SKColor(0x33, 0x41, 0x55);
+
         // ── 커맨드 ────────────────────────────────────────────────────────────
         public ICommand SetDelay1Command           { get; }
         public ICommand SetDelay2Command           { get; }
@@ -130,6 +162,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // 샘플 Raw 이미지가 있으면 화면 진입 시 바로 표시
             if (File.Exists(SampleImagePath))
                 CurrentImagePath = SampleImagePath;
+
+            BuildCharts();
         }
 
         // Set Delay Time 버튼 — 현재 Delay Time 값을 Delay 1/2 및 적용값으로 반영
@@ -168,6 +202,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         CurrentImagePath = image.FilePath;
                     _mainVM.AddLog($"[VISION] DropWatcher: {action} — 캡쳐 완료 (측정 알고리즘 미구현)", LogLevel.Info);
                 }
+
+                // 측정 결과 그래프 갱신 (알고리즘 연결 전까지 대표 샘플 곡선)
+                BuildCharts(action.GetHashCode());
             }
             catch (Exception ex)
             {
@@ -191,6 +228,99 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 ((RelayCommand)TimeIntervalMeasureCommand).RaiseCanExecuteChanged();
             });
         }
+
+        // ── 그래프 데이터 구성 ──────────────────────────────────────────────
+        // 실제 DW Vision 측정 알고리즘 연결 전까지 대표 샘플 곡선으로 형태를 표시한다.
+        // 연결 시 이 메서드를 측정 결과(Drop 1~5 시계열)로 채우면 된다.
+        private void BuildCharts(int seed = 0)
+        {
+            const int n = 18;                                    // Time 0~17 (um)
+            string[] timeLabels = Enumerable.Range(0, n).Select(t => t.ToString()).ToArray();
+            double phase = (seed % 7) * 0.3;
+
+            var velocity = new ISeries[DropDefs.Length];
+            var position = new ISeries[DropDefs.Length];
+            var spitRate = new ISeries[DropDefs.Length];
+
+            for (int s = 0; s < DropDefs.Length; s++)
+            {
+                double off = s * 0.06;
+                var vv = new double[n];
+                var pp = new double[n];
+                var sr = new double[n];
+                for (int t = 0; t < n; t++)
+                {
+                    // Velocity(m/s): 약 4.5~7.5, 시리즈별 약간의 편차
+                    vv[t] = 6.0 + 1.1 * Math.Sin(t * 0.7 + phase) - 0.5 * Math.Sin(t * 0.33) + off;
+                    // Drop Position(um): 약 150~650, 거의 선형 증가(시리즈 중첩)
+                    pp[t] = 150 + t * 29 + off * 12;
+                    // Side Spit Rate(%): 0 부근, t=11 근처 스파이크
+                    sr[t] = 0.18 * Math.Sin(t * 0.9 + s + phase) + (t == 11 ? 0.35 : 0) - (t == 12 ? 0.35 : 0);
+                }
+                velocity[s] = MakeLine(DropDefs[s].name, DropDefs[s].color, vv);
+                position[s] = MakeLine(DropDefs[s].name, DropDefs[s].color, pp);
+                spitRate[s] = MakeLine(DropDefs[s].name, DropDefs[s].color, sr);
+            }
+
+            VelocitySeries = velocity;
+            PositionSeries = position;
+            SpitRateSeries = spitRate;
+
+            VelocityXAxes = MakeXAxes(timeLabels);
+            PositionXAxes = MakeXAxes(timeLabels);
+            SpitRateXAxes = MakeXAxes(timeLabels);
+            VelocityYAxes = MakeYAxes("Velocity (m/s)");
+            PositionYAxes = MakeYAxes("Drop Position (um)");
+            SpitRateYAxes = MakeYAxes("Side Spit Rate (%)");
+
+            OnPropertyChanged(nameof(VelocitySeries));
+            OnPropertyChanged(nameof(PositionSeries));
+            OnPropertyChanged(nameof(SpitRateSeries));
+            OnPropertyChanged(nameof(VelocityXAxes));
+            OnPropertyChanged(nameof(PositionXAxes));
+            OnPropertyChanged(nameof(SpitRateXAxes));
+            OnPropertyChanged(nameof(VelocityYAxes));
+            OnPropertyChanged(nameof(PositionYAxes));
+            OnPropertyChanged(nameof(SpitRateYAxes));
+        }
+
+        private static ISeries MakeLine(string name, SKColor color, double[] values) =>
+            new LineSeries<double>
+            {
+                Name           = name,
+                Values         = values,
+                Stroke         = new SolidColorPaint(color, 1.6f),
+                Fill           = null,
+                GeometrySize   = 5,
+                GeometryStroke = new SolidColorPaint(color, 1.6f),
+                GeometryFill   = new SolidColorPaint(SKColors.White),
+                LineSmoothness = 0.2,
+            };
+
+        private static Axis[] MakeXAxes(string[] labels) => new[]
+        {
+            new Axis
+            {
+                Labels          = labels,
+                Name            = "Time (um)",
+                TextSize        = 10,
+                NamePaint       = new SolidColorPaint(AxisText),
+                LabelsPaint     = new SolidColorPaint(AxisText),
+                SeparatorsPaint = new SolidColorPaint(AxisGrid) { StrokeThickness = 0.5f },
+            }
+        };
+
+        private static Axis[] MakeYAxes(string name) => new[]
+        {
+            new Axis
+            {
+                Name            = name,
+                TextSize        = 10,
+                NamePaint       = new SolidColorPaint(AxisText),
+                LabelsPaint     = new SolidColorPaint(AxisText),
+                SeparatorsPaint = new SolidColorPaint(AxisGrid) { StrokeThickness = 0.5f },
+            }
+        };
 
         public void Dispose() => _pollTimer.Stop();
     }

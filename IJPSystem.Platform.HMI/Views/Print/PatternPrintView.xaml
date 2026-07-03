@@ -692,47 +692,80 @@
                 <!-- Pressure control + Status lamps -->
                 <Border Grid.Column="4" Style="{StaticResource CardBorder}" Padding="10" Width="150">
                     <StackPanel>
-                        <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,4"
-                                Background="#1D4ED8" BorderBrush="#3B82F6" Content="Final VV"/>
-                        <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,4"
-                                Background="#1D4ED8" BorderBrush="#3B82F6" Content="Switching Pressure"/>
-                        <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,6"
-                                IsEnabled="False" Content="Pump Control"/>
-
-                        <!-- 상태 램프 -->
-                        <ItemsControl>
-                            <ItemsControl.Resources>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Foreground" Value="#CBD5E1"/>
-                                    <Setter Property="FontSize"   Value="11"/>
-                                    <Setter Property="FontWeight" Value="Bold"/>
-                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                        <Button Height="28" Margin="0,0,0,4" Content="Final VV"
+                                Command="{Binding Vv.FinalVvCommand}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource ActionBtn}">
+                                    <Setter Property="Background"  Value="#1D4ED8"/>
+                                    <Setter Property="BorderBrush" Value="#3B82F6"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Vv.FinalVvOn}" Value="True">
+                                            <Setter Property="Background"  Value="#059669"/>
+                                            <Setter Property="BorderBrush" Value="#10B981"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
                                 </Style>
-                            </ItemsControl.Resources>
-                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
-                                <TextBlock Grid.Column="1" Text="Meni"/></Grid>
-                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Border Width="26" Height="14" Background="#22C55E" CornerRadius="2" HorizontalAlignment="Left"/>
-                                <TextBlock Grid.Column="1" Text="Purge"/></Grid>
-                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
-                                <TextBlock Grid.Column="1" Text="Final VV"/></Grid>
-                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
-                                <TextBlock Grid.Column="1" Text="Over Flow"/></Grid>
-                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
-                                <TextBlock Grid.Column="1" Text="Purge"/></Grid>
-                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
-                                <TextBlock Grid.Column="1" Text="Meniscus"/></Grid>
-                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
-                                <TextBlock Grid.Column="1" Text="Pump"/></Grid>
-                            <Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Border Width="26" Height="12" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
-                                <TextBlock Grid.Column="1" Text="MPC AL"/></Grid>
+                            </Button.Style>
+                        </Button>
+                        <Button Height="28" Margin="0,0,0,4" Content="Switching Pressure"
+                                Command="{Binding Vv.SwitchingPressureCommand}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource ActionBtn}">
+                                    <Setter Property="Background"  Value="#1D4ED8"/>
+                                    <Setter Property="BorderBrush" Value="#3B82F6"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Vv.SwitchingPressureOn}" Value="True">
+                                            <Setter Property="Background"  Value="#059669"/>
+                                            <Setter Property="BorderBrush" Value="#10B981"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Height="28" Margin="0,0,0,6" Content="Pump Control"
+                                Command="{Binding Vv.PumpControlCommand}"
+                                IsEnabled="{Binding Vv.PumpControlEnabled}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource ActionBtn}">
+                                    <Setter Property="Background"  Value="#1D4ED8"/>
+                                    <Setter Property="BorderBrush" Value="#3B82F6"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Vv.PumpControlOn}" Value="True">
+                                            <Setter Property="Background"  Value="#059669"/>
+                                            <Setter Property="BorderBrush" Value="#10B981"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+
+                        <!-- 상태 램프 (VV_IND: DIN 폴링으로 갱신) -->
+                        <ItemsControl ItemsSource="{Binding Vv.Indicators}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,1">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <Border x:Name="led" Width="26" Height="12" Background="#1E293B"
+                                                BorderBrush="#334155" BorderThickness="1" CornerRadius="2" HorizontalAlignment="Left"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Label}" Foreground="#CBD5E1"
+                                                   FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    </Grid>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsOn}" Value="True">
+                                            <Setter TargetName="led" Property="Background" Value="#22C55E"/>
+                                            <Setter TargetName="led" Property="BorderThickness" Value="0"/>
+                                            <Setter TargetName="led" Property="Height" Value="14"/>
+                                        </DataTrigger>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsOn}" Value="True"/>
+                                                <Condition Binding="{Binding IsAlarm}" Value="True"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter TargetName="led" Property="Background" Value="#EF4444"/>
+                                        </MultiDataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
                 </Border>

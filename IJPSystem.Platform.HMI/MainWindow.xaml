@@ -222,7 +222,18 @@
                 <Button Content="{DynamicResource SubMenu_Initialize}"
                         Style="{StaticResource PrintSubButtonStyle}"
                         Command="{Binding MoveWindowCommand}" CommandParameter="PRINT_INITIALIZE"/>
-                
+                <!-- PRINT 서브메뉴에서도 메인과 동일한 시스템 종료 버튼 표시 -->
+                <Button Style="{StaticResource PrintSubButtonStyle}"
+                        Background="#C0392B" Margin="8,16,8,4"
+                        Command="{Binding ExitCommand}"
+                        ToolTipService.ShowOnDisabled="True"
+                        ToolTip="{DynamicResource Tip_SystemExit}">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBlock Text="⏻" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{DynamicResource SubMenu_SystemExit}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
                 <!-- ── RECIPE 메뉴 선택 시에만 표시 ── -->
                 <Button Content="{DynamicResource SubMenu_MotorInfo}"
                         Style="{StaticResource RecipeSubButtonStyle}"
