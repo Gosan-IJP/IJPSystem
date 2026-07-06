@@ -116,6 +116,22 @@
                                 Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B" ToolTip="Pan"/>
                         <Button Width="30" Height="26" Content="╱" FontSize="13"
                                 Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B" ToolTip="Line"/>
+
+                        <!-- Live View 토글 -->
+                        <Button Width="72" Height="26" Margin="12,0,0,0" Command="{Binding ToggleLiveViewCommand}"
+                                ToolTip="Live View 토글 (연속 캡쳐)">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource MutedActionButtonStyle}">
+                                    <Setter Property="Background" Value="#0E7490"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsLiveView}" Value="True">
+                                            <Setter Property="Background" Value="#B91C1C"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <TextBlock Text="{Binding LiveViewLabel}" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                        </Button>
                     </StackPanel>
                 </Border>
 

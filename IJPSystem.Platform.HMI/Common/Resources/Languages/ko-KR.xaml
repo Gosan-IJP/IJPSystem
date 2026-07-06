@@ -13,6 +13,7 @@
     <system:String x:Key="SubMenu_NJI">└ NJI</system:String>
     <system:String x:Key="SubMenu_GLASS_VIEW">└ 글라스 뷰</system:String>
     <system:String x:Key="SubMenu_DROP_WATCHER">└ 드랍 와쳐</system:String>
+    <system:String x:Key="SubMenu_VISUAL_MONITOR">└ 비주얼 모니터</system:String>
     <system:String x:Key="SubMenu_Sequence">시퀀스</system:String>
     <system:String x:Key="SubMenu_MotorInfo">모터 정보</system:String>
     <system:String x:Key="SubMenu_TeachingPoint">티칭 정보</system:String>

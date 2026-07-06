@@ -201,7 +201,10 @@
                     <Button Content="{DynamicResource SubMenu_DROP_WATCHER}"
                             Style="{StaticResource SubNavButtonStyle}"
                             Command="{Binding MoveWindowCommand}" CommandParameter="DROP_WATCHER"/>
-                    
+                    <Button Content="{DynamicResource SubMenu_VISUAL_MONITOR}"
+                            Style="{StaticResource SubNavButtonStyle}"
+                            Command="{Binding MoveWindowCommand}" CommandParameter="VISUAL_MONITOR"/>
+
                 </StackPanel>
                 <Button Content="{DynamicResource SubMenu_PNID}"
                         Style="{StaticResource MaintenanceSubButtonStyle}"

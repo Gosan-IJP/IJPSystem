@@ -26,8 +26,10 @@ namespace IJPSystem.Machines.Pulse
 
         public void Initialize()
         {
-            IO.Connect();
+            // 코미조아 등 공유 EtherCAT 마스터 구성에서는 모션이 먼저 마스터를
+            // enumerate 해야 IO 가 그 위에 붙는다. 따라서 Motion → IO 순서로 연결.
             Motion.Connect();
+            IO.Connect();
             Vision.Connect();
         }
 

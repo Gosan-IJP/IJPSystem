@@ -153,7 +153,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // ── 메니스커스 DMD 실장치(Modbus RTU / 시리얼 상태머신) ────────
         // 연결 성공 시 상태머신이 백그라운드 폴링/쓰기를 실제 장치로 수행, 실패 시 mock.
         // UI 는 Pa, 상태머신은 kPa → 1 kPa = 1000 Pa 환산.
-        private IJPSystem.Drivers.Meniscus.MeniscusStateMachine? _meniscus;
+        private IJPSystem.Platform.Infrastructure.Devices.Meniscus.MeniscusStateMachine? _meniscus;
         private bool _meniscusConnected;
         private bool _meniscusErrLogged;
         private const double PaPerKpa = 1000.0;
@@ -594,13 +594,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 try
                 {
-                    var dmdCfg = new IJPSystem.Drivers.Meniscus.DmdConfig
+                    var dmdCfg = new IJPSystem.Platform.Infrastructure.Devices.Meniscus.DmdConfig
                     {
                         ComPort  = cfg.MeniscusComPort,
                         BaudRate = cfg.MeniscusBaudRate,
                         UnitId   = cfg.MeniscusUnitId
                     };
-                    var sm = new IJPSystem.Drivers.Meniscus.MeniscusStateMachine(dmdCfg);
+                    var sm = new IJPSystem.Platform.Infrastructure.Devices.Meniscus.MeniscusStateMachine(dmdCfg);
                     sm.StateChanged += OnMeniscusStateChanged;
                     _meniscus = sm;
 
@@ -624,7 +624,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
 
         /// <summary>상태머신 상태 변경 알림 → 연결 플래그 갱신 + 현재 압력(Pa) UI 반영.</summary>
-        private void OnMeniscusStateChanged(IJPSystem.Drivers.Meniscus.DmdState st)
+        private void OnMeniscusStateChanged(IJPSystem.Platform.Infrastructure.Devices.Meniscus.DmdState st)
         {
             _meniscusConnected = st.Connected && !st.HasError;
 

@@ -23,7 +23,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\IJPSystem.Drivers.IO\IJPSystem.Drivers.IO.csproj" />
-    <ProjectReference Include="..\IJPSystem.Drivers.Meniscus\IJPSystem.Drivers.Meniscus.csproj" />
     <ProjectReference Include="..\IJPSystem.Drivers.Vision\IJPSystem.Drivers.Vision.csproj" />
     <ProjectReference Include="..\IJPSystem.Machines.Pulse\IJPSystem.Machines.Pulse.csproj" />
     <ProjectReference Include="..\IJPSystem.Platform.Application\IJPSystem.Platform.Application.csproj" />

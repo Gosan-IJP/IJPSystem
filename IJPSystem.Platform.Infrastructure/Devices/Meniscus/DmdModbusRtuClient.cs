@@ -3,7 +3,7 @@ using System.IO.Ports;
 using NModbus;
 using NModbus.Serial;
 
-namespace IJPSystem.Drivers.Meniscus
+namespace IJPSystem.Platform.Infrastructure.Devices.Meniscus
 {
     /// <summary>
     /// LabVIEW "DMD_Read Pressure.vi" 의 시리얼 Modbus RTU 통신 변환.

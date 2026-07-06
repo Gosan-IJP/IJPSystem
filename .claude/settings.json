@@ -80,7 +80,17 @@
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, ensure_ascii=False, indent=1\\)\\)\")",
       "Bash(grep -iv \"interface\\\\|:.*IIODriver$\")",
       "Bash(rm -f IJPSystem.Drivers.Meniscus/DmdModbusClient.cs IJPSystem.Drivers.Meniscus/MeniscusController.cs IJPSystem.Drivers.Meniscus/DmdRegisterMap.cs && echo \"삭제 완료\" && ls IJPSystem.Drivers.Meniscus/*.cs 2>/dev/null)",
-      "Bash(grep -viE \"Drivers/Motion|Drivers\\\\\\\\\\\\\\\\Motion|: IMotionDriver|interface\")"
+      "Bash(grep -viE \"Drivers/Motion|Drivers\\\\\\\\\\\\\\\\Motion|: IMotionDriver|interface\")",
+      "Bash(tasklist)",
+      "Bash(sed -i 's/namespace IJPSystem\\\\.Drivers\\\\.Meniscus/namespace IJPSystem.Subsystems.Meniscus/' IJPSystem.Subsystems.Meniscus/*.cs)",
+      "Bash(sed -i 's/namespace IJPSystem\\\\.Drivers\\\\.DropWatcher/namespace IJPSystem.Subsystems.DropWatcher/' IJPSystem.Subsystems.DropWatcher/*.cs)",
+      "Bash(mv IJPSystem.Subsystems.Meniscus/*.cs   IJPSystem.Platform.Infrastructure/Devices/Meniscus/)",
+      "Bash(mv IJPSystem.Subsystems.DropWatcher/*.cs IJPSystem.Platform.Infrastructure/Devices/DropWatcher/)",
+      "Bash(sed -i 's/namespace IJPSystem\\\\.Subsystems\\\\.Meniscus/namespace IJPSystem.Platform.Infrastructure.Devices.Meniscus/' IJPSystem.Platform.Infrastructure/Devices/Meniscus/*.cs)",
+      "Bash(sed -i 's/namespace IJPSystem\\\\.Subsystems\\\\.DropWatcher/namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher/' IJPSystem.Platform.Infrastructure/Devices/DropWatcher/*.cs)",
+      "Bash(dotnet restore *)",
+      "Read(//c/Program Files \\(x86\\)/Inno Setup 6/**)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"build-installer.ps1\")"
     ],
     "additionalDirectories": [
       "d:\\tmp",

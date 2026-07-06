@@ -8,7 +8,7 @@ namespace IJPSystem.Platform.Domain.Models.Config
 {
     public class AppSettings
     {
-        public string MachineType       { get; set; } = "Pulse";
+        public string MachineType       { get; set; } = "PULSE";
         public string AdminPassword     { get; set; } = "admin";
         public string EngineerPassword  { get; set; } = "engineer";
         public string OperatorPassword  { get; set; } = "operator";
@@ -23,5 +23,22 @@ namespace IJPSystem.Platform.Domain.Models.Config
         public string MeniscusComPort  { get; set; } = "COM3";
         public int    MeniscusBaudRate { get; set; } = 9600;
         public byte   MeniscusUnitId   { get; set; } = 1;
+
+        // ── 드라이버 선택 (디바이스별) ──────────────────────────────
+        // 시뮬레이션은 "Virtual", 실장비는 벤더명. 값이 인식되지 않으면 Virtual 로 동작.
+        public DriverModeSettings DriverMode { get; set; } = new();
+    }
+
+    /// <summary>
+    /// 디바이스별 드라이버 선택.
+    ///   IO     : Virtual | Comizoa | EtherCat
+    ///   Motion : Virtual | Comizoa | Acs
+    ///   Vision : Virtual | Imaqdx
+    /// </summary>
+    public class DriverModeSettings
+    {
+        public string IO     { get; set; } = "Virtual";
+        public string Motion { get; set; } = "Virtual";
+        public string Vision { get; set; } = "Virtual";
     }
 }

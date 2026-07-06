@@ -3,6 +3,7 @@
     <File Path="Config/AlarmHistory.db" />
     <File Path="Config/AlarmSystem.db" />
     <File Path="Config/AppConfig.json" />
+    <File Path="Config/ComiEcatLibCfg.ini" />
     <File Path="Config/IO.json" />
     <File Path="Config/MotorConfig.json" />
     <File Path="Config/RecipeData.db" />
@@ -16,11 +17,16 @@
   </Folder>
   <Folder Name="/2.Drivers/">
     <Project Path="IJPSystem.Drivers.IO/IJPSystem.Drivers.IO.csproj" />
-    <Project Path="IJPSystem.Drivers.Meniscus/IJPSystem.Drivers.Meniscus.csproj" />
     <Project Path="IJPSystem.Drivers.Motion/IJPSystem.Drivers.Motion.csproj" />
     <Project Path="IJPSystem.Drivers.Vision/IJPSystem.Drivers.Vision.csproj" />
   </Folder>
   <Folder Name="/3.Machines/">
     <Project Path="IJPSystem.Machines.Pulse/IJPSystem.Machines.Pulse.csproj" />
+  </Folder>
+  <Folder Name="/4.Installer/">
+    <File Path="Installer/IJPSystem.iss" />
+    <File Path="Installer/build-installer.ps1" />
+    <File Path="Installer/README.md" />
+    <File Path="Installer/native/README.txt" />
   </Folder>
 </Solution>

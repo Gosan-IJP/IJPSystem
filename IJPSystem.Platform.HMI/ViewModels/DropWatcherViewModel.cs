@@ -27,6 +27,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly IVisionDriver _vision;
         private readonly MainViewModel _mainVM;
         private readonly DispatcherTimer _pollTimer;
+        private readonly DispatcherTimer _liveTimer;   // Live View 연속 캡쳐
+        private bool _liveGrabbing;                     // 캡쳐 중복 방지
 
         // 드랍와처 검사용 Raw 샘플 이미지 — 이 파일이 있으면 캡쳐 대신 사용한다.
         // 실제 카메라 연동 전, 실측 Raw 이미지로 화면/검사 로직을 확인하기 위함.
@@ -72,6 +74,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
             get => _isBusy;
             private set => SetProperty(ref _isBusy, value);
         }
+
+        // ── Live View ─────────────────────────────────────────────────────────
+        private bool _isLiveView;
+        public bool IsLiveView
+        {
+            get => _isLiveView;
+            private set { if (SetProperty(ref _isLiveView, value)) OnPropertyChanged(nameof(LiveViewLabel)); }
+        }
+        public string LiveViewLabel => IsLiveView ? "■ Stop" : "▶ Live";
 
         // ── Drop Watcher Parameter ────────────────────────────────────────────
         private int _frequencyHz = 1000;
@@ -140,6 +151,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand AbortCommand               { get; }
         public ICommand MeasureVelocityCommand     { get; }
         public ICommand TimeIntervalMeasureCommand { get; }
+        public ICommand ToggleLiveViewCommand      { get; }
 
         public DropWatcherViewModel(MainViewModel mainVM)
         {
@@ -152,10 +164,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             AbortCommand               = new RelayCommand(_ => ExecuteAbort());
             MeasureVelocityCommand     = new RelayCommand(async _ => await ExecuteMeasureAsync("Measure Velocity"),      _ => !IsBusy);
             TimeIntervalMeasureCommand = new RelayCommand(async _ => await ExecuteMeasureAsync("Time Interval Measure"), _ => !IsBusy);
+            ToggleLiveViewCommand      = new RelayCommand(_ => ToggleLiveView());
 
             _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _pollTimer.Tick += (_, _) => CamStatus = _vision.GetStatus(CamId);
             _pollTimer.Start();
+
+            _liveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };  // 약 5 fps
+            _liveTimer.Tick += async (_, _) => await LiveGrabAsync();
 
             CamStatus = _vision.GetStatus(CamId);
 
@@ -215,6 +231,42 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 IsBusy = false;
                 RaiseMeasureCanExecute();
             }
+        }
+
+        // ── Live View: 연속 캡쳐로 최신 프레임을 계속 갱신 ─────────────────────
+        private void ToggleLiveView()
+        {
+            if (IsLiveView)
+            {
+                _liveTimer.Stop();
+                IsLiveView = false;
+                _mainVM.AddLog("[VISION] DropWatcher: Live View 정지", LogLevel.Info);
+            }
+            else
+            {
+                IsLiveView = true;
+                _liveTimer.Start();
+                _mainVM.AddLog("[VISION] DropWatcher: Live View 시작", LogLevel.Info);
+            }
+        }
+
+        private async Task LiveGrabAsync()
+        {
+            if (_liveGrabbing || IsBusy) return;   // 측정 중이거나 이전 캡쳐 진행 중이면 건너뜀
+            _liveGrabbing = true;
+            try
+            {
+                var image = await _vision.CaptureAsync(CamId);
+                if (image.IsValid) CurrentImagePath = image.FilePath;
+                CamStatus = _vision.GetStatus(CamId);
+            }
+            catch (Exception ex)
+            {
+                _mainVM.AddLog($"[VISION] DropWatcher: Live 캡쳐 실패: {ex.Message}", LogLevel.Error);
+                _liveTimer.Stop();
+                IsLiveView = false;
+            }
+            finally { _liveGrabbing = false; }
         }
 
         private void LogPlaceholder(string action) =>
@@ -322,6 +374,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         };
 
-        public void Dispose() => _pollTimer.Stop();
+        public void Dispose()
+        {
+            _liveTimer.Stop();
+            _pollTimer.Stop();
+        }
     }
 }

@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.IO;
 
@@ -37,12 +39,42 @@ namespace IJPSystem.Drivers.IO.Comizoa
 
         public bool IsConnected { get; private set; }
 
+        // 저수준 SDK(ecat_*) 를 실제로 호출할 수 있는지 여부.
+        // false 면 하드웨어 호출을 건너뛰고 echo(가상) 상태로만 동작한다(크래시 방지).
+        private bool _hwUsable;
+        private bool _degradeLogged;
+
         public bool Connect()
         {
             // 모션(ComizoaMotionDriver)이 동일 EtherCAT 마스터를 이미 enumerate 했다는 전제.
-            // 별도 IO 전용 초기화가 필요하면 여기서 ecat_* init 함수를 호출한다(SDK 헤더 확인).
-            IsConnected = true;
-            return true;
+            // 저수준 SDK 가 실제로 호출 가능한지 1회 프로브 — DLL 미존재/엔트리포인트 불일치 시
+            // 예외가 나므로, 그때는 echo 모드로 안전하게 강등한다(무한 에러창 방지).
+            try
+            {
+                _dio.GetInputBits();          // 무해한 읽기로 SDK 가용성 확인
+                _hwUsable = true;
+            }
+            catch (Exception ex)
+            {
+                _hwUsable = false;
+                LoggerService.WriteToFile("WARN",
+                    $"[Comizoa IO] SDK 사용 불가 — echo(가상) 모드로 동작합니다: {ex.GetType().Name}: {ex.Message}");
+            }
+            IsConnected = _hwUsable;
+            return true;   // echo 모드라도 앱은 계속 진행(화면/시퀀스 동작 유지)
+        }
+
+        /// <summary>런타임 저수준 호출 실패 시 echo 모드로 영구 강등(1회만 로깅).</summary>
+        private void DegradeToEcho(Exception ex)
+        {
+            _hwUsable   = false;
+            IsConnected = false;
+            if (!_degradeLogged)
+            {
+                _degradeLogged = true;
+                LoggerService.WriteToFile("ERROR",
+                    $"[Comizoa IO] 하드웨어 호출 실패 — echo 모드로 전환: {ex.GetType().Name}: {ex.Message}");
+            }
         }
 
         public void Disconnect()
@@ -144,16 +176,42 @@ namespace IJPSystem.Drivers.IO.Comizoa
         }
 
         // ── int 채널 기반 (저수준 ComiEcatDigitalIo 로 위임) ─────────────────
-        public bool GetInput(int channel) => channel >= 0 && _dio.GetInput(channel);
+        // 저수준 호출은 예외를 UI 로 전파하지 않는다. 실패 시 echo 모드로 강등(무한 에러창 방지).
+        public bool GetInput(int channel)
+        {
+            if (channel < 0 || !_hwUsable) return false;
+            try { return _dio.GetInput(channel); }
+            catch (Exception ex) { DegradeToEcho(ex); return false; }
+        }
 
-        public bool GetOutput(int channel) => channel >= 0 && _dio.GetOutput(channel);
+        public bool GetOutput(int channel)
+        {
+            if (channel < 0 || !_hwUsable) return false;
+            try { return _dio.GetOutput(channel); }
+            catch (Exception ex) { DegradeToEcho(ex); return false; }
+        }
 
-        public void SetOutput(int channel, bool on) { if (channel >= 0) _dio.SetOutput(channel, on); }
+        public void SetOutput(int channel, bool on)
+        {
+            if (channel < 0 || !_hwUsable) return;
+            try { _dio.SetOutput(channel, on); }
+            catch (Exception ex) { DegradeToEcho(ex); }
+        }
 
         // 여러 입력/출력을 한 번에 (비트마스크) — 실장비 HAL 과 동일.
-        public uint GetInputBits() => _dio.GetInputBits();
+        public uint GetInputBits()
+        {
+            if (!_hwUsable) return 0;
+            try { return _dio.GetInputBits(); }
+            catch (Exception ex) { DegradeToEcho(ex); return 0; }
+        }
 
-        public void SetOutputBits(uint bits) => _dio.SetOutputBits(bits);
+        public void SetOutputBits(uint bits)
+        {
+            if (!_hwUsable) return;
+            try { _dio.SetOutputBits(bits); }
+            catch (Exception ex) { DegradeToEcho(ex); }
+        }
 
         // 아날로그 int 채널 — ETS-D08MN 미지원(no-op)
         public double GetAnalogInput(int channel) => 0.0;

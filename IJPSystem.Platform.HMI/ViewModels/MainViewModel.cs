@@ -698,6 +698,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     AddLog(T("Log_MoveDropWatcher"), LogLevel.Info);
                     break;
 
+                case "VISUAL_MONITOR":
+                    IsVisionSubMenuVisible = true;
+                    IsMotorSubMenuVisible  = false;
+                    SelectedMenu    = "MAINTENANCE";
+                    SelectedSubMenu = "VISUAL_MONITOR";
+                    CurrentView = new VisualMonitorViewModel(this);
+                    AddLog("[VISION] Visual Monitor 이동", LogLevel.Info);
+                    break;
+
                 case "PNID":
                     CollapseAllSubMenus();
                     SelectedMenu    = "MAINTENANCE";

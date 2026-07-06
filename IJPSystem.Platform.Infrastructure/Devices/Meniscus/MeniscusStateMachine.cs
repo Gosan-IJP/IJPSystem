@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace IJPSystem.Drivers.Meniscus
+namespace IJPSystem.Platform.Infrastructure.Devices.Meniscus
 {
     /// <summary>
     /// LabVIEW 메니스커스(DMD) 상태머신 변환: Init → Read → Set → Stop.

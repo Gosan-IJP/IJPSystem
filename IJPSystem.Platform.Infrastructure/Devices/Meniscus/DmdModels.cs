@@ -1,6 +1,6 @@
 using System.IO.Ports;
 
-namespace IJPSystem.Drivers.Meniscus
+namespace IJPSystem.Platform.Infrastructure.Devices.Meniscus
 {
     /// <summary>
     /// LabVIEW "DMD Work State.ctl" enum 대응. 메니스커스(DMD) 동작 상태.

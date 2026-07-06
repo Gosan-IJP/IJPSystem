@@ -37,6 +37,10 @@
                 <views:DropWatcherView />
             </DataTemplate>
 
+            <DataTemplate DataType="{x:Type vm:VisualMonitorViewModel}">
+                <views:VisualMonitorView />
+            </DataTemplate>
+
             <DataTemplate DataType="{x:Type vm:WaveformViewModel}">
                 <views:WaveformView />
             </DataTemplate>

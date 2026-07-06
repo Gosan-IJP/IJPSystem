@@ -13,6 +13,7 @@
     <system:String x:Key="SubMenu_NJI">└ NJI</system:String>
     <system:String x:Key="SubMenu_GLASS_VIEW">└ GLASS VIEW</system:String>
     <system:String x:Key="SubMenu_DROP_WATCHER">└ DROP WATCHER</system:String>
+    <system:String x:Key="SubMenu_VISUAL_MONITOR">└ VISUAL MONITOR</system:String>
     <system:String x:Key="SubMenu_Sequence">SEQUENCE</system:String>
     <system:String x:Key="SubMenu_MotorInfo">MOTOR INFO</system:String>
     <system:String x:Key="SubMenu_TeachingPoint">TEACH INFO</system:String>

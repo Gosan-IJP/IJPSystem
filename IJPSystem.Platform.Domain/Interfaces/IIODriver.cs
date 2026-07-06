@@ -8,6 +8,7 @@ namespace IJPSystem.Platform.Domain.Interfaces
         bool Connect();
         void Disconnect();
         bool IsConnected { get; }
+        void Initialize(List<IODeviceInfo> configList);
         List<IODeviceInfo> GetAllIOInfo();
 
         // ==========================================

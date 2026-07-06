@@ -1,10 +1,15 @@
 ﻿using IJPSystem.Drivers.IO;
+using IJPSystem.Drivers.IO.Comizoa;
 using IJPSystem.Drivers.Motion;
+using IJPSystem.Drivers.Motion.ACS;
+using IJPSystem.Drivers.Motion.Comizoa;
 using IJPSystem.Drivers.Vision;
+using IJPSystem.Drivers.Vision.Imaqdx;
 using IJPSystem.Machines.Pulse;
 using IJPSystem.Platform.Common.Constants;
 using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Interfaces;
+using IJPSystem.Platform.Domain.Models.Config;
 using IJPSystem.Platform.Domain.Models.Motion;
 using IJPSystem.Platform.HMI.Common;
 using IJPSystem.Platform.HMI.ViewModels;
@@ -19,6 +24,7 @@ namespace IJPSystem.Platform.HMI
     public partial class App : System.Windows.Application
     {
         private IMachine? _machine;
+        private bool _errorDialogOpen;   // 미처리 예외 창 중복(무한 중첩) 방지
 
         protected override async void OnStartup(StartupEventArgs e)
         {
@@ -27,10 +33,18 @@ namespace IJPSystem.Platform.HMI
             // 글로벌 미처리 예외 → LoggerService 에 기록 (다음 충돌 진단용)
             DispatcherUnhandledException += (s, ev) =>
             {
+                ev.Handled = true; // 앱이 즉시 죽지 않게 막음
                 LoggerService.WriteToFile("FATAL", $"[UI thread] {ev.Exception}");
-                Dialogs.Show($"미처리 예외:\n\n{ev.Exception.Message}\n\n자세한 내용은 C:\\Logs 의 .txt 로그를 확인하세요.",
-                                "Application Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                ev.Handled = true; // 앱이 즉시 죽지 않게 막음 — 사용자가 메시지 확인 후 종료
+
+                // 같은 예외가 타이머 등에서 반복되면 창이 무한히 쌓이므로, 한 번에 하나만 표시.
+                if (_errorDialogOpen) return;
+                _errorDialogOpen = true;
+                try
+                {
+                    Dialogs.Show($"미처리 예외:\n\n{ev.Exception.Message}\n\n자세한 내용은 C:\\Logs 의 .txt 로그를 확인하세요.",
+                                    "Application Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                finally { _errorDialogOpen = false; }
             };
             AppDomain.CurrentDomain.UnhandledException += (s, ev) =>
             {
@@ -57,15 +71,15 @@ namespace IJPSystem.Platform.HMI
                 IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Initialize(appSettings);
 
                 var ioDriver = await splashVM.RunStepAsync(
-                    "I/O Driver", "Virtual I/O 드라이버 연결",
+                    "I/O Driver", $"{appSettings.DriverMode.IO} I/O 드라이버 연결",
                     InitializeIODriver);
 
                 var motionDriver = await splashVM.RunStepAsync(
-                    "Motion Driver", "Virtual Motion 드라이버 연결",
+                    "Motion Driver", $"{appSettings.DriverMode.Motion} Motion 드라이버 연결",
                     InitializeMotionDriver);
 
                 var visionDriver = await splashVM.RunStepAsync(
-                    "Vision Driver", "Virtual Vision 드라이버 연결",
+                    "Vision Driver", $"{appSettings.DriverMode.Vision} Vision 드라이버 연결",
                     InitializeVisionDriver);
 
                 _machine = await splashVM.RunStepAsync(
@@ -144,13 +158,23 @@ namespace IJPSystem.Platform.HMI
 
         
         
+        /// <summary>AppConfig.json 의 DriverMode 값(대소문자·공백 무시). 미설정 시 Virtual.</summary>
+        private static string DriverMode(Func<DriverModeSettings, string> pick)
+            => (pick(AppSettingsService.Current?.DriverMode ?? new DriverModeSettings()) ?? "Virtual")
+               .Trim().ToLowerInvariant();
+
         private IIODriver InitializeIODriver()
-        { 
+        {
             string path = GetConfigPath(AppConstants.IoConfigFile);
             var loader = new ConfigLoader();
             var ioConfig = loader.LoadIOConfig(path);
 
-            var ioDriver = new VirtualIODriver();
+            IIODriver ioDriver = DriverMode(d => d.IO) switch
+            {
+                "comizoa"  => new ComizoaIODriver(),
+                "ethercat" => new EtherCatIODriver(),
+                _          => new VirtualIODriver(),   // Virtual / 미인식
+            };
             ioDriver.Initialize(ioConfig.GetAllDevices());
 
             return ioDriver;
@@ -162,7 +186,13 @@ namespace IJPSystem.Platform.HMI
             var loader = new ConfigLoader();
             var motionConfig = loader.LoadMotionConfig(path);
 
-            var motionDriver = new VirtualMotionDriver(); 
+            IMotionDriver motionDriver = DriverMode(d => d.Motion) switch
+            {
+                // 실장 EtherCAT 설정(ComiEcatLibCfg.ini)을 Config 폴더에서 로드
+                "comizoa" => new ComizoaMotionDriver { IniPath = GetConfigPath("ComiEcatLibCfg.ini") },
+                "acs"     => new AcsMotionDriver(),
+                _         => new VirtualMotionDriver(),   // Virtual / 미인식
+            };
             if (motionConfig?.MotionAxisList != null)
             {
                 motionDriver.Initialize(motionConfig.MotionAxisList);
@@ -176,7 +206,11 @@ namespace IJPSystem.Platform.HMI
             var loader = new ConfigLoader();
             var root = loader.LoadVisionConfig(path);
 
-            var visionDriver = new VirtualVisionDriver();
+            IVisionDriver visionDriver = DriverMode(d => d.Vision) switch
+            {
+                "imaqdx" => new ImaqdxVisionDriver(),
+                _        => new VirtualVisionDriver(),   // Virtual / 미인식
+            };
             visionDriver.Initialize(root.VisionCameraList);
 
             return visionDriver;

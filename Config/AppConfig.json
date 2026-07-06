@@ -8,5 +8,10 @@
   "MeniscusEnabled": false,
   "MeniscusComPort": "COM3",
   "MeniscusBaudRate": 9600,
-  "MeniscusUnitId": 1
+  "MeniscusUnitId": 1,
+  "DriverMode": {
+    "IO": "Virtual",
+    "Motion": "Virtual",
+    "Vision": "Virtual"
+  }
 }
