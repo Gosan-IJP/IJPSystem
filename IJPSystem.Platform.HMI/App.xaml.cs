@@ -63,12 +63,21 @@ namespace IJPSystem.Platform.HMI
 
             try
             {
+                // ① 현장 진단용 시작 배너 — 버전/비트수/관리자권한/OS (디버거 없이 환경 확인)
+                LogStartupBanner();
+
                 var loader = new ConfigLoader();
 
                 var appSettings = await splashVM.RunStepAsync(
                     "System Configuration", "AppConfig.json 로드",
                     () => loader.LoadAppSettings(GetConfigPath("AppConfig.json")));
                 IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Initialize(appSettings);
+
+                // 실장 진단: 실제로 읽은 설정 파일 경로와 파싱된 DriverMode 값을 기록.
+                // 스플래시/화면이 Virtual 로 뜨는 원인(잘못된 파일/파싱 실패)을 이 로그로 즉시 확인.
+                LoggerService.WriteToFile("INFO",
+                    $"[Config] AppConfig 로드: {GetConfigPath("AppConfig.json")} → " +
+                    $"DriverMode IO={appSettings.DriverMode.IO}, Motion={appSettings.DriverMode.Motion}, Vision={appSettings.DriverMode.Vision}");
 
                 var ioDriver = await splashVM.RunStepAsync(
                     "I/O Driver", $"{appSettings.DriverMode.IO} I/O 드라이버 연결",
@@ -89,6 +98,9 @@ namespace IJPSystem.Platform.HMI
                         "PULSE" => CreatePulse(loader, ioDriver, motionDriver, visionDriver),
                         _ => throw new NotSupportedException($"Unsupported: {appSettings.MachineType}"),
                     });
+
+                // 드라이버 Connect 후 실제 로드된 네이티브 DLL(ComiEcatSdk 등) 경로·버전 기록
+                LogLoadedNativeModules();
 
                 splashVM.MachineName = _machine.MachineName.ToUpper();
 
@@ -191,7 +203,7 @@ namespace IJPSystem.Platform.HMI
                 // 실장 EtherCAT 설정(ComiEcatLibCfg.ini)을 Config 폴더에서 로드
                 "comizoa" => new ComizoaMotionDriver { IniPath = GetConfigPath("ComiEcatLibCfg.ini") },
                 "acs"     => new AcsMotionDriver(),
-                _         => new VirtualMotionDriver(),   // Virtual / 미인식
+                _         => new VirtualMotionDriver(),  
             };
             if (motionConfig?.MotionAxisList != null)
             {
@@ -209,12 +221,63 @@ namespace IJPSystem.Platform.HMI
             IVisionDriver visionDriver = DriverMode(d => d.Vision) switch
             {
                 "imaqdx" => new ImaqdxVisionDriver(),
-                _        => new VirtualVisionDriver(),   // Virtual / 미인식
+                _        => new VirtualVisionDriver(), 
             };
             visionDriver.Initialize(root.VisionCameraList);
 
             return visionDriver;
         }
         private static string GetConfigPath(string fileName) => PathUtils.GetConfigPath(fileName);
+
+        /// <summary>시작 배너: 앱 버전·프로세스 비트수·관리자권한·런타임·OS 를 1회 기록.</summary>
+        private static void LogStartupBanner()
+        {
+            try
+            {
+                var asm = System.Reflection.Assembly.GetExecutingAssembly();
+                string ver     = asm.GetName().Version?.ToString() ?? "?";
+                string bitness = Environment.Is64BitProcess ? "x64(64bit)" : "x86(32bit)";
+
+                bool admin = false;
+                try
+                {
+                    using var id = System.Security.Principal.WindowsIdentity.GetCurrent();
+                    admin = new System.Security.Principal.WindowsPrincipal(id)
+                        .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+                }
+                catch { /* 권한 조회 실패는 무시 */ }
+
+                LoggerService.WriteToFile("INFO",
+                    $"[BOOT] IJPSystem HMI v{ver} | {bitness} | Admin={admin} | " +
+                    $".NET {Environment.Version} | OS {Environment.OSVersion.Version} | PC {Environment.MachineName}");
+            }
+            catch { /* 배너 실패는 앱 진행에 영향 없음 */ }
+        }
+
+        /// <summary>로드된 벤더 네이티브 DLL(ComiEcat/cmm 등)의 경로·파일버전 기록 — 비트수/버전 불일치 진단.</summary>
+        private static void LogLoadedNativeModules()
+        {
+            try
+            {
+                using var proc = System.Diagnostics.Process.GetCurrentProcess();
+                bool any = false;
+                foreach (System.Diagnostics.ProcessModule m in proc.Modules)
+                {
+                    string name = m.ModuleName ?? "";
+                    if (name.IndexOf("Comi",   StringComparison.OrdinalIgnoreCase) < 0 &&
+                        name.IndexOf("cmm",    StringComparison.OrdinalIgnoreCase) < 0 &&
+                        name.IndexOf("niimaq", StringComparison.OrdinalIgnoreCase) < 0)
+                        continue;
+                    any = true;
+                    string fver = "";
+                    try { fver = m.FileVersionInfo?.FileVersion ?? ""; } catch { }
+                    LoggerService.WriteToFile("INFO", $"[BOOT] 네이티브 모듈: {name} v{fver} @ {m.FileName}");
+                }
+                if (!any)
+                    LoggerService.WriteToFile("WARN",
+                        "[BOOT] 벤더 네이티브 모듈(ComiEcatSdk 등)이 로드되지 않음 — DriverMode Virtual 이거나 DLL 로드 실패 가능.");
+            }
+            catch { /* 모듈 열거 실패는 무시 */ }
+        }
     }
 }

@@ -1,3 +1,4 @@
+using IJPSystem.Platform.Common.Utilities;
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -6,93 +7,303 @@ using System.Threading;
 namespace IJPSystem.Drivers.Motion.Comizoa
 {
     /// <summary>
-    /// Comizoa EtherCAT 모션 구현 (ComiEcatSdk.dll 래퍼).
-    /// ※ [DllImport] 함수명/인자/호출규약은 자리표시(placeholder)다.
-    ///   실제 ComiEcatSdk 헤더(.h)/매뉴얼의 함수로 반드시 교체할 것.
+    /// Comizoa EtherCAT (PCI/Ex, ComiECAT) 모션 구현 — ComiEcatSdk.dll 래퍼.
+    ///
+    /// 실제 DLL export 확인 결과 이 DLL 은 PCI/Ex EtherCAT SDK(헤더 ComiEcatSdk_Api.h)이며,
+    /// 모션은 ecmSx*(단축)/ecmHome*(원점)/ecNet*/ecGn* 접두사를 사용한다.
+    ///
+    /// 규약(중요):
+    ///   - 명령 함수(SetSvon/Move*/Stop/SetSpeedPatt/Home* 등)는 t_cmdidx 를 반환하며 0 이면 실패다.
+    ///   - ecmSxSt_WaitCompt / ecmHomeSt_WaitCompt 는 1=성공(완료대기 성공).
+    ///   - ecmSxSt_GetFlags 는 t_word 비트플래그(TEcmSxSt_Flags)를 반환한다.
+    ///   - 위치/속도 단위는 ecmSxCfg_SetUnitDist(펄스/논리단위) 설정에 따른 "논리 단위"다.
+    ///   - NetID 는 단일 네트워크 기준 0.
+    ///   - x86 빌드 필수(이 DLL 이 32비트). x64 프로세스는 로드 불가.
+    ///
+    /// ※ 실장(현장) 검증 필요 항목:
+    ///   1) 초기화(디바이스 로드/모션환경 파일) — ecGn_LoadDevice/ecmGn_InitFromFile 는 이 DLL(2022)과
+    ///      온라인 문서(2025) 사이 버전차가 있어 시그니처가 다를 수 있다. LabVIEW Init.vi 또는 헤더로 확정할 것.
+    ///      (단, 호출규약이 Cdecl(호출자 스택정리)이라 인자 수가 달라도 프로세스가 죽지는 않는다.)
+    ///   2) 원점복귀 방향(Direction)·모드(HomeMode) — 물리적으로 축을 움직이므로 반드시 사이트 값으로 설정할 것.
+    ///   3) GetPosition 의 카운터 선택 인자 타입 — 문서상 t_f64 로 표기되나 실제는 열거형(int)으로 판단해 int 로 선언함.
     /// </summary>
     public sealed class ComiEcatMotion : IComiMotion
     {
         private const string Dll = "ComiEcatSdk.dll";
+        private const int NetID = 0;               // 단일 EtherCAT 네트워크
 
-        // ===== P/Invoke (자리표시 → 실제 SDK 함수로 교체) =====
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_Init(int embedded, int sim);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_Close();
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_ServoOn(int axis, int on);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_Home(int axis);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_MoveAbs(int axis, double pos);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_MoveRel(int axis, double dist);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_Jog(int axis, int dir);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_Stop(int axis);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_SetVel(int axis, double vel, double acc, double dec);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_SetEncRes(int axis, double ppu);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_SetHomeParam(int axis, int dir, double hi, double lo, double acc, int mode, double offset);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_SetSwLimit(int axis, int enable, double posLim, double negLim);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_SetAlState(int axis, int reset);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_GetPos(int axis, out double pos);
-        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)] private static extern int ecat_GetStatus(int axis, out int flags);
-        // =========================================================
+        // ── 상수(문서 확인값) ─────────────────────────────────────────
+        private const byte ecAL_STATE_OP = 8;      // EtherCAT AL-State: OP(운전)
+        private const int ecmDIR_N = 0;            // (-) 방향
+        private const int ecmDIR_P = 1;            // (+) 방향
+        private const int ecmSMODE_TRAPE  = 1;     // 사다리꼴 가감속
+        private const int ecmSMODE_SCURVE = 2;     // S-curve 가감속
+        private const int ecmCNT_FEED = 1;         // Feedback(실제) 위치 카운터
+
+        // ===== P/Invoke =====================================================
+        // -- 네트워크/초기화 (LabVIEW Init.vi 와 동일 함수 사용) --
+        // ecGn_LoadDevice 시 라이브러리가 현재 작업 디렉터리의 'ComiEcatLibCfg.ini' 를 읽어 마스터를 구성한다.
+        [DllImport(Dll)] [return: MarshalAs(UnmanagedType.I1)] private static extern bool ecGn_LoadDevice(out int errCode);
+        [DllImport(Dll)] [return: MarshalAs(UnmanagedType.I1)] private static extern bool ecGn_UnloadDevices(out int errCode);
+        // 진단용: 드라이버가 인식한 마스터/네트워크 수. LoadDevice 실패(-5) 원인 구분에 사용.
+        [DllImport(Dll)] private static extern int ecGn_GetNumDevices(out int errCode);
+        [DllImport(Dll)] private static extern int ecGn_GetNumNetworks(out int errCode);
+        // 구성된 슬레이브 수(LabVIEW Init.vi 와 동일). 반환=슬레이브 수.
+        [DllImport(Dll)] private static extern int ecNet_GetCfgSlaveCount(int netId, out int errCode);
+        // AlState 는 EEcAlState(4바이트 enum) → int 로 마샬. (byte 로 선언하면 값/스택 크기가 어긋남)
+        [DllImport(Dll)] private static extern uint ecNet_SetAlState(int netId, int alState, out int errCode);
+        // 현재 AL-State 조회(LabVIEW Init.vi 와 동일). OP 전환 완료 확인용. 반환=현재 상태값.
+        [DllImport(Dll)] private static extern int ecNet_GetAlState(int netId, out int errCode);
+
+        // -- 서보 제어 --
+        [DllImport(Dll)] private static extern int ecmSxCtl_SetSvon(int netId, int axis, int svon, out int errCode);
+        [DllImport(Dll)] private static extern int ecmSxCtl_GetSvon(int netId, int axis, out int errCode);
+        [DllImport(Dll)] private static extern int ecmSxCtl_ResetAlm(int netId, int axis, out int errCode);
+
+        // -- 축 설정(속도패턴/단위) --
+        [DllImport(Dll)] private static extern int ecmSxCfg_SetSpeedPatt(int netId, int axis, int speedMode, double vini, double vend, double vwork, double acc, double dec, out int errCode);
+        // UnitDist 는 t_f64(double) — 절대 long 이 아니다(공식 예제 확인). long 으로 넘기면 비트패턴이 깨져 엉뚱한 분해능이 설정됨.
+        [DllImport(Dll)] [return: MarshalAs(UnmanagedType.I1)] private static extern bool ecmSxCfg_SetUnitDist(int netId, int axis, double unitDist, out int errCode);
+
+        // -- 단축 모션 --
+        [DllImport(Dll)] private static extern int ecmSxMot_MoveToStart(int netId, int axis, double position, out int errCode);   // 절대
+        [DllImport(Dll)] private static extern int ecmSxMot_MoveStart(int netId, int axis, double distance, out int errCode);      // 상대
+        [DllImport(Dll)] private static extern int ecmSxMot_VMoveStart(int netId, int axis, int dir, out int errCode);            // 조그(속도이송)
+        [DllImport(Dll)] private static extern int ecmSxMot_Stop(int netId, int axis, int isDecStop, int isWaitCompt, out int errCode);
+
+        // -- 상태 --
+        // IsBusy 반환은 t_bool(1바이트) → byte. int 로 받으면 eax 상위바이트 잔여값 때문에 항상 busy 로 오판될 수 있음.
+        [DllImport(Dll)] private static extern byte ecmSxSt_IsBusy(int netId, int axis, out int errCode);
+        [DllImport(Dll)] private static extern int ecmSxSt_WaitCompt(int netId, int axis, out int errCode);
+        [DllImport(Dll)] private static extern ushort ecmSxSt_GetFlags(int netId, int axis, out int errCode);
+        [DllImport(Dll)] private static extern double ecmSxSt_GetPosition(int netId, int axis, int targCntr, out int errCode);
+
+        // -- 원점복귀 --
+        [DllImport(Dll)] private static extern int ecmHomeCfg_SetMode(int netId, int axis, int homeOpMode, out int errCode);
+        [DllImport(Dll)] private static extern int ecmHomeCfg_SetOffset(int netId, int axis, double offset, out int errCode);
+        [DllImport(Dll)] private static extern int ecmHomeCfg_SetSpeedPatt(int netId, int axis, int speedMode, double vel, double acc, double dec, double homeSpecVel, out int errCode);
+        [DllImport(Dll)] private static extern int ecmHomeMot_MoveStart(int netId, int axis, int direction, out int errCode);
+        [DllImport(Dll)] private static extern int ecmHomeSt_WaitCompt(int netId, int axis, out int errCode);
+        // ====================================================================
 
         private bool _init;
+        // 축별 원점복귀 방향(+1/-1)을 SetHomeParameters 에서 저장 → Home() 에서 사용(안전값 확정용).
+        private readonly System.Collections.Generic.Dictionary<AxisId, int> _homeDir = new();
 
-        private static void Check(int rc, string op)
+        /// <summary>cmdidx(=0 실패) 반환 명령 함수 검사. 실패 시 오류코드를 이름·설명으로 디코딩.</summary>
+        private static void CheckCmd(int cmdidx, int err, string op)
         {
-            if (rc != 0) throw new InvalidOperationException($"{op} 실패 (rc={rc})");
+            if (cmdidx == 0)
+                throw new InvalidOperationException($"{op} 실패 (err={ComiEcatError.Describe(err)})");
         }
         private void Need() { if (!_init) throw new InvalidOperationException("Init 먼저 호출."); }
 
         public void Init(ComiEcatConfig cfg)
         {
             if (cfg == null) throw new ArgumentNullException(nameof(cfg));
-            // 실제 SDK가 ini 경로/네트워크 설정을 받으면 그 API로 교체.
-            Check(ecat_Init(cfg.EmbeddedMode ? 1 : 0, cfg.SimulationMode ? 1 : 0), "Init");
+
+            // LabVIEW Init.vi 실제 순서: ecGn_LoadDevice → GetNumDevices → ecNet_GetCfgSlaveCount → ecNet_SetAlState(OP)
+            //
+            // ★ 핵심(DLL 분석으로 확인): Comizoa 라이브러리는 설정을 앱 폴더/CWD 가 아니라
+            //   고정 위치 'C:\ProgramData\COMIZOA\' 에서 읽는다.
+            //   (DLL 내부: SHGetKnownFolderPath(Common AppData) + "\COMIZOA\...")
+            //   필요한 구성 파일:
+            //     · ComiEcatLibCfg.ini   (라이브러리/마스터 IP·모드)
+            //     · ComiEcatDCSetup.ini  (DC 셋업)
+            //     · CEcatNetCfg_*.cec     (EtherCAT 네트워크/슬레이브 구성)  ← Comizoa 설정 유틸리티가 생성
+            //   이 파일들이 없으면 마스터 미구성 → LoadDevice 가 -5(ecERR_DEVICE_NOT_LOADED, NumDevices=0) 로 실패.
+            //   앱의 Config\ComiEcatLibCfg.ini 를 이 위치에 없을 때만 복사하고, 폴더 내용을 로그로 남긴다.
+            //   ※ .cec(네트워크 구성)는 앱이 만들 수 없다 — 실장 PC 의 C:\ProgramData\COMIZOA\ 에 존재해야 한다.
+            string comizoaDir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "COMIZOA");
+            try
+            {
+                System.IO.Directory.CreateDirectory(comizoaDir);
+                string dstIni = System.IO.Path.Combine(comizoaDir, "ComiEcatLibCfg.ini");
+                if (!System.IO.File.Exists(dstIni) && !string.IsNullOrEmpty(cfg.SourcePath) && System.IO.File.Exists(cfg.SourcePath))
+                {
+                    System.IO.File.Copy(cfg.SourcePath, dstIni);
+                    LoggerService.WriteToFile("INFO", $"[ComiEcat] ComiEcatLibCfg.ini → '{dstIni}' 복사(신규)");
+                }
+                string[] files = System.IO.Directory.GetFiles(comizoaDir);
+                for (int i = 0; i < files.Length; i++) files[i] = System.IO.Path.GetFileName(files[i]);
+                LoggerService.WriteToFile("INFO", $"[ComiEcat] '{comizoaDir}' 구성파일: [{string.Join(", ", files)}]");
+            }
+            catch (Exception ex)
+            {
+                LoggerService.WriteToFile("WARN", $"[ComiEcat] '{comizoaDir}' 준비 경고: {ex.Message}");
+            }
+
+            bool loaded = ecGn_LoadDevice(out int errLoad);
+            int numDev = ecGn_GetNumDevices(out _);
+            int numNet = ecGn_GetNumNetworks(out _);
+            LoggerService.WriteToFile("INFO",
+                $"[ComiEcat] LoadDevice={loaded} (err={ComiEcatError.Describe(errLoad)}), NumDevices={numDev}, NumNetworks={numNet}");
+            if (!loaded)
+                throw new InvalidOperationException(
+                    $"LoadDevice 실패 (err={ComiEcatError.Describe(errLoad)}, NumDevices={numDev}). " +
+                    $"C:\\ProgramData\\COMIZOA\\ 의 구성파일(ComiEcatLibCfg.ini/ComiEcatDCSetup.ini/CEcatNetCfg_*.cec) 존재 여부, " +
+                    $"Comizoa 데몬 실행, 원격 마스터({cfg.MasterIp}) 연결을 확인.");
+
+            // 구성된 슬레이브 수 확인(LabVIEW 와 동일: ecNet_GetCfgSlaveCount)
+            int slaveCnt = ecNet_GetCfgSlaveCount(NetID, out int errCnt);
+            LoggerService.WriteToFile("INFO",
+                $"[ComiEcat] CfgSlaveCount(net={NetID}) = {slaveCnt} (err={ComiEcatError.Describe(errCnt)})");
+
+            // 마스터/슬레이브를 OP(운전) 상태로 전환 — 이 단계가 되어야 PDO 입출력·모션이 가능.
+            uint rc = ecNet_SetAlState(NetID, ecAL_STATE_OP, out int err);
+            if (rc == 0) throw new InvalidOperationException($"SetAlState(OP) 실패 (err={ComiEcatError.Describe(err)})");
+
+            // OP 전환은 즉시 완료가 아니다(DC 셋업 지연=DC_Setup_Delay, ini 기본 4000ms).
+            // LabVIEW 처럼 ecNet_GetAlState 로 실제 OP 도달을 폴링 확인한다.
+            int timeoutMs = Math.Max(6000, cfg.DcSetupDelay + 3000);
+            var sw = Stopwatch.StartNew();
+            int alState = 0;
+            while (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                alState = ecNet_GetAlState(NetID, out _);
+                if (alState == ecAL_STATE_OP) break;
+                Thread.Sleep(50);
+            }
+            if (alState != ecAL_STATE_OP)
+                throw new InvalidOperationException(
+                    $"OP 전환 확인 실패 — 현재 AlState={alState} (기대=8/OP), {sw.ElapsedMilliseconds}ms 대기. " +
+                    "슬레이브 전원/배선/링 연결, DC 설정 확인.");
+            LoggerService.WriteToFile("INFO",
+                $"[ComiEcat] SetAlState(OP) 성공 — 마스터 운전 상태 (도달 {sw.ElapsedMilliseconds}ms)");
+
             _init = true;
         }
 
-        public void Unload() { if (_init) { try { ecat_Close(); } catch { } _init = false; } }
+        public void Unload()
+        {
+            if (!_init) return;
+            try { ecNet_SetAlState(NetID, /*PREOP*/2, out _); } catch { }
+            try { ecGn_UnloadDevices(out _); } catch { }
+            _init = false;
+        }
 
-        public void ServoOn(AxisId a, bool on) { Need(); Check(ecat_ServoOn((int)a, on ? 1 : 0), "ServoOn"); }
-        public void Home(AxisId a) { Need(); Check(ecat_Home((int)a), "Home"); }
-        public void MoveAbsolute(AxisId a, double pos) { Need(); Check(ecat_MoveAbs((int)a, pos), "MoveAbs"); }
-        public void MoveRelative(AxisId a, double dist) { Need(); Check(ecat_MoveRel((int)a, dist), "MoveRel"); }
-        public void Jog(AxisId a, int dir) { Need(); Check(ecat_Jog((int)a, dir), "Jog"); }
-        public void Stop(AxisId a) { Need(); Check(ecat_Stop((int)a), "Stop"); }
+        public void ServoOn(AxisId a, bool on)
+        {
+            Need();
+            int rc = ecmSxCtl_SetSvon(NetID, (int)a, on ? 1 : 0, out int err);
+            CheckCmd(rc, err, "ServoOn");
+        }
+
+        public void MoveAbsolute(AxisId a, double pos)
+        {
+            Need();
+            int rc = ecmSxMot_MoveToStart(NetID, (int)a, pos, out int err);   // 절대 위치
+            CheckCmd(rc, err, "MoveAbsolute");
+        }
+
+        public void MoveRelative(AxisId a, double dist)
+        {
+            Need();
+            int rc = ecmSxMot_MoveStart(NetID, (int)a, dist, out int err);    // 상대 거리
+            CheckCmd(rc, err, "MoveRelative");
+        }
+
+        public void Jog(AxisId a, int dir)
+        {
+            Need();
+            int rc = ecmSxMot_VMoveStart(NetID, (int)a, dir >= 0 ? ecmDIR_P : ecmDIR_N, out int err);
+            CheckCmd(rc, err, "Jog");
+        }
+
+        public void Stop(AxisId a)
+        {
+            Need();
+            // IsDecStop=1(감속정지), IsWaitCompt=0(대기 안함)
+            int rc = ecmSxMot_Stop(NetID, (int)a, 1, 0, out int err);
+            CheckCmd(rc, err, "Stop");
+        }
 
         public void StopAll()
         {
             foreach (AxisId a in Enum.GetValues(typeof(AxisId)))
-                try { ecat_Stop((int)a); } catch { }
+                try { ecmSxMot_Stop(NetID, (int)a, 1, 0, out _); } catch { }
         }
 
         public void SetVelocity(AxisId a, VelocityProfile p)
-        { Need(); Check(ecat_SetVel((int)a, p.Velocity, p.Acceleration, p.Deceleration), "SetVelocity"); }
+        {
+            Need();
+            // SpeedMode=사다리꼴, Vini=0, Vend=0, Vwork=속도, Acc/Dec
+            int rc = ecmSxCfg_SetSpeedPatt(NetID, (int)a, ecmSMODE_TRAPE,
+                                           0.0, 0.0, p.Velocity, p.Acceleration, p.Deceleration, out int err);
+            CheckCmd(rc, err, "SetVelocity");
+        }
 
         public void SetEncoderResolution(AxisId a, double ppu)
-        { Need(); Check(ecat_SetEncRes((int)a, ppu), "SetEncRes"); }
+        {
+            Need();
+            // 논리단위 1 을 이동하기 위한 펄스 수(UnitDist, t_f64=double)
+            bool ok = ecmSxCfg_SetUnitDist(NetID, (int)a, ppu, out int err);
+            if (!ok) throw new InvalidOperationException($"SetEncoderResolution 실패 (err={err})");
+        }
 
         public void SetHomeParameters(AxisId a, HomeParameters h)
-        { Need(); Check(ecat_SetHomeParam((int)a, h.Direction, h.HighVelocity, h.LowVelocity, h.Acceleration, h.HomeMode, h.Offset), "SetHomeParam"); }
+        {
+            Need();
+            _homeDir[a] = h.Direction;   // Home() 에서 사용
+            int rc;
+            rc = ecmHomeCfg_SetMode(NetID, (int)a, h.HomeMode, out int err);           CheckCmd(rc, err, "SetHomeMode");
+            rc = ecmHomeCfg_SetOffset(NetID, (int)a, h.Offset, out err);               CheckCmd(rc, err, "SetHomeOffset");
+            // 속도패턴: SpeedMode=사다리꼴, Vel=고속, Acc/Dec, HomeSpecVel=저속(근접)
+            rc = ecmHomeCfg_SetSpeedPatt(NetID, (int)a, ecmSMODE_TRAPE,
+                                         h.HighVelocity, h.Acceleration, h.Acceleration, h.LowVelocity, out err);
+            CheckCmd(rc, err, "SetHomeSpeedPatt");
+        }
+
+        public void Home(AxisId a)
+        {
+            Need();
+            // ※ 방향은 SetHomeParameters 로 설정된 값 사용. 미설정 시 (-)방향 기본값.
+            //   원점 방향/모드는 물리적 안전과 직결되므로 실장 전 반드시 사이트 값 확인.
+            int dir = _homeDir.TryGetValue(a, out int d) ? (d >= 0 ? ecmDIR_P : ecmDIR_N) : ecmDIR_N;
+            int rc = ecmHomeMot_MoveStart(NetID, (int)a, dir, out int err);
+            CheckCmd(rc, err, "Home");
+        }
 
         public void SetSoftLimit(AxisId a, SoftLimit l)
-        { Need(); Check(ecat_SetSwLimit((int)a, l.Enabled ? 1 : 0, l.PositiveLimit, l.NegativeLimit), "SetSwLimit"); }
+        {
+            Need();
+            // ※ ecmSxCfg_SetSoftLimit 시그니처 미확정으로 현재 미구현(no-op).
+            //   소프트리밋은 Comizoa 모션 환경파일에서 설정하거나, 헤더 확인 후 여기에 구현할 것.
+        }
 
         public void SetAlarmState(AxisId a, bool reset)
-        { Need(); Check(ecat_SetAlState((int)a, reset ? 1 : 0), "SetAlState"); }
+        {
+            Need();
+            if (!reset) return;
+            int rc = ecmSxCtl_ResetAlm(NetID, (int)a, out int err);
+            CheckCmd(rc, err, "ResetAlarm");
+        }
 
         public AxisState GetState(AxisId a)
         {
             Need();
-            ecat_GetPos((int)a, out double pos);
-            ecat_GetStatus((int)a, out int f);
-            // 상태 비트 해석은 실제 SDK 정의에 맞게 교체.
+            double pos = ecmSxSt_GetPosition(NetID, (int)a, ecmCNT_FEED, out _);   // 실제(피드백) 위치
+            ushort f = ecmSxSt_GetFlags(NetID, (int)a, out _);                     // 상태 비트(TEcmSxSt_Flags 순서)
+            bool busy = ecmSxSt_IsBusy(NetID, (int)a, out _) != 0;
+
+            // 비트 순서(문서 TEcmSxSt_Flags): 0 RdyToSwOn,1 SwOn,2 OperEnabled(=서보온),3 ServoFault,
+            //   4 VoltEnabled,5 QuickStop,6 SwOnDisabled,7 ServoWarn,8 CtlrFault,9 HomeError,
+            //   10 OMS1,11 IntLimit,12 OMS2,13 HomeBusy,14 HomeAttained
+            bool servoOn      = (f & (1 << 2)) != 0;
+            bool alarm        = (f & (1 << 3)) != 0 || (f & (1 << 8)) != 0;   // ServoFault | CtlrFault
+            bool homeAttained = (f & (1 << 14)) != 0;
+
             return new AxisState
             {
-                Position = pos,
-                IsMoving = (f & 0x01) != 0,
-                ServoOn = (f & 0x02) != 0,
-                IsHomed = (f & 0x04) != 0,
-                Alarm = (f & 0x08) != 0,
-                PositiveLimit = (f & 0x10) != 0,
-                NegativeLimit = (f & 0x20) != 0
+                Position      = pos,
+                IsMoving      = busy,
+                ServoOn       = servoOn,
+                IsHomed       = homeAttained,
+                Alarm         = alarm,
+                // 하드웨어 EL 리밋은 GetFlags 에 직접 없음(필요 시 ecmSxSt_GetDI 로 확장). 현재 미매핑.
+                PositiveLimit = false,
+                NegativeLimit = false
             };
         }
 

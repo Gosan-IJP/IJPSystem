@@ -19,9 +19,11 @@ $proj    = Join-Path $here '..\IJPSystem.Platform.HMI\IJPSystem.Platform.HMI.csp
 $pubDir  = Join-Path $here 'publish'
 
 # 1) publish (self-contained: 대상 PC에 .NET 설치 불필요) --------------------
-Write-Host '[1/2] dotnet publish (win-x64, self-contained)...' -ForegroundColor Cyan
+Write-Host '[1/2] dotnet publish (win-x86, self-contained)...' -ForegroundColor Cyan
+# ※ Comizoa ComiEcatSdk.dll 이 32비트(x86)이므로 앱도 반드시 x86 으로 빌드해야 로드된다.
+#    (64비트 프로세스는 32비트 네이티브 DLL 로드 불가 → BadImageFormatException)
 if (Test-Path $pubDir) { Remove-Item $pubDir -Recurse -Force }
-dotnet publish $proj -c Release -r win-x64 --self-contained true `
+dotnet publish $proj -c Release -r win-x86 --self-contained true `
     -p:PublishSingleFile=false -o $pubDir
 if ($LASTEXITCODE -ne 0) { throw "publish 실패 (exit $LASTEXITCODE)" }
 

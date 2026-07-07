@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="IJPSystem.Platform.HMI"/>
+
+  <!--
+    Comizoa EtherCAT(WDM 커널 드라이버) 접근에는 관리자 권한이 필요하다.
+    권한이 없으면 ecGn_LoadDevice 가 ecERR_DEVICE_NOT_LOADED(-5)로 실패한다.
+    (벤더 IDE/LabVIEW 는 보통 관리자 권한으로 실행됨)
+  -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <!-- Windows 10/11 호환성 선언 (DPI/타이머 정확도 등 일관 동작) -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/> <!-- Windows 10/11 -->
+    </application>
+  </compatibility>
+</assembly>

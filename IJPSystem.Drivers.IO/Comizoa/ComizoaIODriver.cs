@@ -46,13 +46,23 @@ namespace IJPSystem.Drivers.IO.Comizoa
 
         public bool Connect()
         {
-            // 모션(ComizoaMotionDriver)이 동일 EtherCAT 마스터를 이미 enumerate 했다는 전제.
-            // 저수준 SDK 가 실제로 호출 가능한지 1회 프로브 — DLL 미존재/엔트리포인트 불일치 시
-            // 예외가 나므로, 그때는 echo 모드로 안전하게 강등한다(무한 에러창 방지).
+            // 모션(ComizoaMotionDriver)이 동일 EtherCAT 마스터를 이미 로드했다는 전제.
+            // 프로브로 SDK 호출 가능성 + 네트워크 유효성(errCode)을 함께 확인한다.
+            //   - 예외: DLL 미존재/엔트리포인트 불일치 → echo 강등
+            //   - errCode != 0 (예: -20 INVALID_NETID): 마스터 미로드 → echo 강등
+            //     (errCode 를 안 보면 마스터가 없어도 0 을 반환해 "거짓 연결"로 오판함)
             try
             {
-                _dio.GetInputBits();          // 무해한 읽기로 SDK 가용성 확인
-                _hwUsable = true;
+                if (_dio.Probe(out int err))
+                {
+                    _hwUsable = true;
+                }
+                else
+                {
+                    _hwUsable = false;
+                    LoggerService.WriteToFile("WARN",
+                        $"[Comizoa IO] 프로브 실패(err={err}{(err == -20 ? " INVALID_NETID: 마스터 미로드" : "")}) — echo(가상) 모드로 동작합니다.");
+                }
             }
             catch (Exception ex)
             {

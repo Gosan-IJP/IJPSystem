@@ -18,5 +18,12 @@ namespace IJPSystem.Drivers.IO.Comizoa
         uint GetInputBits();
         /// <summary>출력 전체를 비트마스크로 쓰기.</summary>
         void SetOutputBits(uint bits);
+
+        /// <summary>
+        /// 연결 프로브: 무해한 읽기로 마스터/네트워크가 실제로 유효한지 확인한다.
+        /// errCode==0 이면 정상, 아니면 SDK 오류코드(예: -20 INVALID_NETID = 마스터 미로드).
+        /// ※ Get 계열은 예외를 안 던지므로, 이 메서드로 errCode 를 봐야 "거짓 연결"을 걸러낸다.
+        /// </summary>
+        bool Probe(out int errCode);
     }
 }

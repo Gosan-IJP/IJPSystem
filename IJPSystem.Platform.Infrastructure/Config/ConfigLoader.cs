@@ -20,7 +20,9 @@ namespace IJPSystem.Platform.Infrastructure.Config
             {
                 if (!File.Exists(path)) return new AppSettings();
                 string json = File.ReadAllText(path);
-                return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+                // _options(대소문자 무시) 사용 — 다른 로더와 동일. 미사용 시 키 표기 차이로
+                // DriverMode 등이 바인딩 안 돼 조용히 기본값(Virtual)으로 떨어짐.
+                return JsonSerializer.Deserialize<AppSettings>(json, _options) ?? new AppSettings();
             }
             catch
             {

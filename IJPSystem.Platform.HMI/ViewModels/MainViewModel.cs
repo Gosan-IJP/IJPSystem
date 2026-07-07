@@ -325,6 +325,45 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _controller.GetMachine().SetSystemStatus(MachineState.Standby);
 
             AddLog(T("Log_SystemInit"), LogLevel.Success);
+
+            // 드라이버 실제 로드 상태를 화면 로그에 표시(실장/가상·연결여부 즉시 확인용)
+            LogDriverStatus();
+        }
+
+        /// <summary>
+        /// 각 드라이버가 실제로 어떤 구현으로 로드됐는지(실장 vs Virtual)와 연결 상태를 화면 로그에 남긴다.
+        /// - Virtual* 타입이면 "가상" → AppConfig.json 의 DriverMode 가 실장으로 안 먹은 것.
+        /// - 실장 타입인데 미연결이면 SDK/하드웨어 문제(echo 강등) → C:\Logs 의 상세 로그 확인.
+        /// </summary>
+        private void LogDriverStatus()
+        {
+            var m = _controller?.GetMachine();
+            if (m == null) return;
+
+            // 앱이 실제로 읽은 AppConfig 경로와 파싱된 DriverMode 값을 화면 로그에 표시.
+            // → Virtual 로 뜨면 "이 경로의 파일"을 Comizoa 로 고쳐야 함이 즉시 드러남.
+            try
+            {
+                var dm = IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Current?.DriverMode;
+                string cfgPath = IJPSystem.Platform.Common.Utilities.PathUtils.GetConfigPath("AppConfig.json");
+                AddLog($"[CONFIG] {cfgPath} → IO={dm?.IO}, Motion={dm?.Motion}, Vision={dm?.Vision}", LogLevel.Info);
+            }
+            catch { /* 진단 로그 실패는 무시 */ }
+
+            void Report(string tag, object? drv, bool connected)
+            {
+                string kind = drv?.GetType().Name ?? "None";
+                bool isVirtual = kind.StartsWith("Virtual") || kind == "None";
+                string mode = isVirtual ? "가상(Virtual)" : "실장";
+                LogLevel level = isVirtual ? LogLevel.Warning
+                               : connected ? LogLevel.Success
+                                           : LogLevel.Error;   // 실장인데 미연결 = SDK/HW 문제
+                AddLog($"[{tag}] {kind} — {mode}, 연결={(connected ? "OK" : "실패/미연결")}", level);
+            }
+
+            Report("IO",     m.IO,     m.IO?.IsConnected     ?? false);
+            Report("MOTION", m.Motion, m.Motion?.IsConnected ?? false);
+            Report("VISION", m.Vision, m.Vision?.IsConnected ?? false);
         }
 
         private void StartTimers()

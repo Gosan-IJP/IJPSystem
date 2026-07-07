@@ -90,7 +90,40 @@
       "Bash(sed -i 's/namespace IJPSystem\\\\.Subsystems\\\\.DropWatcher/namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher/' IJPSystem.Platform.Infrastructure/Devices/DropWatcher/*.cs)",
       "Bash(dotnet restore *)",
       "Read(//c/Program Files \\(x86\\)/Inno Setup 6/**)",
-      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"build-installer.ps1\")"
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"build-installer.ps1\")",
+      "Bash(git commit --amend -m '비전/설치본 추가 및 Comizoa IO SDK 함수 실장 반영' -m '- Comizoa IO: placeholder ecat_* → 실제 SW Daemon SDK\\(secdi/secdo\\) 함수로 교체, Put 성공여부 규약 수정 *)",
+      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./build-installer.ps1)",
+      "Bash(grep -i \"path\\\\|C:\\\\\\\\\\\\\\\\\\\\|Logs\")",
+      "Bash(grep -ivE \"IJPSystem|\\\\.dll$\")",
+      "Bash(cd \"/d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련/ethercat_ip_core_221223_2/API\" *)",
+      "Read(//d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련/ethercat_ip_core_221223_2/API/**)",
+      "Bash(SDK=\"/d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련\" *)",
+      "Read(//d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련/**)",
+      "Read(//d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련/ComiIDE_v1.10.4.0/Data/Scripter/C#/DeviceSources/**)",
+      "Bash(grep -rnE \"WriteToFile|C:\\\\\\\\\\\\\\\\Logs|AppendAllText|File\\\\.|LogFolder|\\\\.txt\" --include=*.cs IJPSystem.Platform.HMI/ViewModels/LogViewModel.cs)",
+      "Read(//c/Program Files \\(x86\\)/IJPSystem/Config/**)",
+      "Bash(echo \"=== C:\\\\\\\\Logs 최신 파일 ===\")",
+      "Bash(API=\"/d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련/ethercat_ip_core_221223_2/API\" *)",
+      "Bash(grep -viE \"extern|//|MarshalAs\")",
+      "Bash(mkdir -p /c/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/manual)",
+      "Read(//c/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/**)",
+      "Bash(unzip -o \"/c/Users/bluey/Downloads/Comizoa_DLL_Manual.zip\")",
+      "Read(//c/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/manual/**)",
+      "Bash(unzip -o \"ComiECAT_Cores_240705_1_whql.zip\" -d cores)",
+      "Read(//c/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/manual/cores/ComiECAT_Cores_240705_1_whql/Library/C#//**)",
+      "Bash(grep -viE \"extern|DllImport|MarshalAs|EntryPoint|//|enum|///\")",
+      "Bash(SCRATCH=\"/c/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/manual\" *)",
+      "Read(//c/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/manual/cores/ComiECAT_Cores_240705_1_whql/Library/C#/**)",
+      "Read(//d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련/ComiIDE_v1.10.4.0/**)",
+      "Bash(BASE=\"/d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련/ComiIDE_v1.10.4.0\" *)",
+      "Read(//d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련/ComiIDE_v1.10.4.0/Data/Scripter/C#/**)",
+      "Bash(grep -vE \"^\\\\s*$\")",
+      "Read(//d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련/ComiIDE_v1.10.4.0/WorkData/config/**)",
+      "Bash(BASE=\"/d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련/ComiIDE_v1.10.4.0/Data\" *)",
+      "Read(//d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련/ComiIDE_v1.10.4.0/Data/**)",
+      "Bash(grep -E \"^-?[0-9]{1,2} \")",
+      "Bash(cd /d/IJP/IJPSystem *)",
+      "Bash(grep -nA15 \"public void AddLog\" IJPSystem.Platform.HMI/ViewModels/MainViewModel.cs)"
     ],
     "additionalDirectories": [
       "d:\\tmp",
@@ -98,7 +131,8 @@
       "D:\\IJP\\IJPSystem",
       "C:\\Users\\bluey\\OneDrive\\바탕 화면",
       "C:\\Users\\bluey\\.claude",
-      "D:\\IJP\\IJPSystem\\IJPSystem.Drivers.Meniscus"
+      "D:\\IJP\\IJPSystem\\IJPSystem.Drivers.Meniscus",
+      "D:\\IJP\\IJPSystem\\_lv"
     ]
   }
 }

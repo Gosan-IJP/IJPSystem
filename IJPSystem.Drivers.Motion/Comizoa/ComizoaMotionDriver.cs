@@ -1,3 +1,4 @@
+using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.Motion;
 using System;
@@ -23,6 +24,10 @@ namespace IJPSystem.Drivers.Motion.Comizoa
 
         private IComiMotion? _comi;
 
+        // 진단 로그 1회성 플래그(폴링 스팸 방지)
+        private bool _statusErrLogged;
+        private bool _servoErrLogged;
+
         /// <summary>ComiEcatLib ini 경로(없으면 기본값 사용).</summary>
         public string IniPath { get; set; } = "ComiEcatLibCfg.ini";
 
@@ -33,9 +38,12 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             try
             {
                 var cfg = ComiEcatConfig.Load(IniPath);
+                LoggerService.WriteToFile("INFO",
+                    $"[Comizoa Motion] Init 시도 — ini={IniPath}, Embedded={cfg.EmbeddedMode}, Simulation={cfg.SimulationMode}");
                 var comi = new ComiEcatMotion();
                 comi.Init(cfg);
                 _comi = comi;
+                LoggerService.WriteToFile("INFO", "[Comizoa Motion] Init 성공 — 실제 하드웨어 연결됨");
 
                 // 축별 기본 속도 프로파일 적용(Move 기준)
                 foreach (var c in _configs)
@@ -54,8 +62,12 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 IsConnected = true;
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                // 실장 진단: ecat_Init/SetVelocity 가 실패하면 여기로 온다.
+                // EntryPointNotFound=함수명 불일치, DllNotFound=DLL 미존재, BadImageFormat=비트수 불일치.
+                LoggerService.WriteToFile("ERROR",
+                    $"[Comizoa Motion] 연결 실패 — 모든 축 명령이 무시됩니다(시뮬레이션처럼 보임): {ex.GetType().Name}: {ex.Message}");
                 IsConnected = false;
                 return false;
             }
@@ -123,20 +135,44 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 s.CcwLimit     = st.NegativeLimit;
                 s.IsInPosition = !st.IsMoving;
             }
-            catch { /* 통신 오류 시 마지막 상태 유지 */ }
+            catch (Exception ex)
+            {
+                // 폴링마다 반복되므로 1회만 로깅. ecat_GetStatus/GetPos 실패 시 여기로 온다.
+                if (!_statusErrLogged)
+                {
+                    _statusErrLogged = true;
+                    LoggerService.WriteToFile("ERROR",
+                        $"[Comizoa Motion] 상태 읽기 실패({axisNo}) — 마지막 상태 유지: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
         }
 
         // ── 구동 명령 ──
         public Task<bool> ServoOn(string axisNo, bool isOn)
         {
-            if (!TryAxis(axisNo, out var ax)) return Task.FromResult(false);
+            if (!TryAxis(axisNo, out var ax))
+            {
+                LoggerService.WriteToFile("WARN",
+                    $"[Comizoa Motion] ServoOn 무시({axisNo}, {isOn}) — 미연결 또는 축 매핑 없음(시뮬레이션처럼 보임)");
+                return Task.FromResult(false);
+            }
             try
             {
                 _comi!.ServoOn(ax, isOn);
                 if (_axisStates.TryGetValue(axisNo, out var s)) s.IsServoOn = isOn;
+                LoggerService.WriteToFile("INFO", $"[Comizoa Motion] ServoOn 명령 전송({axisNo} → {isOn})");
                 return Task.FromResult(true);
             }
-            catch { return Task.FromResult(false); }
+            catch (Exception ex)
+            {
+                if (!_servoErrLogged)
+                {
+                    _servoErrLogged = true;
+                    LoggerService.WriteToFile("ERROR",
+                        $"[Comizoa Motion] ServoOn 실패({axisNo}, {isOn}): {ex.GetType().Name}: {ex.Message}");
+                }
+                return Task.FromResult(false);
+            }
         }
 
         public Task<bool> MoveAbs(string axisNo, double pos, double vel, double acc, double dec)

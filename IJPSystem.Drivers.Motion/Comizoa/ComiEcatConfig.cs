@@ -32,11 +32,15 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         public int InPort { get; set; } = 35040;
         public int OutPort { get; set; } = 35041;
 
+        /// <summary>로드에 사용한 ini 파일의 실제 경로. ecmGn_InitFromFile 에 그대로 전달한다.</summary>
+        public string? SourcePath { get; set; }
+
         /// <summary>ini 파일에서 로드(간단 파싱). 파일이 없으면 기본값 반환.</summary>
         public static ComiEcatConfig Load(string iniPath)
         {
             var cfg = new ComiEcatConfig();
             if (string.IsNullOrEmpty(iniPath) || !File.Exists(iniPath)) return cfg;
+            cfg.SourcePath = Path.GetFullPath(iniPath);
 
             var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (string raw in File.ReadAllLines(iniPath))

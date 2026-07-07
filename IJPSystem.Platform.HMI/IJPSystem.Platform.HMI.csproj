@@ -9,6 +9,8 @@
     <BaseOutputPath></BaseOutputPath>
 	  <DisableShadowCopy>true</DisableShadowCopy>
 	  <DesignerDisableShadowCopy>true</DesignerDisableShadowCopy>
+    <!-- Comizoa WDM 드라이버 접근용 관리자 권한 요청 -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

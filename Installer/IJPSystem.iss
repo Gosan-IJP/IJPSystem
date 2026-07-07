@@ -5,7 +5,7 @@
 ; ============================================================================
 
 #define MyAppName      "IJPSystem HMI"
-#define MyAppVersion   "1.0.1"
+#define MyAppVersion   "1.0.11"
 #define MyAppPublisher "GosanTech"                      ; ← 회사명으로 수정
 #define MyAppExeName   "IJPSystem.Platform.HMI.exe"
 #define PublishDir     "publish"                        ; build-installer.ps1 의 publish 출력
@@ -23,8 +23,10 @@ OutputDir=dist
 OutputBaseFilename=IJPSystem_Setup_{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
+; ※ 앱을 x86(win-x86)으로 빌드하므로 32비트 모드로 설치한다(→ Program Files (x86)).
+;   Comizoa ComiEcatSdk.dll 이 32비트라 앱도 x86 이어야 로드된다.
 ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesInstallIn64BitMode=
 PrivilegesRequired=admin
 CloseApplications=yes
 WizardStyle=modern
