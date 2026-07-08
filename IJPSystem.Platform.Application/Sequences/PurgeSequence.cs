@@ -38,12 +38,12 @@ namespace IJPSystem.Platform.Application.Sequences
             new SequenceStepDef(5, "Step_Purge_HeadDownDone",
                 ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 10_000, ct)),
 
-            // ── 헤드 밸브 OPEN (IO.json: DO_HEAD1_LEFT/RIGHT_VALVE) ──
+            // ── 헤드 밸브 OPEN (IO.json: DO_SOL_VV_INK_1(바렐)/INK_2(주사기)) ──
             new SequenceStepDef(6, "Step_Purge_ValveOpen",
                 ct =>
                 {
-                    machine.IO.SetOutput("DO_HEAD1_LEFT_VALVE",  true);
-                    machine.IO.SetOutput("DO_HEAD1_RIGHT_VALVE", true);
+                    machine.IO.SetOutput("DO_SOL_VV_INK_1",  true);
+                    machine.IO.SetOutput("DO_SOL_VV_INK_2", true);
                     return Task.Delay(300, ct);   // 밸브 응답 시간
                 }),
 
@@ -62,8 +62,8 @@ namespace IJPSystem.Platform.Application.Sequences
             new SequenceStepDef(10, "Step_Purge_ValveClose",
                 ct =>
                 {
-                    machine.IO.SetOutput("DO_HEAD1_LEFT_VALVE",  false);
-                    machine.IO.SetOutput("DO_HEAD1_RIGHT_VALVE", false);
+                    machine.IO.SetOutput("DO_SOL_VV_INK_1",  false);
+                    machine.IO.SetOutput("DO_SOL_VV_INK_2", false);
                     return Task.Delay(300, ct);
                 }),
 

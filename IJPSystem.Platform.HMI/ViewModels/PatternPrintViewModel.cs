@@ -162,9 +162,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public IJPSystem.Platform.HMI.Print.VvControlViewModel Vv { get; }
 
         // ── Valve L / R (Fluidics 다이어그램 토글 → 디지털 출력) ──────
-        // Valve L = Y100(DO_HEAD1_LEFT_VALVE), Valve R = Y101(DO_HEAD1_RIGHT_VALVE)
-        private const string DoValveL = "DO_HEAD1_LEFT_VALVE";
-        private const string DoValveR = "DO_HEAD1_RIGHT_VALVE";
+        // Valve L = Y003(DO_SOL_VV_INK_1, 바렐), Valve R = Y004(DO_SOL_VV_INK_2, 주사기)
+        private const string DoValveL = "DO_SOL_VV_INK_1";
+        private const string DoValveR = "DO_SOL_VV_INK_2";
 
         private bool _isValveLOn;
         public bool IsValveLOn { get => _isValveLOn; private set => SetProperty(ref _isValveLOn, value); }

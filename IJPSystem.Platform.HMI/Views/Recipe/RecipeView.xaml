@@ -291,8 +291,7 @@
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>   <!-- Purge Time 1/4 카드 -->
-                            <ColumnDefinition Width="*"/>   <!-- Safety Door 1/4 카드 -->
-                            <ColumnDefinition Width="2*"/>  <!-- 나머지 빈 공간 -->
+                            <ColumnDefinition Width="3*"/>  <!-- 나머지 빈 공간 -->
                         </Grid.ColumnDefinitions>
 
                         <!-- ── Purge Time 카드 (왼쪽 1/4) ── -->
@@ -395,53 +394,6 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- ── 안전 / 도어 사용 카드 (Grid.Column=1, Purge Time 과 동일 1/4 폭 · 위쪽 정렬) ── -->
-                        <Border Grid.Column="1" Background="#1E293B" CornerRadius="10"
-                                BorderBrush="#334155" BorderThickness="1"
-                                Margin="20" Padding="16"
-                                VerticalAlignment="Top">
-                            <StackPanel VerticalAlignment="Top">
-
-                                <!-- 타이틀 -->
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                                    <TextBlock Text="🚪" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="SAFETY — DOOR" Foreground="White"
-                                               FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
-                                </StackPanel>
-
-                                <!-- 설명 -->
-                                <TextBlock Text="가동 전 도어 잠금 검사 여부" Foreground="#94A3B8"
-                                           FontSize="12" Margin="0,0,0,12" TextWrapping="Wrap"/>
-
-                                <!-- 콤보박스 (1/4 폭에 맞춰 항목 텍스트 간결화) -->
-                                <ComboBox x:Name="DoorUseCombo"
-                                          SelectedValuePath="Tag"
-                                          SelectedValue="{Binding IsDoorCheckEnabled, Mode=TwoWay}"
-                                          FontSize="13" Padding="10,6"
-                                          Background="#0F172A" Foreground="Black" FontWeight="Bold"
-                                          BorderBrush="#475569" BorderThickness="1">
-                                    <ComboBoxItem Content="사용 (ON)" Foreground="#10B981">
-                                        <ComboBoxItem.Tag>
-                                            <sys:Boolean>True</sys:Boolean>
-                                        </ComboBoxItem.Tag>
-                                    </ComboBoxItem>
-                                    <ComboBoxItem Content="미사용 (OFF)" Foreground="#F59E0B">
-                                        <ComboBoxItem.Tag>
-                                            <sys:Boolean>False</sys:Boolean>
-                                        </ComboBoxItem.Tag>
-                                    </ComboBoxItem>
-                                </ComboBox>
-
-                                <!-- 경고 -->
-                                <Border Background="#451A03" CornerRadius="6"
-                                        BorderBrush="#92400E" BorderThickness="1"
-                                        Padding="10,8" Margin="0,14,0,0">
-                                    <TextBlock Foreground="#FCD34D" FontSize="11"
-                                               TextWrapping="Wrap"
-                                               Text="⚠ 실가동 시 반드시 '사용'. 인터락 우회는 사고 위험."/>
-                                </Border>
-                            </StackPanel>
-                        </Border>
                     </Grid>
                 </Border>
 

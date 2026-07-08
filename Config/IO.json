@@ -9,106 +9,115 @@
     },
     {
       "Address": "X001",
-      "Index": "DI_PRESS_SW_DMD_VAC",
-      "Description": "Regulator Pressure Switch #2 (Vacuum, DMD)",
+      "Index": "DI_PRESS_SW_DMPC_VAC",
+      "Description": "DMPC Vacuum Switch",
       "Type": "N.O",
       "IoCategory": "Digital Input"
     },
     {
       "Address": "X002",
-      "Index": "DI_PRESS_SW_3WAY",
-      "Description": "Regulator Pressure Switch #3 (Positive, 3Way Valve)",
+      "Index": "DI_PRESS_SW_HEAD",
+      "Description": "Head Pressure Switch",
       "Type": "N.O",
       "IoCategory": "Digital Input"
     },
     {
       "Address": "X003",
-      "Index": "DI_PRESS_SW_HEAD_MODULE",
-      "Description": "Regulator Pressure Switch #4 (Positive, Head Module Valve)",
+      "Index": "DI_PRESS_SW_3WAY",
+      "Description": "3Way Pressure Switch",
       "Type": "N.O",
       "IoCategory": "Digital Input"
     },
     {
       "Address": "X004",
-      "Index": "DI_EMO",
-      "Description": "EMO",
-      "Type": "N.C",
+      "Index": "DI_LEVEL_SND_LOW",
+      "Description": "Level Sensor Low (BAE00KJ)",
+      "Type": "N.O",
       "IoCategory": "Digital Input"
     },
     
     {
-      "Address": "X100",
-      "Index": "DI_LEVEL_LOW",
-      "Description": "Level Sensor (Low)",
-      "Type": "N.C",
+      "Address": "X005",
+      "Index": "DI_LEVEL_SND_HIGH",
+      "Description": "Level Sensor High (BAE00KJ)",
+      "Type": "N.O",
       "IoCategory": "Digital Input"
     },
+
     {
-      "Address": "X101",
-      "Index": "DI_LEVEL_HIGH",
-      "Description": "Level Sensor (High)",
-      "Type": "N.C",
+      "Address": "X006",
+      "Index": "DI_OVER_FLOW_SND",
+      "Description": "Over Flower Sensor (FS-N11N)",
+      "Type": "N.O",
       "IoCategory": "Digital Input"
     },
-    
-    {
-      "Address": "X200",
-      "Index": "DI_DOOR",
-      "Description": "Door Sensor",
-      "Type": "N.C",
+
+  { 
+      "Address": "X007",
+      "Index": "DI_SPARE_7",
+      "Description": "SPARE",
+      "Type": "N.O",
       "IoCategory": "Digital Input"
     },
-    
+
     {
       "Address": "Y000",
-      "Index": "DO_CHUCK_VAC_VALVE",
-      "Description": "Chuck Table Vacuum Sol' Valve",
+      "Index": "DO_SOL_VV_CHUCK_VAC",
+      "Description": "Chcuk Table Vacuum Sol' V/V",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     },
     {
       "Address": "Y001",
-      "Index": "DO_DMD_VAC_VALVE",
-      "Description": "DMD Vacuum Sol' Valve",
+      "Index": "DO_SOL_VV_DMPC_VAC",
+      "Description": "DMPC Vacuum Sol' V/V",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     },
     {
       "Address": "Y002",
-      "Index": "DO_3WAY_VALVE_SWITCH",
-      "Description": "3Way Sol' Valve (Switch)",
+      "Index": "DO_SOL_VV_HEAD_CONV",
+      "Description": "Head CDA/VAC Convert Sol' V/V",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     },
     {
       "Address": "Y003",
-      "Index": "DO_3WAY_VALVE_EXHAUST",
-      "Description": "3Way Sol' Valve (Exhaust)",
+      "Index": "DO_SOL_VV_INK_1",
+      "Description": "Ink 1 Sol' V/V",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     },
     {
       "Address": "Y004",
-      "Index": "DO_2WAY_VALVE_PURGE",
-      "Description": "2Way Sol' Valve (Switch, Purge Suction)",
+      "Index": "DO_SOL_VV_INK_2",
+      "Description": "Ink 2 Sol' V/V",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     },
    
-    {
-      "Address": "Y100",
-      "Index": "DO_HEAD1_LEFT_VALVE",
-      "Description": "S800 HEAD #1 Left Sol' Valve (S800 Reservoir)",
+   {
+      "Address": "Y005",
+      "Index": "DO_SOL_VV_EXHAUST",
+      "Description": "배기 Sol V/V",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     },
+
+   {
+      "Address": "Y006",
+      "Index": "DO_SPARE_6",
+      "Description": "SPARE",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+
     {
-      "Address": "Y101",
-      "Index": "DO_HEAD1_RIGHT_VALVE",
-      "Description": "S800 HEAD #1 Right Sol' Valve (S800 Reservoir)",
+      "Address": "Y007",
+      "Index": "DO_SPARE_7",
+      "Description": "SPARE",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     }
-    
   ]
 }

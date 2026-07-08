@@ -206,7 +206,9 @@
                             Command="{Binding MoveWindowCommand}" CommandParameter="VISUAL_MONITOR"/>
 
                 </StackPanel>
+                <!-- P&ID 메뉴 임시 숨김(요청) — 기능 유지, 표시만 Collapsed -->
                 <Button Content="{DynamicResource SubMenu_PNID}"
+                        Visibility="Collapsed"
                         Style="{StaticResource MaintenanceSubButtonStyle}"
                         Command="{Binding MoveWindowCommand}" CommandParameter="PNID"/>
                 <Button Content="{DynamicResource SubMenu_Sequence}"

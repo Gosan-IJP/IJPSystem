@@ -1,12 +1,13 @@
 namespace IJPSystem.Machines.Pulse
 {
-    // 도어 감지 — IO.json(COMIZOA ETS-D08MN): DI_DOOR(Door Sensor)만 존재.
-    // ※ 도어 개폐 액추에이터 출력은 IO.json에 없으므로 OpenDoor/CloseDoor는 구동 대상이 없다(인터페이스 계약 유지용).
+    // 도어 감지 — 현재 IO.json(ETS-D08MN 8/7점)에는 도어 센서/개폐 출력이 없다.
+    // ※ IsDoorLocked()는 항상 false, OpenDoor/CloseDoor는 no-op(인터페이스 계약 유지용).
+    //   도어 IO가 추가되면 IO.json 에 등록 후 아래 상수를 실제 Index 로 교체할 것.
     public partial class PulseMachine
     {
         private static partial class DI
         {
-            public const string DOOR = "DI_DOOR"; // X200 Door Sensor (N.C)
+            public const string DOOR = "DI_DOOR";
         }
 
         // IO.json에 도어 개폐 출력이 없어 실제 제어 대상 없음

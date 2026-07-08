@@ -10,22 +10,19 @@ namespace IJPSystem.Drivers.IO.Comizoa
     // 코미조아(COMIZOA) EtherCAT 디지털 I/O 드라이버 — 모듈: ETS-D08MN.
     //
     // SDK: ComiEcatSdk.dll (COMIZOA EtherCAT SDK) 를 P/Invoke 로 호출.
-    //      실장비 HAL(Mizar.Hal.Io.EtherCatDigitalIo)과 동일한 ecat_* 함수 시그니처를 사용한다.
-    //      모션(ComizoaMotionDriver, czm_*)과 동일한 EtherCAT 네트워크를 공유하므로,
-    //      마스터 초기화(enumerate)는 모션 쪽에서 1회 수행되면 여기서는 생략 가능하다.
+    //      저수준 래퍼 ComiEcatDigitalIo(ecdi*/ecdo*)에 채널 접근을 위임한다.
+    //      모션(ComizoaMotionDriver)과 동일한 EtherCAT 네트워크를 공유하므로,
+    //      마스터 초기화(LoadDevice)는 모션 쪽에서 1회 수행된다.
     //
     // 채널 매핑(중요):
-    //   IO.json 의 Address(예: "X100"/"Y101") → SDK 채널(int) 로 환산해 ecat_* 함수를 호출한다.
-    //   SDK 는 DIN/DOUT 을 각각 0-base 채널 인덱스로 접근하므로 아래 규칙을 사용:
-    //     · Address 숫자 n 을 slave = n/100, bit = n%100 으로 분해 (X100 → slave1 bit0)
-    //     · 채널 = slave * PointsPerModule(8) + bit          (ETS-D08MN = 8점 모듈) 
-    //     · DIN(X)/DOUT(Y) 는 서로 다른 채널 공간(ecat_GetDin vs ecat_SetDout)
-    //   ※ slave 열거 순서/모듈 점수는 실배선에 따라 다를 수 있으므로 Connect 시 경고를 남긴다.
-    //     실장비에서 채널이 어긋나면 PointsPerModule / MapChannel 만 조정하면 된다.
+    //   IO.json 의 Address(예: "X000"~"X007" / "Y000"~"Y007") → SDK 전역 채널(int) 로 환산.
+    //     · Address 의 숫자부(3자리, 0-base) = SDK 전역 채널 번호 그대로.  (X000 → 채널 0, X007 → 채널 7)
+    //     · DIN(X)/DOUT(Y) 는 서로 다른 채널 공간(ecdiGetOne(DiChannel) vs ecdoPutOne(DoChannel)).
+    //   ※ SDK 의 ecdi/ecdo 는 전 슬레이브를 통합한 "전역 채널 인덱스"를 받으므로,
+    //     여러 모듈이 있어도 X008·X009… 처럼 채널을 이어서 부여하면 된다.
+    //     실장비에서 채널이 어긋나면 이 매핑(MapChannel)만 조정하면 된다.
     public class ComizoaIODriver : IIODriver
     {
-        private const int PointsPerModule = 8;   // ETS-D08MN = 디지털 8점
-
         // 저수준 EtherCAT DIO (ComiEcatSdk.dll 래퍼) — 하드웨어 채널 접근을 위임한다.
         private readonly IDigitalIo _dio = new ComiEcatDigitalIo();
 
@@ -115,8 +112,9 @@ namespace IJPSystem.Drivers.IO.Comizoa
             }
         }
 
-        // Address("X100"/"Y101") → (출력 여부, SDK 채널). slave*8+bit 규칙.
-        // 실배선 슬레이브 순서에 맞지 않으면 이 메서드만 조정하면 된다.
+        // Address("X000"~"X007" / "Y000"~"Y007") → (출력 여부, SDK 전역 채널).
+        // 숫자부(0-base)를 전역 채널 번호로 그대로 사용한다. (X000→0, Y007→7)
+        // 실배선 채널이 어긋나면 이 메서드만 조정하면 된다.
         private static bool TryMapChannel(string? address, out bool isOutput, out int channel)
         {
             isOutput = false;
@@ -125,12 +123,10 @@ namespace IJPSystem.Drivers.IO.Comizoa
 
             char kind = char.ToUpperInvariant(address[0]);
             if (kind != 'X' && kind != 'Y') return false;   // 디지털 X/Y 만 대상
-            if (!int.TryParse(address.Substring(1), out int n)) return false;
+            if (!int.TryParse(address.Substring(1), out int n) || n < 0) return false;
 
             isOutput = kind == 'Y';
-            int slave = n / 100;      // 백의 자리 = 슬레이브 노드
-            int bit   = n % 100;      // 나머지 = 모듈 내 비트
-            channel   = slave * PointsPerModule + bit;
+            channel  = n;             // 주소 숫자 = SDK 전역 DI/DO 채널 번호
             return true;
         }
 

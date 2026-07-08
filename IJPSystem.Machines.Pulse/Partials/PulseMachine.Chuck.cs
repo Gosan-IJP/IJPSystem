@@ -8,25 +8,25 @@ namespace IJPSystem.Machines.Pulse
         {
             // 진공 압력 스위치(Regulator Pressure Switch) — 진공이 형성되면 ON
             public const string PRESS_SW_CHUCK_VAC = "DI_PRESS_SW_CHUCK_VAC"; // X000
-            public const string PRESS_SW_DMD_VAC   = "DI_PRESS_SW_DMD_VAC";   // X001
+            public const string PRESS_SW_DMPC_VAC  = "DI_PRESS_SW_DMPC_VAC";  // X001 DMPC Vacuum
         }
         private static partial class DO
         {
-            public const string CHUCK_VAC_VALVE = "DO_CHUCK_VAC_VALVE"; // Y000 Chuck Table Vacuum Sol' Valve
-            public const string DMD_VAC_VALVE   = "DO_DMD_VAC_VALVE";   // Y001 DMD Vacuum Sol' Valve
+            public const string CHUCK_VAC_VALVE = "DO_SOL_VV_CHUCK_VAC"; // Y000 Chuck Table Vacuum Sol' V/V
+            public const string DMPC_VAC_VALVE  = "DO_SOL_VV_DMPC_VAC";  // Y001 DMPC Vacuum Sol' V/V
         }
 
         // ── Chuck 진공 제어 ──
         public void VacuumOn()
         {
             IO?.SetOutput(DO.CHUCK_VAC_VALVE, true);
-            IO?.SetOutput(DO.DMD_VAC_VALVE,   true);
+            IO?.SetOutput(DO.DMPC_VAC_VALVE,  true);
         }
 
         public void VacuumOff()
         {
             IO?.SetOutput(DO.CHUCK_VAC_VALVE, false);
-            IO?.SetOutput(DO.DMD_VAC_VALVE,   false);
+            IO?.SetOutput(DO.DMPC_VAC_VALVE,  false);
         }
 
         // ── Glass(척 안착) 감지 ──
