@@ -22,6 +22,14 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         private readonly Dictionary<string, AxisId> _axisMap = new();
         private List<AxisDeviceInfo> _configs = new();
 
+        // 원점복귀 완료를 소프트웨어로 래치한다.
+        // 이유: CiA-402/EtherCAT 드라이브의 HomeAttained(bit14) 는 드라이브가 Homing 모드에 있을 때만
+        //   유효하다. 초기화 시퀀스가 홈 직후 READY 로 일반 이동하면 드라이브가 Homing 모드를 벗어나
+        //   bit14 가 사라져, 방금 원점복귀했는데도 IsHomeDone=false 로 오판(오토프린트 사전조건 실패,
+        //   원점 LED 꺼짐). → Home 성공 시 여기에 래치하고, 서보 OFF/알람 시 해제.
+        private readonly HashSet<AxisId> _homedAxes = new();
+        private readonly object _homedSync = new();
+
         private IComiMotion? _comi;
 
         // 진단 로그 1회성 플래그(폴링 스팸 방지)
@@ -57,6 +65,20 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                             Acceleration = mv.Acceleration,
                             Deceleration = mv.Deceleration
                         });
+                }
+
+                // 전원투입 시 드라이브가 래치된 폴트 상태로 부팅되는 경우가 있다(실장: Y축 raw=0x8038, bit3 ServoFault).
+                // 수동으로 알람 해제하면 사라지고, 재실행하면 안 나타나는 전형적 잔류 폴트다.
+                // → 상태 폴링(알람 감시) 시작 전에 각 축 폴트를 1회 리셋. 실제 지속 폴트(STO/배선 등)는
+                //   리셋해도 즉시 재폴트하므로 감시에서 그대로 잡혀, 정상 알람은 놓치지 않는다.
+                foreach (var ax in _axisMap.Values)
+                {
+                    try { comi.SetAlarmState(ax, reset: true); }
+                    catch (Exception ex)
+                    {
+                        LoggerService.WriteToFile("WARN",
+                            $"[Comizoa Motion] 기동 폴트 리셋 실패(축 {(int)ax}): {ex.GetType().Name}: {ex.Message}");
+                    }
                 }
 
                 IsConnected = true;
@@ -135,7 +157,15 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 s.CurrentPos   = st.Position;
                 s.IsMoving     = st.IsMoving;
                 s.IsServoOn    = st.ServoOn;
-                s.IsHomeDone   = st.IsHomed;
+                // 하드웨어 HomeAttained 는 홈 직후 일반 이동하면 사라지므로 소프트 래치를 신뢰.
+                // 알람이 서면 원점 신뢰 불가 → 래치 해제.
+                if (st.Alarm)
+                {
+                    lock (_homedSync) _homedAxes.Remove(ax);
+                }
+                bool homed;
+                lock (_homedSync) homed = _homedAxes.Contains(ax);
+                s.IsHomeDone   = homed;
                 s.IsAlarm      = st.Alarm;
                 s.CwLimit      = st.PositiveLimit;
                 s.CcwLimit     = st.NegativeLimit;
@@ -166,6 +196,8 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             {
                 _comi!.ServoOn(ax, isOn);
                 if (_axisStates.TryGetValue(axisNo, out var s)) s.IsServoOn = isOn;
+                // 서보 OFF 시 원점 신뢰 불가 → 래치 해제(재서보온 후 재홈 필요).
+                if (!isOn) lock (_homedSync) _homedAxes.Remove(ax);
                 LoggerService.WriteToFile("INFO", $"[Comizoa Motion] ServoOn 명령 전송({axisNo} → {isOn})");
                 return Task.FromResult(true);
             }
@@ -226,10 +258,37 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             if (!TryAxis(axisNo, out var ax)) return Task.FromResult(false);
             return Task.Run(() =>
             {
-                // 홈은 단축모션 busy 가 아닌 홈 전용 완료 플래그로 대기해야 한다.
-                try { _comi!.Home(ax); return _comi.WaitForHomeDone(ax, DefaultMoveTimeoutMs); }
+                try
+                {
+                    // 서보 ON 명령 직후 곧바로 홈하면 드라이브가 아직 Operation-Enabled 전이라
+                    // 원점복귀가 실패(HomeError)하고 컨트롤러 폴트가 latched → 알람 오보(실장 로그 재현).
+                    // → 서보가 구동가능(Operation-Enabled) 상태가 될 때까지 확인 후 홈 시작.
+                    if (!WaitServoEnabled(ax, 3000))
+                        LoggerService.WriteToFile("WARN",
+                            $"[Comizoa Motion] Home({axisNo}) — 서보 Enable 대기 시간초과, 그대로 진행");
+                    // 홈은 단축모션 busy 가 아닌 홈 전용 완료 플래그로 대기.
+                    lock (_homedSync) _homedAxes.Remove(ax);   // 새 홈 시작 — 이전 래치 무효화
+                    _comi!.Home(ax);
+                    bool done = _comi.WaitForHomeDone(ax, DefaultMoveTimeoutMs);
+                    if (done)
+                        lock (_homedSync) _homedAxes.Add(ax);   // 완료 래치(이후 일반 이동해도 유지)
+                    return done;
+                }
                 catch { return false; }
             });
+        }
+
+        /// <summary>서보가 Operation-Enabled(구동 가능) 상태가 될 때까지 대기. 도달=true, 타임아웃=false.</summary>
+        private bool WaitServoEnabled(AxisId ax, int timeoutMs)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                try { if (_comi != null && _comi.GetState(ax).ServoOn) return true; }
+                catch { /* 상태 읽기 실패 시 재시도 */ }
+                System.Threading.Thread.Sleep(10);
+            }
+            return false;
         }
 
         public Task<bool> ResetAlarm(string axisNo)

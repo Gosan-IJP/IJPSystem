@@ -27,6 +27,7 @@
 
     <!-- Buttons — Main Dashboard -->
     <system:String x:Key="Btn_Start">▶ START</system:String>
+    <system:String x:Key="Btn_StartContinuous">▶▶ CONT</system:String>
     <system:String x:Key="Btn_Stop">■ STOP</system:String>
     <system:String x:Key="Btn_EmergencyReset">⚠️ EMERGENCY RESET</system:String>
 
@@ -349,6 +350,7 @@
     <system:String x:Key="Log_AutoPrintStopMotionError">[AUTO PRINT] Motion stop error: {0}</system:String>
     <system:String x:Key="Log_AutoPrintResume">[AUTO PRINT] Resumed — continuing from next step</system:String>
     <system:String x:Key="Log_AutoPrintStopPause">[AUTO PRINT] STOP — pausing after current step completes (press START to resume)</system:String>
+    <system:String x:Key="Log_AutoPrintContinuousStart">[AUTO PRINT] Continuous run started — repeating cycles until STOP</system:String>
     <system:String x:Key="Log_AutoPrintStepAborted">[AUTO PRINT] Step {0} aborted — will retry on resume</system:String>
     <system:String x:Key="Log_AutoPrintCompleted">AUTO PRINT completed ({0}s)</system:String>
     <system:String x:Key="Log_AutoPrintTimeoutMsg">AUTO PRINT timeout: {0}</system:String>

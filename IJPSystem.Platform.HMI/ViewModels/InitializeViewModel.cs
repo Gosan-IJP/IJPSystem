@@ -161,6 +161,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 return;
             }
 
+            // 초기화를 수행하면 진행/일시정지 중이던 오토런도 함께 초기화(백그라운드 런·화면 상태 정리).
+            _mainVM.ResetAutoRunForInitialize();
+
             BuildSteps();
             ExecutionLogs.Clear();
             IsError = false;
@@ -244,6 +247,16 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             var running = Steps.FirstOrDefault(s => s.Status == StepStatus.Running);
             if (running != null) running.Status = status;
+        }
+
+        /// <summary>
+        /// 진행 중인 초기화 시퀀스를 중단한다. 초기화 화면을 벗어나거나 알람이 발생하면 호출.
+        /// 미호출 시 시퀀스가 백그라운드에서 대기하다, 사용자가 Motor Control 등에서 축을 수동
+        /// 정상화하면 대기 조건이 충족돼 남은 단계(READY 이동 등)가 자동 실행되는 위험이 있다.
+        /// </summary>
+        public void Abort()
+        {
+            if (IsRunning) _cts?.Cancel();
         }
 
         private void AddExecLog(string message)

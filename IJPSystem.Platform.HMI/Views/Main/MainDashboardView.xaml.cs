@@ -26,7 +26,7 @@ namespace IJPSystem.Platform.HMI.Views
         // 시퀀스 진행 상태 추적 — 잉크 분사 / 스캔라인 가시성 제어
         private int _currentStepNo;
         private double _maxScanT;                  // PrintedAreaScale 단조 증가용 (한 번 인쇄된 영역 유지)
-        private const int PrintScanStepNo = 9;     // AutoPrintSequence step 9 = 인쇄 진행 (15단계 시퀀스)
+        private const int PrintScanStepNo = 8;     // AutoPrintSequence step 8 = 인쇄 진행 (14단계 — VacuumConfirm 제외)
         // 각 step 진입 시각 (animStart 기준 초) — 스크립트 모드 phase 애니메이션 기점
         private readonly Dictionary<int, double> _stepTimes = new();
         // 파티클 분사 throttle — V-sync ~60fps 환경에서 매 프레임 분사 시 GC 압력 큼
@@ -63,9 +63,16 @@ namespace IJPSystem.Platform.HMI.Views
         //   스캔선 화면X      = 132(ScanLine Left) + t·PrintAreaMaxW + GlassX
         //   스테이지 이동     = GlassScanStart → GlassScanStart − PrintAreaMaxW
         //   ⇒ 132 + GlassScanStart = 400 이면 t 와 무관하게 스캔선이 헤드에 고정.
-        private const double HeadFixedX     = 270;                          // 고정 헤드 위치(translate)
+        private const double HeadFixedX     = 270;                          // 고정 헤드 위치(translate, 수평)
         private const double GlassScanStart = 268;                          // 인쇄 시작 시 스테이지 위치(= 400 − 132)
         private const double GlassScanEnd   = GlassScanStart - PrintAreaMaxW; // 인쇄 종료 시 스테이지 위치
+
+        // ── 헤드 Z(수직 승강) — 이미지처럼 헤드가 글라스로 하강/상승 ──
+        // HeadDown(step 6)에서 하강, HeadUp(step 10)에서 상승. 상승은 스테이지(Y) 복귀와 동시에 진행.
+        private const double HeadZUp        = 0;    // 상승(파킹) 위치
+        private const double HeadZDown      = 34;   // 하강(인쇄) 위치 — 글라스 근접
+        private const int    HeadDownStepNo = 6;    // Z 하강 시작 스텝(HeadDown)
+        private const int    HeadUpStepNo   = 10;   // Z 상승 시작 스텝(HeadUp) = Y 복귀 동시 시작
 
         // ── Phase 시간표 (초) ────────────────────────────────────────
         // Glass 반입/반출은 elapsed 기반 (시작/종료 이벤트가 별도로 없음)
@@ -154,10 +161,18 @@ namespace IJPSystem.Platform.HMI.Views
             foreach (var t in _nozzleXTransforms) t.X = x;
         }
 
+        // 헤드 Z(수직) 승강에 맞춰 노즐 점도 함께 상하 이동
+        private void SyncNozzleY(double y)
+        {
+            foreach (var t in _nozzleXTransforms) t.Y = y;
+        }
+
         // ── 보간 / 이징 헬퍼 ────────────────────────────────────────
         private static double Lerp(double a, double b, double t) => a + (b - a) * t;
         private static double EaseOutCubic(double t) => 1 - Math.Pow(1 - t, 3);
         private static double EaseInCubic(double t) => t * t * t;
+        private static double EaseInOutCubic(double t) =>
+            t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
 
         // ── CompositionTarget.Rendering 후킹 ────────────────────────
         // V-sync에 맞춰 호출되어 DispatcherTimer보다 frame jitter가 적음.
@@ -209,9 +224,8 @@ namespace IJPSystem.Platform.HMI.Views
             _lastFrameAt = now;
 
             // ── 진행 상태 판정 ──
-            // 15단계 시퀀스에서 진공 해제(반출)는 step 13.
-            const int VacuumOffStepNo = 13;
-            bool unloadStarted    = _stepTimes.TryGetValue(VacuumOffStepNo, out double unloadStart);
+            // 프린팅 완료 후 헤드 상승(Z)과 동시에 스테이지(Y) 복귀 이동 시작 → 복귀 트리거를 HeadUp(step 10)로.
+            bool unloadStarted    = _stepTimes.TryGetValue(HeadUpStepNo, out double unloadStart);
             bool isPrintingNow    = _currentStepNo == PrintScanStepNo;
             bool printAlreadyDone = _currentStepNo > PrintScanStepNo;
 
@@ -234,10 +248,32 @@ namespace IJPSystem.Platform.HMI.Views
             }
             if (printAlreadyDone) t = 1.0;
 
-            // ── 헤드: 고정 (실장 구조 — 헤드는 움직이지 않음) ──
+            // ── 헤드 수평(X): 고정 (실장 구조 — 스캔축은 스테이지가 담당) ──
             HeadXTransform.X     = HeadFixedX;
             HeadLabelTransform.X = HeadFixedX;
             SyncNozzleX(HeadFixedX);
+
+            // ── 헤드 수직(Z): HeadDown(step6) 하강 → 인쇄 중 유지 → HeadUp(step10) 상승 ──
+            double headZ;
+            if (_currentStepNo < HeadDownStepNo)
+            {
+                headZ = HeadZUp;                                     // 하강 전 — 상승 파킹
+            }
+            else if (_currentStepNo < HeadUpStepNo)
+            {
+                double td = _stepTimes.TryGetValue(HeadDownStepNo, out var tDown)
+                    ? EaseInOutCubic(PhaseT(elapsed, tDown, T_HeadPosDur)) : 1.0;
+                headZ = Lerp(HeadZUp, HeadZDown, td);                // 하강 → 인쇄 위치 유지
+            }
+            else
+            {
+                double tu2 = _stepTimes.TryGetValue(HeadUpStepNo, out var tUp)
+                    ? EaseInOutCubic(PhaseT(elapsed, tUp, T_HeadPosDur)) : 1.0;
+                headZ = Lerp(HeadZDown, HeadZUp, tu2);               // 상승(스테이지 Y 복귀와 동시)
+            }
+            HeadXTransform.Y     = headZ;
+            HeadLabelTransform.Y = headZ;
+            SyncNozzleY(headZ);
 
             // ── 스테이지(글라스) X: 반입(우→스캔시작) → 스캔(Y 진행률로 고정 헤드 밑 통과) → 반출(좌로 배출) ──
             double glassX;
@@ -322,7 +358,8 @@ namespace IJPSystem.Platform.HMI.Views
             for (int k = 0; k < count; k++)
             {
                 double x = headCenterX + _rng.NextDouble() * 50 - 25;
-                double y = NozzleBaseY + _rng.NextDouble() * 4;
+                // 헤드 Z 하강분(HeadXTransform.Y)만큼 분사 시작점도 내려 글라스에 근접시킴
+                double y = NozzleBaseY + HeadXTransform.Y + _rng.NextDouble() * 4;
                 if (x < 133 || x > 667) continue;
 
                 byte alpha = (byte)_rng.Next(140, 210);
@@ -358,12 +395,15 @@ namespace IJPSystem.Platform.HMI.Views
         private void ResetTransforms()
         {
             GlassTransform.X        = GlassParkedR;   // 반입은 우측에서 시작
-            HeadXTransform.X        = HeadFixedX;     // 헤드 고정
+            HeadXTransform.X        = HeadFixedX;     // 헤드 수평 고정
             HeadLabelTransform.X    = HeadFixedX;
+            HeadXTransform.Y        = HeadZUp;        // 헤드 수직 — 상승 파킹
+            HeadLabelTransform.Y    = HeadZUp;
             PrintedAreaScale.ScaleX = 0;
             ScanLineTransform.X     = 0;
             ScanLine.Opacity        = 0;
             SyncNozzleX(HeadFixedX);
+            SyncNozzleY(HeadZUp);
         }
 
         // ── ViewModel.AutoPrintStarted ──────────────────────────────
@@ -417,17 +457,23 @@ namespace IJPSystem.Platform.HMI.Views
                 // step 전환 시각의 기대 위치를 즉시 스냅해 첫 프레임의 시작점을 정렬
                 SnapHeadForStep(stepNumber);
 
+                // 14단계 시퀀스(VacuumConfirm 제외) 기준 상태 배너
                 switch (stepNumber)
                 {
                     case 1: SetStatus("▶  LOADING  ·  GLASS SUBSTRATE ENTERING ...", "#38BDF8"); break;
-                    case 2: SetStatus("⊙  VACUUM ON  ·  GLASS CLAMPED", "#22C55E"); break;
-                    case 3:
-                    case 4: SetStatus("⬇  PRINT HEAD  ·  POSITIONING TO SCAN START", "#60A5FA"); break;
-                    case 5:
-                    case 6: SetStatus("◉  PRINTING  ·  INKJET PRINTING IN PROGRESS ...", "#A78BFA"); break;
-                    case 7: SetStatus("⊘  VACUUM OFF  ·  GLASS RELEASED", "#F59E0B"); break;
+                    case 2:
+                    case 3: SetStatus("⊙  VACUUM ON  ·  GLASS CLAMPED", "#22C55E"); break;
+                    case 4:
+                    case 5: SetStatus("⬇  PRINT HEAD  ·  POSITIONING TO SCAN START", "#60A5FA"); break;
+                    case 6:
+                    case 7: SetStatus("⬇  PRINT HEAD  ·  HEAD DOWN", "#60A5FA"); break;
                     case 8:
-                    case 9: SetStatus("◀  UNLOADING  ·  HEAD PARK + GLASS EXITING ...", "#38BDF8"); break;
+                    case 9: SetStatus("◉  PRINTING  ·  INKJET PRINTING IN PROGRESS ...", "#A78BFA"); break;
+                    case 10:
+                    case 11: SetStatus("⬆  HEAD UP (Z)  ·  STAGE RETURN (Y)  —  SIMULTANEOUS", "#60A5FA"); break;
+                    case 12: SetStatus("⊘  VACUUM OFF  ·  GLASS RELEASED", "#F59E0B"); break;
+                    case 13:
+                    case 14: SetStatus("◀  UNLOADING  ·  RETURN TO READY ...", "#38BDF8"); break;
                 }
             });
         }

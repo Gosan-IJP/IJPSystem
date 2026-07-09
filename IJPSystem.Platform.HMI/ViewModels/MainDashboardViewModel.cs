@@ -38,6 +38,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private CancellationTokenSource? _cts;
         private CancellationTokenSource? _stepCts;   // 스텝 단위 취소 (일시정지 시 사용)
 
+        // 연속 운전 모드 — true 면 한 사이클 완료 후 자동으로 다음 사이클을 반복(정지 전까지).
+        private bool _continuousMode;
+
+        // 초기화(INITIALIZE) 수행에 의한 오토런 리셋 진행 플래그.
+        // 진행 중이던 런을 취소한 뒤, 런의 finally 에서 ABORTED 대신 IDLE 초기상태로 정리하기 위함.
+        private bool _resettingForInit;
+
         public ObservableCollection<SequenceStep> Steps { get; } = new();
 
         // 시퀀스 시작 시 캐싱되는 스캔축(ScanAxis) 티칭 좌표. View 가 GetLiveScanMm() 로
@@ -185,6 +192,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         #region Commands
         public ICommand StartCommand { get; }
+        public ICommand StartContinuousCommand { get; }   // 연속 운전 시작
         public ICommand StopCommand { get; }
         public ICommand ResetCommand { get; }
 
@@ -282,7 +290,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             ActiveRecipeName = initialActiveRecipe;
 
-            // 정지 상태면 시퀀스 시작, 일시정지 상태면 재개
+            // 정지 상태면 시퀀스 시작(1회), 일시정지 상태면 재개
             StartCommand = new RelayCommand(async _ =>
             {
                 if (IsRunning && IsPaused)
@@ -292,14 +300,37 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     return;
                 }
                 if (!IsRunning)
+                {
+                    _continuousMode = false;       // 1회 운전
                     await RunAutoPrintAsync();
+                }
+            }, _ => !IsRunning || IsPaused);
+
+            // 연속 운전 시작 — 한 사이클 완료 후 정지 전까지 자동 반복. 일시정지 상태면 재개.
+            StartContinuousCommand = new RelayCommand(async _ =>
+            {
+                if (IsRunning && IsPaused)
+                {
+                    _continuousMode = true;        // 연속 버튼으로 재개 → 연속 모드 재개
+                    IsPaused = false;
+                    _logAction?.Invoke(T("Log_AutoPrintResume"), LogLevel.Info);
+                    return;
+                }
+                if (!IsRunning)
+                {
+                    _continuousMode = true;        // 연속 운전
+                    _logAction?.Invoke(T("Log_AutoPrintContinuousStart"), LogLevel.Info);
+                    await RunAutoPrintAsync();
+                }
             }, _ => !IsRunning || IsPaused);
 
             // STOP 은 취소가 아니라 일시정지 — 현재 step 끝까지 마무리 후 다음 step 진입 전 멈춤. 재시작은 START.
+            // 연속 운전 중이면 반복도 중지(현재 사이클까지 마치고 더 이상 반복하지 않음).
             StopCommand = new RelayCommand(_ =>
             {
                 if (IsRunning && !IsPaused)
                 {
+                    _continuousMode = false;       // 연속 반복 중지
                     IsPaused = true;
                     _logAction?.Invoke(T("Log_AutoPrintStopPause"), LogLevel.Warning);
                 }
@@ -399,14 +430,21 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _machine.SetSystemStatus(MachineState.Running);
             _logAction?.Invoke(T("Log_Start"), LogLevel.Success);
 
-            AutoPrintStarted?.Invoke();
-
             _cts = new CancellationTokenSource();
             var startTime = DateTime.Now;
             bool success = false;
+            int cycle = 0;
 
             try
             {
+                // ── 연속 운전 루프 — _continuousMode 면 정지/취소 전까지 사이클 반복 ──
+                do
+                {
+                cycle++;
+                startTime = DateTime.Now;
+
+                // 각 사이클 시작 시 애니메이션/스텝 상태를 리셋
+                AutoPrintStarted?.Invoke();
                 BuildSteps();
                 int total = Steps.Count;
 
@@ -458,12 +496,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     }
                 }
 
+                // ── 한 사이클 완료 ──
                 ProcessProgress = 100;
-                CurrentStepName = "COMPLETED";
                 TotalCount++;
+                if (TotalCount >= 1000) TotalCount = 0;
                 TactTime = Math.Round((DateTime.Now - startTime).TotalSeconds, 1);
-                _machine.SetSystemStatus(MachineState.Standby);
+                CurrentStepName = _continuousMode ? $"CYCLE {cycle} DONE  ·  TOTAL {TotalCount}" : "COMPLETED";
                 _logAction?.Invoke(T("Log_AutoPrintCompleted", TactTime), LogLevel.Success);
+
+                // 연속 운전이면 다음 사이클 전 짧은 대기(취소 감지 포함)
+                if (_continuousMode && !_cts.Token.IsCancellationRequested)
+                    await Task.Delay(500, _cts.Token);
+                }
+                while (_continuousMode && !_cts.Token.IsCancellationRequested);
+
+                CurrentStepName = "COMPLETED";
+                _machine.SetSystemStatus(MachineState.Standby);
                 success = true;
             }
             catch (OperationCanceledException)
@@ -500,9 +548,41 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 _cts?.Dispose();
                 _cts = null;
 
-                if (success) AutoPrintCompleted?.Invoke();
-                else         AutoPrintAborted?.Invoke();
+                // 초기화 요청으로 취소된 경우, ABORTED 표시 대신 IDLE 초기상태로 정리.
+                if (_resettingForInit)        ApplyInitReset();
+                else if (success)             AutoPrintCompleted?.Invoke();
+                else                          AutoPrintAborted?.Invoke();
             }
+        }
+
+        /// <summary>
+        /// 초기화(INITIALIZE) 수행 시 호출 — 진행/일시정지 중이던 오토런을 완전히 중단하고
+        /// 대시보드를 초기 상태(IDLE·진행률 0·카운트 0)로 되돌린다.
+        /// STOP 은 일시정지(IsRunning 유지)이므로, 오토런을 멈춘 채 초기화하면 백그라운드 런과
+        /// 화면 상태가 남는다. 초기화와 함께 오토런도 초기화해 정합성을 맞춘다.
+        /// </summary>
+        public void ResetForInitialize()
+        {
+            _resettingForInit = true;
+            _continuousMode   = false;   // 연속 반복 중단
+            IsPaused          = false;   // 일시정지 게이트 해제 → 루프가 취소를 감지
+            _stepCts?.Cancel();
+            _cts?.Cancel();
+
+            // 진행 중 런이 없으면 즉시 정리(런이 있으면 런의 finally 에서 ApplyInitReset 실행).
+            if (!IsRunning) ApplyInitReset();
+        }
+
+        private void ApplyInitReset()
+        {
+            IsError         = false;
+            ProcessProgress = 0;
+            TactTime        = 0;
+            TotalCount      = 0;
+            CurrentStepName = "IDLE";
+            BuildSteps();                 // 스텝 상태(Done/Running/Aborted 표시) 리셋
+            AutoPrintAborted?.Invoke();   // View 애니메이션도 초기 위치로 복귀
+            _resettingForInit = false;
         }
 
         /// <summary>
@@ -511,17 +591,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// </summary>
         private bool CheckPrerequisites()
         {
-            if (_hasActiveAlarm?.Invoke() == true)
-            {
-                _logAction?.Invoke("[AUTO PRINT] 미해제 알람 존재 — 시작 거부", LogLevel.Warning);
-                Dialogs.Show(
-                    "미해제 알람이 있습니다.\n알람 화면에서 알람을 모두 해제(Clear)한 뒤 다시 시도하세요.",
-                    "AUTO PRINT 시작 불가",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Warning);
-                return false;
-            }
-
             var allAxes = _machine.Motion?.GetAllStatus();
             if (allAxes == null || allAxes.Count == 0)
             {
@@ -529,6 +598,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 return false;
             }
 
+            // 사용자 요청(2026-07): 오토런 사전 체크는 '초기화(원점복귀) 완료' 하나만 유지.
+            // 미해제 알람·서보ON·EMO·도어·압력스위치 체크는 제외.
             var notHomed = allAxes.Where(ax => !ax.IsHomeDone)
                                   .Select(ax => ax.AxisNo).ToList();
             if (notHomed.Count > 0)
@@ -540,61 +611,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 return false;
             }
 
-            var notServoOn = allAxes.Where(ax => !ax.IsServoOn)
-                                    .Select(ax => ax.AxisNo).ToList();
-            if (notServoOn.Count > 0)
-            {
-                string msg = T("Log_PrereqNotServoOn", string.Join(", ", notServoOn));
-                _logAction?.Invoke(msg.Replace("\n\n", " — "), LogLevel.Error);
-                Dialogs.Show(msg, T("Log_PrereqDialogTitle"),
-                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
-                return false;
-            }
-
             return true;
         }
 
-        // 사전 조건은 항상 체크, EMO/도어/압력은 릴리즈 빌드에서만.
+        // 오토런 전 체크는 초기화(원점복귀) 완료만 확인.
+        // 기존 EMO/도어/압력스위치/알람/서보 체크는 사용자 요청으로 제외됨.
         private bool CheckSafetyBeforeStart()
         {
-            if (!CheckPrerequisites()) return false;
-
-        #if DEBUG
-            _logAction?.Invoke(T("Log_SafetyBypass"), LogLevel.Warning);
-            return true;
-        #else
-            if (_machine.IsEmoActive())
-            {
-                _machine.SetSystemStatus(MachineState.Emergency);
-                _onAlarmChanged?.Invoke(true);
-                _logAction?.Invoke(T("Log_EmoDetected"), LogLevel.Fatal);
-                _raiseAlarm?.Invoke("SNS-EMO");
-                return false;
-            }
-
-            // 도어 잠금 체크 — 기타정보 화면의 "도어 사용" 설정이 ON 일 때만 검사
-            if (AppSettingsService.Current.IsDoorCheckEnabled && !_machine.IsDoorLocked())
-            {
-                _machine.SetSystemStatus(MachineState.Alarm);
-                _onAlarmChanged?.Invoke(true);
-                _logAction?.Invoke(T("Log_DoorLockFail"), LogLevel.Error);
-                _raiseAlarm?.Invoke("SNS-DOOR-OPEN");
-                return false;
-            }
-
-            for (int i = 1; i <= 3; i++)
-            {
-                if (!_machine.IsPressureOk(i))
-                {
-                    _onAlarmChanged?.Invoke(true);
-                    _logAction?.Invoke(T("Log_PressureFail", i), LogLevel.Error);
-                    _raiseAlarm?.Invoke("SNS-PRESSURE-NG");
-                    return false;
-                }
-            }
-
-            return true;
-        #endif
+            return CheckPrerequisites();
         }
 
         public void UpdateSensorStatus()

@@ -166,7 +166,7 @@
                         ToolTipService.ShowOnDisabled="True"
                         ToolTip="{DynamicResource Tip_SystemExit}">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <TextBlock Text="⏻" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets" Margin="0,0,8,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{DynamicResource SubMenu_SystemExit}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
@@ -234,7 +234,7 @@
                         ToolTipService.ShowOnDisabled="True"
                         ToolTip="{DynamicResource Tip_SystemExit}">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <TextBlock Text="⏻" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets" Margin="0,0,8,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{DynamicResource SubMenu_SystemExit}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>

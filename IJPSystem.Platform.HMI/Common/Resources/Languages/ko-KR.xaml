@@ -27,6 +27,7 @@
 
     <!-- 버튼 — 메인 대시보드 -->
     <system:String x:Key="Btn_Start">▶ 시작</system:String>
+    <system:String x:Key="Btn_StartContinuous">▶▶ 연속</system:String>
     <system:String x:Key="Btn_Stop">■ 정지</system:String>
     <system:String x:Key="Btn_EmergencyReset">⚠️ 비상 리셋</system:String>
 
@@ -349,6 +350,7 @@
     <system:String x:Key="Log_AutoPrintStopMotionError">[AUTO PRINT] 모션 정지 중 오류: {0}</system:String>
     <system:String x:Key="Log_AutoPrintResume">[AUTO PRINT] 재개 — 다음 단계부터 이어서 진행</system:String>
     <system:String x:Key="Log_AutoPrintStopPause">[AUTO PRINT] STOP — 현재 단계 완료 후 일시정지 (START로 재개)</system:String>
+    <system:String x:Key="Log_AutoPrintContinuousStart">[AUTO PRINT] 연속 운전 시작 — 정지 전까지 사이클 반복</system:String>
     <system:String x:Key="Log_AutoPrintStepAborted">[AUTO PRINT] Step {0} 중단 — 재개 시 재실행</system:String>
     <system:String x:Key="Log_AutoPrintCompleted">AUTO PRINT 완료 ({0}s)</system:String>
     <system:String x:Key="Log_AutoPrintTimeoutMsg">AUTO PRINT 타임아웃: {0}</system:String>

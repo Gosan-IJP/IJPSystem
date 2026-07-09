@@ -147,6 +147,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set
             {
                 if (ReferenceEquals(_currentView, value)) return;
+                // 초기화 화면을 벗어나면 진행 중인 초기화 시퀀스를 중단 —
+                // 백그라운드로 계속 대기하다 자동 진행(READY 이동 등)되는 것을 방지.
+                if (_currentView is InitializeView oldInit &&
+                    oldInit.DataContext is InitializeViewModel oldInitVm)
+                    oldInitVm.Abort();
                 // 화면 전환 시 이전 ViewModel 의 Timer/이벤트 정리 (메모리 누수 방지)
                 // RecipeVM 등 재사용 객체는 IDisposable 미구현이므로 자동으로 건너뜀
                 (_currentView as IDisposable)?.Dispose();
@@ -879,6 +884,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 SyncSystemStatusWithAlarm();
                 // 런 중 알람이 발생/해제되면 대시보드 시퀀스를 일시정지/재개
                 _mainDashboardVM?.OnAlarmActiveChanged(_alarmVM.HasActiveAlarm);
+                // 초기화 화면에서 알람이 발생하면 초기화 시퀀스를 중단(대기 후 자동 진행 방지)
+                if (_alarmVM.HasActiveAlarm &&
+                    CurrentView is InitializeView initView &&
+                    initView.DataContext is InitializeViewModel initVm)
+                    initVm.Abort();
             }
         }
 
@@ -923,6 +933,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 _controller.GetMachine().SetSystemStatus(MachineState.Standby);  
             }
         }
+
+        /// <summary>초기화(INITIALIZE) 수행 시 호출 — 대시보드 오토런도 초기 상태로 리셋.</summary>
+        public void ResetAutoRunForInitialize() => _mainDashboardVM?.ResetForInitialize();
 
         public PulseController GetController() => _controller;
 
