@@ -64,6 +64,8 @@ namespace IJPSystem.Platform.Application.Sequences
                 ct =>
                 {
                     machine.VacuumOff();
+                    // Virtual 모드에서 압력스위치 OFF 를 시뮬레이션(실장 드라이버는 no-op → 물리 신호가 자연 발생).
+                    // 2단계 ON 예약과 대칭. 제거하면 Virtual 모드에서 이 단계가 타임아웃 실패한다.
                     machine.IO.ScheduleInput("DI_PRESS_SW_CHUCK_VAC", false, 200);
                     return WaitHelper.ForIOSignal(machine.IO, "DI_PRESS_SW_CHUCK_VAC",
                                                  expected: false, timeoutMs: 10_000, ct);

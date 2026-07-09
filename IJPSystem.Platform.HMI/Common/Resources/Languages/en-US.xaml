@@ -250,8 +250,6 @@
     <system:String x:Key="Step_Init_Homing">Home — all axes</system:String>
     <system:String x:Key="Step_Init_MoveReady">Move to READY position</system:String>
     <system:String x:Key="Step_Init_MoveReadyDone">Confirm InPosition (all axes)</system:String>
-    <system:String x:Key="Step_Init_MoveLoad">Move to LOAD position</system:String>
-    <system:String x:Key="Step_Init_MoveLoadDone">Confirm InPosition at LOAD</system:String>
 
     <system:String x:Key="Step_Purge_VacuumOff">Vacuum OFF</system:String>
     <system:String x:Key="Step_Purge_MovePurge">Move to PURGE position</system:String>

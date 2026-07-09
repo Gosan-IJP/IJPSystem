@@ -25,9 +25,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly Action<string, LogLevel> _logAction;
         private readonly Action<bool> _onAlarmChanged;
         private readonly Action<string>? _raiseAlarm;
-        // (pointName, axisName) → mm — 활성 레시피의 X축 티칭 좌표 조회용
+        // (pointName, axisName) → mm — 활성 레시피의 스캔축 티칭 좌표 조회용
         private readonly Func<string, string, double?>? _getPointAxisMm;
         private readonly Func<bool>? _hasActiveAlarm;
+
+        // 프린팅 스캔(스테이지 이송) 축. 실장 구조: 헤드(X축)는 고정, 스테이지(Y축)가 이동하며 인쇄한다.
+        // 메인 대시보드 애니메이션은 이 축의 모터 위치·티칭 좌표로 스테이지 이동/인쇄 진행을 구동한다.
+        private const string ScanAxis = "Y";
 
         private readonly IMachine _machine;
         private readonly IMotionService _motion;
@@ -36,31 +40,30 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         public ObservableCollection<SequenceStep> Steps { get; } = new();
 
-        // 시퀀스 시작 시 캐싱되는 X축 티칭 좌표. View 가 GetLiveMotorX() 와 함께
-        // 헤드 픽셀 위치를 piecewise 매핑할 때 사용:
-        //   motor ∈ [Ready, PrintStart]    → head ∈ [HeadParkedX, HeadScanStartX]
-        //   motor ∈ [PrintStart, PrintEnd] → head ∈ [HeadScanStartX, HeadScanEndX]
-        public double ReadyXmm      { get; private set; } = double.NaN;
-        public double PrintStartXmm { get; private set; } = double.NaN;
-        public double PrintEndXmm   { get; private set; } = double.NaN;
-        public bool   HasPrintRange => !double.IsNaN(PrintStartXmm)
-                                    && !double.IsNaN(PrintEndXmm)
-                                    && Math.Abs(PrintEndXmm - PrintStartXmm) > 0.001;
-        public bool   HasReadyMapping => !double.IsNaN(ReadyXmm)
-                                      && !double.IsNaN(PrintStartXmm)
-                                      && Math.Abs(PrintStartXmm - ReadyXmm) > 0.001;
+        // 시퀀스 시작 시 캐싱되는 스캔축(ScanAxis) 티칭 좌표. View 가 GetLiveScanMm() 로
+        // 스테이지 픽셀 위치·인쇄 진행률을 매핑할 때 사용:
+        //   scan ∈ [PrintStart, PrintEnd] → 진행률 0..1 (스테이지가 고정 헤드 밑을 통과)
+        public double ReadyScanMm      { get; private set; } = double.NaN;
+        public double PrintStartScanMm { get; private set; } = double.NaN;
+        public double PrintEndScanMm   { get; private set; } = double.NaN;
+        public bool   HasPrintRange => !double.IsNaN(PrintStartScanMm)
+                                    && !double.IsNaN(PrintEndScanMm)
+                                    && Math.Abs(PrintEndScanMm - PrintStartScanMm) > 0.001;
+        public bool   HasReadyMapping => !double.IsNaN(ReadyScanMm)
+                                      && !double.IsNaN(PrintStartScanMm)
+                                      && Math.Abs(PrintStartScanMm - ReadyScanMm) > 0.001;
 
-        // View 60fps 프레임 타이머용 — 100ms 주기 MotorXPosition 캐시 대신 매 호출 실측치 반환
-        public double GetLiveMotorX() => _machine.Motion?.GetActualPosition("X") ?? 0.0;
+        // View 60fps 프레임 타이머용 — 100ms 주기 캐시 대신 매 호출 스캔축(이송축) 실측치 반환
+        public double GetLiveScanMm() => _machine.Motion?.GetActualPosition(ScanAxis) ?? 0.0;
 
         private void CachePrintRange()
         {
-            ReadyXmm      = _getPointAxisMm?.Invoke(PointNames.Ready,      "X") ?? double.NaN;
-            PrintStartXmm = _getPointAxisMm?.Invoke(PointNames.PrintStart, "X") ?? double.NaN;
-            PrintEndXmm   = _getPointAxisMm?.Invoke(PointNames.PrintEnd,   "X") ?? double.NaN;
-            OnPropertyChanged(nameof(ReadyXmm));
-            OnPropertyChanged(nameof(PrintStartXmm));
-            OnPropertyChanged(nameof(PrintEndXmm));
+            ReadyScanMm      = _getPointAxisMm?.Invoke(PointNames.Ready,      ScanAxis) ?? double.NaN;
+            PrintStartScanMm = _getPointAxisMm?.Invoke(PointNames.PrintStart, ScanAxis) ?? double.NaN;
+            PrintEndScanMm   = _getPointAxisMm?.Invoke(PointNames.PrintEnd,   ScanAxis) ?? double.NaN;
+            OnPropertyChanged(nameof(ReadyScanMm));
+            OnPropertyChanged(nameof(PrintStartScanMm));
+            OnPropertyChanged(nameof(PrintEndScanMm));
             OnPropertyChanged(nameof(HasPrintRange));
             OnPropertyChanged(nameof(HasReadyMapping));
         }

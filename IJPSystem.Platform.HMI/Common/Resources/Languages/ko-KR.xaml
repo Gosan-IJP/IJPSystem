@@ -250,8 +250,6 @@
     <system:String x:Key="Step_Init_Homing">원점복귀 — 전체 축</system:String>
     <system:String x:Key="Step_Init_MoveReady">대기 위치(READY) 이동</system:String>
     <system:String x:Key="Step_Init_MoveReadyDone">전체 축 InPosition 확인</system:String>
-    <system:String x:Key="Step_Init_MoveLoad">LOAD 위치 이동</system:String>
-    <system:String x:Key="Step_Init_MoveLoadDone">LOAD 위치 InPosition 확인</system:String>
 
     <system:String x:Key="Step_Purge_VacuumOff">진공 해제</system:String>
     <system:String x:Key="Step_Purge_MovePurge">퍼지 위치(PURGE) 이동</system:String>

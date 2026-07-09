@@ -3,18 +3,20 @@
     {
       "AxisNo": "X",
       "Name": "X AXIS",
-      "Unit": "mm"
+      "Unit": "mm",
+      "HwAxis": 1
     },
     {
       "AxisNo": "Y",
       "Name": "Y AXIS",
-      "Unit": "mm"
+      "Unit": "mm",
+      "HwAxis": 0
     },
-   
     {
       "AxisNo": "Z",
       "Name": "Z AXIS",
-      "Unit": "mm"
+      "Unit": "mm",
+      "HwAxis": 2
     }
   ]
 }

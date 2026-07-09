@@ -19,9 +19,14 @@ namespace IJPSystem.Platform.Domain.Models.Motion
     // 2. 개별 축 정보
     public class AxisDeviceInfo
     {
-        public string AxisNo { get; set; } = string.Empty; 
-        public string Name { get; set; } = string.Empty;  
+        public string AxisNo { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
         public string Unit { get; set; } = "mm";
+
+        // 물리 하드웨어 축 번호(0-base). null이면 MotionAxisList 나열 순서를 그대로 사용.
+        // 배선상 논리축(X/Y/Z)이 다른 하드웨어 축에 물린 경우(예: X↔Y 뒤바뀜) 여기서 교정한다.
+        public int? HwAxis { get; set; }
+
         public MotionDetailConfig MotionConfig { get; set; } = new();
     }
 

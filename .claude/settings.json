@@ -123,7 +123,10 @@
       "Read(//d/개발자료/기술자료/PULSE/COMIZOA 셋업 관련/ComiIDE_v1.10.4.0/Data/**)",
       "Bash(grep -E \"^-?[0-9]{1,2} \")",
       "Bash(cd /d/IJP/IJPSystem *)",
-      "Bash(grep -nA15 \"public void AddLog\" IJPSystem.Platform.HMI/ViewModels/MainViewModel.cs)"
+      "Bash(grep -nA15 \"public void AddLog\" IJPSystem.Platform.HMI/ViewModels/MainViewModel.cs)",
+      "Bash(powershell.exe -NoProfile -Command 'Get-Process | Where-Object { $_.ProcessName -like '\\\\''*IJPSystem*'\\\\'' -or $_.ProcessName -like '\\\\''*Pulse*'\\\\'' } | Select-Object Id, ProcessName, StartTime | Format-Table -AutoSize')",
+      "Bash(powershell.exe -NoProfile -Command \"Stop-Process -Id 10648 -Force; Start-Sleep -Milliseconds 800; \\(Get-Process -Id 10648 -ErrorAction SilentlyContinue\\) ? 'still running' : 'closed'\")",
+      "Bash(powershell.exe -NoProfile -Command \"Stop-Process -Name 'IJPSystem.Platform.HMI' -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 800; if \\(Get-Process -Name 'IJPSystem.Platform.HMI' -ErrorAction SilentlyContinue\\) { 'still running' } else { 'closed' }\")"
     ],
     "additionalDirectories": [
       "d:\\tmp",

@@ -89,6 +89,8 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         private bool _init;
         // 축별 원점복귀 방향(+1/-1)을 SetHomeParameters 에서 저장 → Home() 에서 사용(안전값 확정용).
         private readonly System.Collections.Generic.Dictionary<AxisId, int> _homeDir = new();
+        // 알람 진단: 축별 마지막으로 로깅한 상태 워드(변화 시에만 1회 로깅 — 폴링 스팸 방지).
+        private readonly System.Collections.Generic.Dictionary<AxisId, ushort> _lastAlarmFlags = new();
 
         /// <summary>cmdidx(=0 실패) 반환 명령 함수 검사. 실패 시 오류코드를 이름·설명으로 디코딩.</summary>
         private static void CheckCmd(int cmdidx, int err, string op)
@@ -292,7 +294,27 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             //   10 OMS1,11 IntLimit,12 OMS2,13 HomeBusy,14 HomeAttained
             bool servoOn      = (f & (1 << 2)) != 0;
             bool alarm        = (f & (1 << 3)) != 0 || (f & (1 << 8)) != 0;   // ServoFault | CtlrFault
-            bool homeAttained = (f & (1 << 14)) != 0;
+            bool homeBusy     = (f & (1 << 13)) != 0;   // 원점복귀 진행 중
+            bool homeAttained = (f & (1 << 14)) != 0;   // 원점복귀 완료
+
+            // 알람 진단: 알람 비트가 서면 raw 상태 워드를 값이 바뀔 때만 1회 로깅.
+            // 실제 서보 폴트(bit3)인지, 전원투입 정상상태(bit6 SwOnDisabled 등)를 오판한 건지 판별용.
+            if (alarm)
+            {
+                if (!_lastAlarmFlags.TryGetValue(a, out var prev) || prev != f)
+                {
+                    _lastAlarmFlags[a] = f;
+                    LoggerService.WriteToFile("WARN",
+                        $"[ComiEcat] Axis {(int)a} 알람 raw=0x{f:X4} " +
+                        $"(bit3 ServoFault={(f >> 3) & 1}, bit8 CtlrFault={(f >> 8) & 1}, " +
+                        $"bit2 OperEnabled={(f >> 2) & 1}, bit6 SwOnDisabled={(f >> 6) & 1}, " +
+                        $"bit7 ServoWarn={(f >> 7) & 1}, bit9 HomeError={(f >> 9) & 1})");
+                }
+            }
+            else if (_lastAlarmFlags.Count > 0)
+            {
+                _lastAlarmFlags.Remove(a);
+            }
 
             return new AxisState
             {
@@ -300,6 +322,7 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 IsMoving      = busy,
                 ServoOn       = servoOn,
                 IsHomed       = homeAttained,
+                HomeBusy      = homeBusy,
                 Alarm         = alarm,
                 // 하드웨어 EL 리밋은 GetFlags 에 직접 없음(필요 시 ecmSxSt_GetDI 로 확장). 현재 미매핑.
                 PositiveLimit = false,
@@ -314,6 +337,27 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             while (sw.ElapsedMilliseconds < timeoutMs)
             {
                 if (!GetState(a).IsMoving) return true;
+                Thread.Sleep(5);
+            }
+            return false;
+        }
+
+        // 원점복귀 완료 대기. 홈 모션은 단축모션(ecmSx) busy 와 무관하므로 WaitForDone(IsMoving) 로는
+        // 완료를 못 잡는다(busy 가 안 떨어져 타임아웃까지 매달림). 홈 전용 플래그(HomeBusy/HomeAttained)로 판정.
+        public bool WaitForHomeDone(AxisId a, int timeoutMs)
+        {
+            Need();
+            // MoveStart 직후 드라이브가 HomeBusy 를 세우기 전에 완료로 오판하지 않도록 잠깐 안정화.
+            Thread.Sleep(100);
+            var sw = Stopwatch.StartNew();
+            bool sawBusy = false;
+            while (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                var st = GetState(a);
+                if (st.HomeBusy) sawBusy = true;
+                // 완료: 홈 busy 해제 && (홈 busy 를 관측했거나 이미 원점 도달 표시)
+                if (!st.HomeBusy && (sawBusy || st.IsHomed))
+                    return st.IsHomed;
                 Thread.Sleep(5);
             }
             return false;

@@ -23,12 +23,6 @@ namespace IJPSystem.Platform.Application.Sequences
 
             new SequenceStepDef(4, "Step_Init_MoveReadyDone",
                 ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 30_000, ct)),
-
-            new SequenceStepDef(5, "Step_Init_MoveLoad",
-                ct => motion.MoveToPointAsync(PointNames.Load, ct)),
-
-            new SequenceStepDef(6, "Step_Init_MoveLoadDone",
-                ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct)),
         };
     }
 }

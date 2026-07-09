@@ -41,8 +41,7 @@ namespace IJPSystem.Platform.HMI.Views
         private const double HeadJumpPx        = 40;     // 1프레임에 40px 이상 점프 = 의심
         private const double MotorJumpMm       = 20;     // 1프레임에 20mm 이상 점프 = 의심
         private DateTime _lastFrameAt;
-        private double   _lastHeadX = double.NaN;
-        private double   _lastMotorX = double.NaN;
+        private double   _lastScanMm = double.NaN;   // 직전 프레임 스캔축(이송축) 위치
 
         // ── 레이아웃 상수 ────────────────────────────────────────────
         private const double HeadParkedX    = -250;
@@ -56,6 +55,17 @@ namespace IJPSystem.Platform.HMI.Views
 
         private const double NozzleCenterX = 130;
         private const double NozzleBaseY   = 222;
+
+        // ── 실장 구조: 헤드(X) 고정 / 스테이지(Y) 이동 ──────────────────
+        // 헤드는 스캔존에 고정되고, 스테이지(글라스)가 그 밑을 통과하며 인쇄한다.
+        // 상수 정합: 스캔선(글라스 자식)이 항상 고정 헤드 토출점 바로 아래에 오도록 —
+        //   헤드 토출점 화면X = NozzleCenterX + HeadFixedX = 130 + 270 = 400
+        //   스캔선 화면X      = 132(ScanLine Left) + t·PrintAreaMaxW + GlassX
+        //   스테이지 이동     = GlassScanStart → GlassScanStart − PrintAreaMaxW
+        //   ⇒ 132 + GlassScanStart = 400 이면 t 와 무관하게 스캔선이 헤드에 고정.
+        private const double HeadFixedX     = 270;                          // 고정 헤드 위치(translate)
+        private const double GlassScanStart = 268;                          // 인쇄 시작 시 스테이지 위치(= 400 − 132)
+        private const double GlassScanEnd   = GlassScanStart - PrintAreaMaxW; // 인쇄 종료 시 스테이지 위치
 
         // ── Phase 시간표 (초) ────────────────────────────────────────
         // Glass 반입/반출은 elapsed 기반 (시작/종료 이벤트가 별도로 없음)
@@ -119,7 +129,7 @@ namespace IJPSystem.Platform.HMI.Views
 
             for (int i = 0; i < count; i++)
             {
-                var tX = new TranslateTransform { X = HeadParkedX };
+                var tX = new TranslateTransform { X = HeadFixedX };
                 var dot = new Ellipse
                 {
                     Width = 5, Height = 5,
@@ -167,88 +177,12 @@ namespace IJPSystem.Platform.HMI.Views
         }
 
         // step 전환 시점의 기대 head 위치로 즉시 스냅 — 다음 OnFrameTick까지 점프 방지
+        // 헤드 고정 구조 — step 전환 시에도 헤드는 항상 고정 위치(점프 방지용 스냅만 유지).
         private void SnapHeadForStep(int stepNumber)
         {
-            double snapX = stepNumber switch
-            {
-                3 or 4 => HeadParkedX,         // 진입 직전 — 파킹 위치에서 출발
-                5      => HeadScanStartX,      // 스캔 시작 직전 — 스캔 시작점 정렬
-                6 or 7 => HeadScanEndX,        // 스캔 직후 — 끝 위치 유지
-                8 or 9 => HeadScanEndX,        // 파킹 복귀 직전 — 끝에서 출발
-                _ => double.NaN
-            };
-            if (double.IsNaN(snapX)) return;
-
-            // motor 모드는 라이브 모터 위치가 우선이므로 motor 매핑 결과로 덮어씀
-            if (_vm != null && _vm.HasPrintRange)
-                snapX = MapMotorToHeadPx(_vm.GetLiveMotorX());
-
-            HeadXTransform.X     = snapX;
-            HeadLabelTransform.X = snapX;
-            SyncNozzleX(snapX);
-        }
-
-        // 모터 X(mm) → 헤드 X(px) piecewise 매핑
-        // 키포인트: (READY, HeadParkedX) → (PRINT START, HeadScanStartX) → (PRINT END, HeadScanEndX)
-        // - 스캔 영역(PRINT START~END) 안: 비례 보간
-        // - 스캔 영역 밖 + READY 좌표가 PRINT START의 좌측: READY~PRINT START 구간 매핑
-        // - 그 외: 가까운 키포인트 값으로 클램프 (음수/외삽 방지)
-        // 호출 전 _vm != null && _vm.HasPrintRange 보장 필요
-        private double MapMotorToHeadPx(double motorMm)
-        {
-            double s = _vm!.PrintStartXmm;
-            double e = _vm.PrintEndXmm;
-
-            if (motorMm >= s && motorMm <= e)
-            {
-                double t = (motorMm - s) / (e - s);
-                return Lerp(HeadScanStartX, HeadScanEndX, t);
-            }
-
-            // 스캔 영역 밖 + READY가 PRINT START의 좌측에 있는 정상 디자인
-            if (_vm.HasReadyMapping && _vm.ReadyXmm < s && motorMm < s)
-            {
-                double t = Math.Clamp((motorMm - _vm.ReadyXmm) / (s - _vm.ReadyXmm), 0, 1);
-                return Lerp(HeadParkedX, HeadScanStartX, t);
-            }
-
-            // 안전 클램프
-            return motorMm < s ? HeadScanStartX : HeadScanEndX;
-        }
-
-        // 스크립트 모드 헤드 X — step 이벤트 시각 기반 (elapsed 무시) — 15단계 시퀀스 기준
-        // step 1-4  : 파킹 (글래스 감지 + 진공 ON + 센서 확인 + 안정화 대기)
-        // step 5-6  : 스캔 시작 위치 진입 (PRINT START)
-        // step 7-8  : HEAD DOWN — X 위치 변화 없음 (Y/Z축 이동)
-        // step 9    : 인쇄 스캔
-        // step 10-13: 인쇄 완료 / HEAD UP / 진공 해제 — 우측 끝 유지
-        // step 14+  : READY 이동 → 파킹 복귀
-        private double ComputeScriptedHeadX(double now)
-        {
-            if (_currentStepNo < 5) return HeadParkedX;
-
-            if (_currentStepNo < 7)   // 5, 6 — PRINT START 이동 + InPosition
-            {
-                double start = _stepTimes.TryGetValue(5, out var v5) ? v5 : now;
-                double t = EaseOutCubic(Math.Clamp((now - start) / T_HeadPosDur, 0, 1));
-                return Lerp(HeadParkedX, HeadScanStartX, t);
-            }
-
-            if (_currentStepNo < 9) return HeadScanStartX;  // 7, 8 — HEAD DOWN (X 유지)
-
-            if (_currentStepNo == 9)  // 인쇄 스캔
-            {
-                double start = _stepTimes.TryGetValue(9, out var v9) ? v9 : now;
-                double t = Math.Clamp((now - start) / T_ScanDur, 0, 1);
-                return Lerp(HeadScanStartX, HeadScanEndX, t);
-            }
-
-            if (_currentStepNo < 14) return HeadScanEndX;   // 10~13 — 인쇄 완료/HEAD UP/진공 해제 우측 끝 유지
-
-            // step 14+ : READY 이동 — 파킹 복귀
-            double start14 = _stepTimes.TryGetValue(14, out var v14) ? v14 : now;
-            double tBack = EaseInCubic(Math.Clamp((now - start14) / T_HeadParkDur, 0, 1));
-            return Lerp(HeadScanEndX, HeadParkedX, tBack);
+            HeadXTransform.X     = HeadFixedX;
+            HeadLabelTransform.X = HeadFixedX;
+            SyncNozzleX(HeadFixedX);
         }
 
         // 한 phase 진행률(0~1) — 시작 전 0, 끝난 뒤 1
@@ -274,104 +208,84 @@ namespace IJPSystem.Platform.HMI.Views
             }
             _lastFrameAt = now;
 
-            // ── Glass X (반입: 시작부터 elapsed 기반, 반출: STEP 13(vacuum off) 진입 시점부터) ──
-            // 15단계 시퀀스에서 진공 해제는 step 13 (HEAD DOWN 7-8 + 인쇄 9-10 + HEAD UP 11-12 다음)
+            // ── 진행 상태 판정 ──
+            // 15단계 시퀀스에서 진공 해제(반출)는 step 13.
             const int VacuumOffStepNo = 13;
-            bool unloadStarted = _stepTimes.TryGetValue(VacuumOffStepNo, out double unloadStart);
-            if (!unloadStarted)
-            {
-                double t = EaseOutCubic(PhaseT(elapsed, T_GlassLoadStart, T_GlassLoadDur));
-                GlassTransform.X = Lerp(GlassParkedL, GlassCenter, t);
-            }
-            else
-            {
-                double t = EaseInCubic(PhaseT(elapsed, unloadStart, T_GlassUnloadDur));
-                GlassTransform.X = Lerp(GlassCenter, GlassParkedR, t);
-            }
-
-            // ── Head X ──
-            // 우선순위:
-            //   (1) HasPrintRange=true → 실제 모터 X(라이브) 매핑
-            //   (2) HasPrintRange=false → step 이벤트 기반 스크립트 phase
-            //       (스크립트도 step 진입 시각을 기점으로 동작 — elapsed 기준이 아님)
-            double headX;
-            double liveMotorX = _vm?.GetLiveMotorX() ?? 0.0;
-            if (_vm != null && _vm.HasPrintRange)
-                headX = MapMotorToHeadPx(liveMotorX);
-            else
-                headX = ComputeScriptedHeadX(elapsed);
-            // [진단] 헤드/모터 점프 감지
-            if (DiagEnabled && !double.IsNaN(_lastHeadX))
-            {
-                double headDelta  = Math.Abs(headX - _lastHeadX);
-                double motorDelta = Math.Abs(liveMotorX - _lastMotorX);
-                if (headDelta > HeadJumpPx || motorDelta > MotorJumpMm)
-                    Debug.WriteLine(
-                        $"[DASH] JUMP  head {_lastHeadX:F1}→{headX:F1} (Δ{headDelta:F1}px)  " +
-                        $"motor {_lastMotorX:F2}→{liveMotorX:F2} (Δ{motorDelta:F2}mm)  " +
-                        $"step={_currentStepNo} elapsed={elapsed:F2}s hasRange={_vm?.HasPrintRange}");
-            }
-            _lastHeadX  = headX;
-            _lastMotorX = liveMotorX;
-
-            HeadXTransform.X     = headX;
-            HeadLabelTransform.X = headX;
-            SyncNozzleX(headX);
-            // GX 표시는 실제 모터 mm 값을 그대로 — bottom MOTOR POSITION X와 일치
-            UpdateXDisplayMm(liveMotorX);
-
-            // ── 스캔 라인 / 인쇄 영역 채움 ──
-            // 잉크 분사·스캔라인은 인쇄 단계(step 5)에서만 활성. PrintedArea는 단조 증가.
-            bool isPrintingNow = _currentStepNo == PrintScanStepNo;
+            bool unloadStarted    = _stepTimes.TryGetValue(VacuumOffStepNo, out double unloadStart);
+            bool isPrintingNow    = _currentStepNo == PrintScanStepNo;
             bool printAlreadyDone = _currentStepNo > PrintScanStepNo;
 
-            if (_vm != null && _vm.HasPrintRange)
+            // ── 인쇄 진행률 t (0..1) ──
+            // 실장/실연결이면 스캔축(Y) 모터 위치 기준, 아니면 step 9 진입 시각 기반 스크립트.
+            double liveScanMm = _vm?.GetLiveScanMm() ?? 0.0;
+            bool hasRange = _vm != null && _vm.HasPrintRange;
+            double t;
+            if (hasRange)
             {
-                double rangeMm = _vm.PrintEndXmm - _vm.PrintStartXmm;
-                double t = Math.Clamp((liveMotorX - _vm.PrintStartXmm) / rangeMm, 0, 1);
-
-                // PrintedArea: 한 번 채워진 부분은 모터가 돌아와도 유지
-                if (printAlreadyDone) _maxScanT = 1.0;       // 인쇄 단계 지나갔으면 100%로 잠금
-                else if (isPrintingNow) _maxScanT = Math.Max(_maxScanT, t);
-                PrintedAreaScale.ScaleX = _maxScanT;
-
-                // 스캔 라인 + 잉크 분사: 인쇄 진행 중에만
-                if (isPrintingNow)
-                {
-                    ScanLineTransform.X = t * PrintAreaMaxW;
-                    bool inScanRange = t > 0.001 && t < 0.999;
-                    ScanLine.Opacity = inScanRange ? 1.0 : 0.0;
-                    _isScanning = inScanRange;
-                }
-                else
-                {
-                    ScanLine.Opacity = 0;
-                    _isScanning = false;
-                }
+                double rangeMm = _vm!.PrintEndScanMm - _vm.PrintStartScanMm;
+                t = Math.Abs(rangeMm) < 1e-6 ? 0.0
+                    : Math.Clamp((liveScanMm - _vm.PrintStartScanMm) / rangeMm, 0.0, 1.0);
             }
             else
             {
-                // 스크립트 폴백 — step 이벤트 기반 (head X와 동일한 기준)
-                if (printAlreadyDone)
-                {
-                    PrintedAreaScale.ScaleX = 1.0;
-                    ScanLineTransform.X     = PrintAreaMaxW;
-                    ScanLine.Opacity        = 0;
-                    _isScanning = false;
-                }
-                else if (isPrintingNow && _stepTimes.TryGetValue(PrintScanStepNo, out var t5))
-                {
-                    double t = Math.Clamp((elapsed - t5) / T_ScanDur, 0, 1);
-                    PrintedAreaScale.ScaleX = t;
-                    ScanLineTransform.X     = t * PrintAreaMaxW;
-                    ScanLine.Opacity        = 1.0;
-                    _isScanning = true;
-                }
-                else
-                {
-                    ScanLine.Opacity = 0;
-                    _isScanning = false;
-                }
+                t = (isPrintingNow && _stepTimes.TryGetValue(PrintScanStepNo, out var t9))
+                    ? Math.Clamp((elapsed - t9) / T_ScanDur, 0.0, 1.0)
+                    : 0.0;
+            }
+            if (printAlreadyDone) t = 1.0;
+
+            // ── 헤드: 고정 (실장 구조 — 헤드는 움직이지 않음) ──
+            HeadXTransform.X     = HeadFixedX;
+            HeadLabelTransform.X = HeadFixedX;
+            SyncNozzleX(HeadFixedX);
+
+            // ── 스테이지(글라스) X: 반입(우→스캔시작) → 스캔(Y 진행률로 고정 헤드 밑 통과) → 반출(좌로 배출) ──
+            double glassX;
+            if (unloadStarted)
+            {
+                double tu = EaseInCubic(PhaseT(elapsed, unloadStart, T_GlassUnloadDur));
+                glassX = Lerp(GlassScanEnd, GlassParkedL, tu);            // 스캔 종료 위치 → 좌측 배출
+            }
+            else if (_currentStepNo >= PrintScanStepNo)
+            {
+                glassX = Lerp(GlassScanStart, GlassScanEnd, t);           // 스캔: 스테이지가 고정 헤드 밑을 통과
+            }
+            else
+            {
+                double tl = EaseOutCubic(PhaseT(elapsed, T_GlassLoadStart, T_GlassLoadDur));
+                glassX = Lerp(GlassParkedR, GlassScanStart, tl);          // 반입: 우측에서 스캔 시작 위치로
+            }
+            GlassTransform.X = glassX;
+
+            // [진단] 스캔축 점프 감지
+            if (DiagEnabled && !double.IsNaN(_lastScanMm))
+            {
+                double motorDelta = Math.Abs(liveScanMm - _lastScanMm);
+                if (motorDelta > MotorJumpMm)
+                    Debug.WriteLine($"[DASH] SCAN JUMP  {_lastScanMm:F2}→{liveScanMm:F2} (Δ{motorDelta:F2}mm)  step={_currentStepNo} t={t:F2}");
+            }
+            _lastScanMm = liveScanMm;
+
+            // 하단 표시는 스캔축(이송축) 실제 모터 mm — bottom MOTOR POSITION Y와 일치
+            UpdateScanDisplayMm(liveScanMm);
+
+            // ── 인쇄 영역 채움 + 스캔선(고정 헤드 바로 아래) ──
+            // 상수 정합상 스캔선 화면X = 132 + t·PrintAreaMaxW + glassX = 고정 헤드 토출점(t 무관).
+            if (printAlreadyDone) _maxScanT = 1.0;                        // 인쇄 지나갔으면 100% 잠금
+            else if (isPrintingNow) _maxScanT = Math.Max(_maxScanT, t);
+            PrintedAreaScale.ScaleX = _maxScanT;
+
+            if (isPrintingNow)
+            {
+                ScanLineTransform.X = t * PrintAreaMaxW;
+                bool inScanRange = t > 0.001 && t < 0.999;
+                ScanLine.Opacity = inScanRange ? 1.0 : 0.0;
+                _isScanning = inScanRange;
+            }
+            else
+            {
+                ScanLine.Opacity = 0;
+                _isScanning = false;
             }
 
             // ── 파티클 업데이트 + 분사 ──
@@ -427,10 +341,10 @@ namespace IJPSystem.Platform.HMI.Views
         }
 
         // ── 위치·상태 표시 ─────────────────────────────────────────
-        // 실제 모터 X mm 값을 그대로 표시 (bottom MOTOR POSITION 패널과 동일 소스)
-        private void UpdateXDisplayMm(double motorMm)
+        // 스캔축(이송축) 실제 모터 mm 값을 그대로 표시 (bottom MOTOR POSITION Y와 동일 소스)
+        private void UpdateScanDisplayMm(double motorMm)
         {
-            YPosText.Text = $"GX : {motorMm,8:F3} mm";
+            YPosText.Text = $"GY : {motorMm,8:F3} mm";
         }
 
         private void SetStatus(string text, string hexColor)
@@ -443,13 +357,13 @@ namespace IJPSystem.Platform.HMI.Views
         // ── 변환 초기화 ────────────────────────────────────────────
         private void ResetTransforms()
         {
-            GlassTransform.X        = GlassParkedL;
-            HeadXTransform.X        = HeadParkedX;
-            HeadLabelTransform.X    = HeadParkedX;
+            GlassTransform.X        = GlassParkedR;   // 반입은 우측에서 시작
+            HeadXTransform.X        = HeadFixedX;     // 헤드 고정
+            HeadLabelTransform.X    = HeadFixedX;
             PrintedAreaScale.ScaleX = 0;
             ScanLineTransform.X     = 0;
             ScanLine.Opacity        = 0;
-            SyncNozzleX(HeadParkedX);
+            SyncNozzleX(HeadFixedX);
         }
 
         // ── ViewModel.AutoPrintStarted ──────────────────────────────
@@ -466,12 +380,11 @@ namespace IJPSystem.Platform.HMI.Views
 
                 ResetTransforms();
                 SetStatus("▶  STARTING ...", "#38BDF8");
-                YPosText.Text = "GX :    0.000 mm";
+                YPosText.Text = "GY :    0.000 mm";
 
                 _animStart    = DateTime.Now;
                 _lastFrameAt  = default;
-                _lastHeadX    = double.NaN;
-                _lastMotorX   = double.NaN;
+                _lastScanMm   = double.NaN;
                 if (DiagEnabled) Debug.WriteLine("[DASH] === AUTO PRINT STARTED ===");
                 HookRendering();
             });
@@ -493,11 +406,11 @@ namespace IJPSystem.Platform.HMI.Views
 
                 if (DiagEnabled)
                 {
-                    double motorX = _vm?.GetLiveMotorX() ?? 0.0;
+                    double scanMm = _vm?.GetLiveScanMm() ?? 0.0;
                     Debug.WriteLine(
                         $"[DASH] STEP {stepNumber}{(isReentry ? " (RETRY)" : "")}  " +
-                        $"elapsed={elapsedAtStep:F2}s  motor={motorX:F2}mm  " +
-                        $"hasRange={_vm?.HasPrintRange} (start={_vm?.PrintStartXmm:F2} end={_vm?.PrintEndXmm:F2})");
+                        $"elapsed={elapsedAtStep:F2}s  scan={scanMm:F2}mm  " +
+                        $"hasRange={_vm?.HasPrintRange} (start={_vm?.PrintStartScanMm:F2} end={_vm?.PrintEndScanMm:F2})");
                 }
 
                 // 디스패처 지연으로 OnFrameTick의 첫 반영이 지연되면 head가 점프해 보임 →

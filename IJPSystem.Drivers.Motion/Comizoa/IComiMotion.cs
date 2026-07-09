@@ -45,7 +45,9 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         // ---- 4_State ----
         /// <summary>축 상태 조회.</summary>
         AxisState GetState(AxisId axis);
-        /// <summary>이동 완료 대기.</summary>
+        /// <summary>이동 완료 대기(단축 모션 busy 기준).</summary>
         bool WaitForDone(AxisId axis, int timeoutMs);
+        /// <summary>원점복귀 완료 대기(홈 전용 플래그 기준 — 단축 busy 와 다름).</summary>
+        bool WaitForHomeDone(AxisId axis, int timeoutMs);
     }
 }

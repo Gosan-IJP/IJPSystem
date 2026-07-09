@@ -98,7 +98,13 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                     Name   = cfg.Name ?? "Unknown Axis",
                     Unit   = cfg.Unit ?? "mm",
                 };
-                _axisMap[cfg.AxisNo] = (AxisId)idx++;   // 설정 순서 → AxisId(0=X,1=Y,…)
+                // HwAxis 지정 시 그 값(물리 축 번호), 없으면 나열 순서 → AxisId(0=X,1=Y,…).
+                // 배선상 X↔Y가 뒤바뀐 경우 MotorConfig.json 의 HwAxis 로 교정.
+                int hw = cfg.HwAxis ?? idx;
+                _axisMap[cfg.AxisNo] = (AxisId)hw;
+                LoggerService.WriteToFile("INFO",
+                    $"[Comizoa Motion] 축 매핑: {cfg.AxisNo}({cfg.Name}) → HwAxis {hw}");
+                idx++;
             }
         }
 
@@ -220,7 +226,8 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             if (!TryAxis(axisNo, out var ax)) return Task.FromResult(false);
             return Task.Run(() =>
             {
-                try { _comi!.Home(ax); return _comi.WaitForDone(ax, DefaultMoveTimeoutMs); }
+                // 홈은 단축모션 busy 가 아닌 홈 전용 완료 플래그로 대기해야 한다.
+                try { _comi!.Home(ax); return _comi.WaitForHomeDone(ax, DefaultMoveTimeoutMs); }
                 catch { return false; }
             });
         }
