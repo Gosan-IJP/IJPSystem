@@ -329,6 +329,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 // 저장 직후 DB 최신값으로 다시 로드해 두 화면의 티칭 값을 일치시킴
                 _mainVM.RecipeVM.ReloadTeachingPoints();
 
+                // 활성 레시피를 티칭 저장한 경우, 시퀀스(오토프린트/Initialize)가 참조하는 활성 스냅샷도 갱신.
+                // RecipeView 저장 경로는 갱신하지만 이 화면 저장은 누락돼 있어, 티칭에서 좌표를 바꿔 저장해도
+                // 스냅샷이 옛 값으로 남아 오토프린트가 이전 좌표로 이동하던 버그를 수정한다.
+                if (string.Equals(name, _mainVM.RecipeVM.ActiveRecipeName, System.StringComparison.Ordinal))
+                {
+                    _mainVM.RecipeVM.RefreshActivePointsSnapshot();
+                    _mainVM.AddLog($"[MOTION] Teach [{name}] — 활성 레시피 스냅샷 갱신됨", LogLevel.Info);
+                }
+
                 _mainVM.AddLog($"[MOTION] Teach [{name}] 저장 완료", LogLevel.Success);
                 //Dialogs.Show("저장 완료");
             }

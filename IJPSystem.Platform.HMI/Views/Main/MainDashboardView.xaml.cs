@@ -223,14 +223,19 @@ namespace IJPSystem.Platform.HMI.Views
             }
             _lastFrameAt = now;
 
-            // ── 진행 상태 판정 ──
-            // 프린팅 완료 후 헤드 상승(Z)과 동시에 스테이지(Y) 복귀 이동 시작 → 복귀 트리거를 HeadUp(step 10)로.
-            bool unloadStarted    = _stepTimes.TryGetValue(HeadUpStepNo, out double unloadStart);
-            bool isPrintingNow    = _currentStepNo == PrintScanStepNo;
-            bool printAlreadyDone = _currentStepNo > PrintScanStepNo;
+            // ── 진행 상태 판정 (프린팅수 swath 에 따라 스텝 구성이 달라짐) ──
+            // 스텝 구성: 1~7 준비/헤드다운, 8~ 패스 루프(패스당 Print/PrintDone, 마지막 아니면
+            //   +SwathStep/SwathStepDone), 이후 HeadUp/HeadUpDone/VacuumOff/MoveReady/MoveReadyDone.
+            //   패스 블록: within = (step-8) % 4 → 0:Print 1:PrintDone 2:SwathStep 3:SwathStepDone.
+            int swath          = Math.Max(1, _vm?.SwathCount ?? 1);
+            int headUpStep     = 4 * swath + 6;        // S=1→10, S=2→14, S=3→18
+            int moveReadyStep  = headUpStep + 3;       // HeadUp, HeadUpDone, VacuumOff, [MoveReady]
+            bool inPassRegion  = _currentStepNo >= PrintScanStepNo && _currentStepNo < headUpStep;
+            int within         = inPassRegion ? (_currentStepNo - PrintScanStepNo) % 4 : -1;
+            bool isPrintStep   = inPassRegion && within == 0;   // 잉크 토출(스캔) 진행
+            bool afterAllPasses = _currentStepNo >= headUpStep;  // 모든 패스 종료(헤드업~복귀)
 
-            // ── 인쇄 진행률 t (0..1) ──
-            // 실장/실연결이면 스캔축(Y) 모터 위치 기준, 아니면 step 9 진입 시각 기반 스크립트.
+            // ── 인쇄 진행률 t (0..1) — 스캔축(Y) 모터 위치 기준. 패스 방향(정/역)은 t가 0↔1로 자연 반영 ──
             double liveScanMm = _vm?.GetLiveScanMm() ?? 0.0;
             bool hasRange = _vm != null && _vm.HasPrintRange;
             double t;
@@ -242,54 +247,78 @@ namespace IJPSystem.Platform.HMI.Views
             }
             else
             {
-                t = (isPrintingNow && _stepTimes.TryGetValue(PrintScanStepNo, out var t9))
-                    ? Math.Clamp((elapsed - t9) / T_ScanDur, 0.0, 1.0)
+                t = (isPrintStep && _stepTimes.TryGetValue(_currentStepNo, out var tp))
+                    ? Math.Clamp((elapsed - tp) / T_ScanDur, 0.0, 1.0)
                     : 0.0;
             }
-            if (printAlreadyDone) t = 1.0;
 
             // ── 헤드 수평(X): 고정 (실장 구조 — 스캔축은 스테이지가 담당) ──
             HeadXTransform.X     = HeadFixedX;
             HeadLabelTransform.X = HeadFixedX;
             SyncNozzleX(HeadFixedX);
 
-            // ── 헤드 수직(Z): HeadDown(step6) 하강 → 인쇄 중 유지 → HeadUp(step10) 상승 ──
+            // ── 헤드 수직(Z): HeadDown(step6) 하강 → 모든 패스 동안 유지 → HeadUp(동적) 상승 ──
+            //   멀티 스와스여도 헤드는 마지막 패스까지 내린 채 유지, headUpStep 에서 1회 상승.
             double headZ;
             if (_currentStepNo < HeadDownStepNo)
             {
                 headZ = HeadZUp;                                     // 하강 전 — 상승 파킹
             }
-            else if (_currentStepNo < HeadUpStepNo)
+            else if (_currentStepNo < headUpStep)
             {
                 double td = _stepTimes.TryGetValue(HeadDownStepNo, out var tDown)
                     ? EaseInOutCubic(PhaseT(elapsed, tDown, T_HeadPosDur)) : 1.0;
-                headZ = Lerp(HeadZUp, HeadZDown, td);                // 하강 → 인쇄 위치 유지
+                headZ = Lerp(HeadZUp, HeadZDown, td);                // 하강 → 인쇄 위치(전 패스) 유지
             }
             else
             {
-                double tu2 = _stepTimes.TryGetValue(HeadUpStepNo, out var tUp)
+                double tu2 = _stepTimes.TryGetValue(headUpStep, out var tUp)
                     ? EaseInOutCubic(PhaseT(elapsed, tUp, T_HeadPosDur)) : 1.0;
-                headZ = Lerp(HeadZDown, HeadZUp, tu2);               // 상승(스테이지 Y 복귀와 동시)
+                headZ = Lerp(HeadZDown, HeadZUp, tu2);               // 상승(마지막 패스 후)
             }
             HeadXTransform.Y     = headZ;
             HeadLabelTransform.Y = headZ;
             SyncNozzleY(headZ);
 
-            // ── 스테이지(글라스) X: 반입(우→스캔시작) → 스캔(Y 진행률로 고정 헤드 밑 통과) → 반출(좌로 배출) ──
+            // ── 스테이지(글라스) X — 실제 Y모터에 동기 ──
+            //  1~3: 우측 Ready 파킹 대기 / 4~7: Ready→PrintStart 반입(Y 동기) /
+            //  8~12: 스캔(PrintStart→PrintEnd, Y 동기) / 13~: PrintEnd→Ready 복귀(오른쪽 방향, Y 동기)
+            //  실측 매핑(HasReadyMapping) 있으면 Y모터 위치로 동기, 없으면 스텝 진입시각 스크립트.
+            const int MoveStartStepNo = 4;    // MoveStart(인쇄 시작 위치로 이동)
+            bool hasReadyMap = _vm != null && _vm.HasReadyMapping;
+            // 마지막 패스 종료 위치: 홀수 swath→PrintEnd(GlassScanEnd), 짝수→PrintStart(GlassScanStart)
+            bool lastForward = (swath % 2 == 1);
+            double scanEndX  = lastForward ? GlassScanEnd : GlassScanStart;
+            double lastEndMm = _vm != null ? (lastForward ? _vm.PrintEndScanMm : _vm.PrintStartScanMm) : 0.0;
+
             double glassX;
-            if (unloadStarted)
+            if (_currentStepNo >= moveReadyStep)
             {
-                double tu = EaseInCubic(PhaseT(elapsed, unloadStart, T_GlassUnloadDur));
-                glassX = Lerp(GlassScanEnd, GlassParkedL, tu);            // 스캔 종료 위치 → 좌측 배출
+                // 복귀: 마지막 패스 종료 위치 → 우측 Ready (오른쪽 방향)
+                double denom = _vm != null ? _vm.ReadyScanMm - lastEndMm : 0.0;
+                double p = (hasReadyMap && Math.Abs(denom) > 1e-6)
+                    ? Math.Clamp((liveScanMm - lastEndMm) / denom, 0.0, 1.0)
+                    : (_stepTimes.TryGetValue(moveReadyStep, out var tr)
+                        ? EaseInOutCubic(PhaseT(elapsed, tr, T_GlassLoadDur)) : 1.0);
+                glassX = Lerp(scanEndX, GlassParkedR, p);
             }
             else if (_currentStepNo >= PrintScanStepNo)
             {
-                glassX = Lerp(GlassScanStart, GlassScanEnd, t);           // 스캔: 스테이지가 고정 헤드 밑을 통과
+                glassX = Lerp(GlassScanStart, GlassScanEnd, t);          // 스캔(t: 실측 Y 또는 스크립트)
+            }
+            else if (_currentStepNo >= MoveStartStepNo)
+            {
+                // 반입: 우측 Ready → 인쇄 시작 위치 (step 4에서 시작, Y 동기)
+                double denom = _vm != null ? _vm.PrintStartScanMm - _vm.ReadyScanMm : 0.0;
+                double p = (hasReadyMap && Math.Abs(denom) > 1e-6)
+                    ? Math.Clamp((liveScanMm - _vm!.ReadyScanMm) / denom, 0.0, 1.0)
+                    : (_stepTimes.TryGetValue(MoveStartStepNo, out var tm)
+                        ? EaseOutCubic(PhaseT(elapsed, tm, T_GlassLoadDur)) : 1.0);
+                glassX = Lerp(GlassParkedR, GlassScanStart, p);
             }
             else
             {
-                double tl = EaseOutCubic(PhaseT(elapsed, T_GlassLoadStart, T_GlassLoadDur));
-                glassX = Lerp(GlassParkedR, GlassScanStart, tl);          // 반입: 우측에서 스캔 시작 위치로
+                glassX = GlassParkedR;                                   // 1~3: 우측 Ready 파킹 대기
             }
             GlassTransform.X = glassX;
 
@@ -307,11 +336,11 @@ namespace IJPSystem.Platform.HMI.Views
 
             // ── 인쇄 영역 채움 + 스캔선(고정 헤드 바로 아래) ──
             // 상수 정합상 스캔선 화면X = 132 + t·PrintAreaMaxW + glassX = 고정 헤드 토출점(t 무관).
-            if (printAlreadyDone) _maxScanT = 1.0;                        // 인쇄 지나갔으면 100% 잠금
-            else if (isPrintingNow) _maxScanT = Math.Max(_maxScanT, t);
+            if (afterAllPasses) _maxScanT = 1.0;                          // 전 패스 종료 → 100% 잠금
+            else if (isPrintStep) _maxScanT = Math.Max(_maxScanT, t);    // 인쇄 중 단조 증가
             PrintedAreaScale.ScaleX = _maxScanT;
 
-            if (isPrintingNow)
+            if (isPrintStep)
             {
                 ScanLineTransform.X = t * PrintAreaMaxW;
                 bool inScanRange = t > 0.001 && t < 0.999;
@@ -457,24 +486,40 @@ namespace IJPSystem.Platform.HMI.Views
                 // step 전환 시각의 기대 위치를 즉시 스냅해 첫 프레임의 시작점을 정렬
                 SnapHeadForStep(stepNumber);
 
-                // 14단계 시퀀스(VacuumConfirm 제외) 기준 상태 배너
-                switch (stepNumber)
+                // 상태 배너 — 프린팅수 swath 에 따라 스텝 구성이 달라지므로 역할을 동적으로 계산
+                int swath        = Math.Max(1, _vm?.SwathCount ?? 1);
+                int headUpStep   = 4 * swath + 6;      // S=1→10, S=2→14
+                int vacuumOffStep = headUpStep + 2;
+                int moveReadyStep = headUpStep + 3;
+
+                if (stepNumber == 1)
+                    SetStatus("▶  LOADING  ·  GLASS SUBSTRATE ENTERING ...", "#38BDF8");
+                else if (stepNumber <= 3)
+                    SetStatus("⊙  VACUUM ON  ·  GLASS CLAMPED", "#22C55E");
+                else if (stepNumber <= 5)
+                    SetStatus("⬇  PRINT HEAD  ·  POSITIONING TO SCAN START", "#60A5FA");
+                else if (stepNumber <= 7)
+                    SetStatus("⬇  PRINT HEAD  ·  HEAD DOWN", "#60A5FA");
+                else if (stepNumber < headUpStep)
                 {
-                    case 1: SetStatus("▶  LOADING  ·  GLASS SUBSTRATE ENTERING ...", "#38BDF8"); break;
-                    case 2:
-                    case 3: SetStatus("⊙  VACUUM ON  ·  GLASS CLAMPED", "#22C55E"); break;
-                    case 4:
-                    case 5: SetStatus("⬇  PRINT HEAD  ·  POSITIONING TO SCAN START", "#60A5FA"); break;
-                    case 6:
-                    case 7: SetStatus("⬇  PRINT HEAD  ·  HEAD DOWN", "#60A5FA"); break;
-                    case 8:
-                    case 9: SetStatus("◉  PRINTING  ·  INKJET PRINTING IN PROGRESS ...", "#A78BFA"); break;
-                    case 10:
-                    case 11: SetStatus("⬆  HEAD UP (Z)  ·  STAGE RETURN (Y)  —  SIMULTANEOUS", "#60A5FA"); break;
-                    case 12: SetStatus("⊘  VACUUM OFF  ·  GLASS RELEASED", "#F59E0B"); break;
-                    case 13:
-                    case 14: SetStatus("◀  UNLOADING  ·  RETURN TO READY ...", "#38BDF8"); break;
+                    // 패스 구간: within 0:Print 1:PrintDone 2:SwathStep 3:SwathStepDone
+                    int offset = stepNumber - 8;
+                    int pass   = offset / 4 + 1;
+                    int within = offset % 4;
+                    if (within == 2 || within == 3)
+                        SetStatus($"⇄  SWATH STEP-OVER  ·  X + HEAD LENGTH  (pass {pass}→{pass + 1})", "#F59E0B");
+                    else
+                    {
+                        string dir = (pass % 2 == 1) ? "START → END" : "END → START";
+                        SetStatus($"◉  PRINTING  ·  PASS {pass}/{swath}  ({dir})", "#A78BFA");
+                    }
                 }
+                else if (stepNumber < vacuumOffStep)
+                    SetStatus("⬆  PRINT HEAD  ·  HEAD UP", "#60A5FA");
+                else if (stepNumber < moveReadyStep)
+                    SetStatus("⊘  VACUUM OFF  ·  GLASS RELEASED", "#F59E0B");
+                else
+                    SetStatus("◀  RETURN TO READY ...", "#38BDF8");
             });
         }
 

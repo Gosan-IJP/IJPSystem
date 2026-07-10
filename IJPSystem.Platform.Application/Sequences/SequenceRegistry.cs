@@ -34,7 +34,8 @@ namespace IJPSystem.Platform.Application.Sequences
                 Icon           = "🖨",
                 NameKey        = "Seq_AutoPrint_Name",
                 DescriptionKey = "Seq_AutoPrint_Desc",
-                BuildSteps     = AutoPrintSequence.Build,
+                // Registry 기본값은 swath=1(현행 1패스). 대시보드 오토런은 활성 레시피 값으로 별도 생성.
+                BuildSteps     = (m, mo) => AutoPrintSequence.Build(m, mo),
             },
             new SequenceDefinition
             {

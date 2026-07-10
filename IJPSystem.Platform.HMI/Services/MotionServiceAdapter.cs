@@ -31,8 +31,8 @@ namespace IJPSystem.Platform.HMI.Services
             var tasks = _mainVM.SharedAxisList.Select(ax => ax.HomeAsync());
             await Task.WhenAll(tasks);
 
-            // 최대 30초 대기
-            for (int i = 0; i < 300; i++)
+            // 최대 50초 대기
+            for (int i = 0; i < 500; i++)
             {
                 ct.ThrowIfCancellationRequested();
                 if (_mainVM.SharedAxisList.All(ax => ax.Status?.IsHomeDone == true)) break;
@@ -86,6 +86,57 @@ namespace IJPSystem.Platform.HMI.Services
 
             // 3. 전체 완료 대기 (이곳에 브레이크를 걸어 전체 종료를 확인하세요)
             await Task.WhenAll(tasks);
+        }
+
+        // 단일 축을 특정 포인트의 해당 축 좌표로 이동(다른 축은 유지). 멀티 스와스 프린트 스캔용.
+        public async Task MoveAxisToPointAsync(string axisNo, string pointName, CancellationToken ct,
+                                               MotionProfileKind profile = MotionProfileKind.Move)
+        {
+            var ax = _mainVM.SharedAxisList.FirstOrDefault(
+                a => string.Equals(a.Info.AxisNo, axisNo, System.StringComparison.OrdinalIgnoreCase));
+            if (ax == null) return;
+
+            double? pos = GetAxisPositionMm(pointName, ax.Info.Name);
+            if (pos == null) return;                      // 포인트에 해당 축 좌표 없음 → 이동 안 함
+
+            await MoveSingleAxisAsync(ax, absolute: true, value: pos.Value, profile, ct);
+        }
+
+        // 단일 축 상대 이동(현재 위치 기준 delta). 스와스 스텝오버(X += headLength)용.
+        public async Task MoveAxisRelativeAsync(string axisNo, double delta, CancellationToken ct,
+                                                MotionProfileKind profile = MotionProfileKind.Move)
+        {
+            var ax = _mainVM.SharedAxisList.FirstOrDefault(
+                a => string.Equals(a.Info.AxisNo, axisNo, System.StringComparison.OrdinalIgnoreCase));
+            if (ax == null) return;
+
+            await MoveSingleAxisAsync(ax, absolute: false, value: delta, profile, ct);
+        }
+
+        // 단일 축 이동 공통 — 활성 레시피 프로파일 적용 + InPosition 대기(driver 직접 폴링)
+        private async Task MoveSingleAxisAsync(AxisViewModel ax, bool absolute, double value,
+                                               MotionProfileKind profile, CancellationToken ct)
+        {
+            ax.IsAbsMode = absolute;
+            ax.TargetPosition = value;
+
+            var snapCfg = _mainVM.RecipeVM.GetActiveMotionConfig(ax.Info.AxisNo);
+            var profileOverride = snapCfg == null ? null : profile switch
+            {
+                MotionProfileKind.Printing => snapCfg.Printing,
+                MotionProfileKind.Jog      => snapCfg.Jog,
+                _                          => snapCfg.Move,
+            };
+
+            await ax.MoveAsync(profile, profileOverride);
+
+            // InPosition 대기 (최대 60초 — 인쇄 스캔 대비). ViewModel 캐시 우회.
+            for (int i = 0; i < 600; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (ax.IsDriverInPosition()) break;
+                await Task.Delay(100, ct);
+            }
         }
 
         // 활성 레시피에서 특정 포인트의 단일 축 mm 값 (IsUsed=1만)

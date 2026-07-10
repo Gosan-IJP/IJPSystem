@@ -62,6 +62,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly Dictionary<string, MotionDetailConfig> _activeMotionConfigSnapshot
             = new(StringComparer.OrdinalIgnoreCase);
 
+        // 활성(APPLY된) 레시피의 프린팅수(Swath)/헤드길이 — 오토프린트 시퀀스 생성에 사용
+        public int ActiveSwath { get; private set; } = 1;
+        public double ActiveHeadLength { get; private set; } = 0;
+
         public IReadOnlyDictionary<string, double>? GetActivePoint(string pointName) =>
             _activePointsSnapshot.TryGetValue(pointName, out var dict) ? dict : null;
 
@@ -73,12 +77,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             _activePointsSnapshot.Clear();
             _activeMotionConfigSnapshot.Clear();
+            ActiveSwath = 1;
+            ActiveHeadLength = 0;
             if (string.IsNullOrEmpty(_activeRecipeName)) return;
 
             try
             {
                 using var db = new SqliteConnection(_dbPath);
                 db.Open();
+
+                // 프린팅수(Swath) / 헤드길이 — 활성 레시피 기준
+                ActiveSwath = db.QueryFirstOrDefault<int?>(
+                    "SELECT Swath FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 1;
+                ActiveHeadLength = db.QueryFirstOrDefault<double?>(
+                    "SELECT HeadLength FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 0;
 
                 // 1) 포인트
                 const string sqlPoints = @"
@@ -228,6 +240,34 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 int clamped = Math.Max(0, Math.Min(60, value));
                 if (SetProperty(ref _purgeTime, clamped) && !_isLoading)
+                    IsDirty = true;
+            }
+        }
+
+        // 프린팅수(Swath) — 기타정보 화면 콤보박스(1~5)에 바인딩
+        public int[] SwathOptions { get; } = { 1, 2, 3, 4, 5 };
+
+        private int _swathCount = 1;
+        public int SwathCount
+        {
+            get => _swathCount;
+            set
+            {
+                int clamped = Math.Max(1, Math.Min(5, value));
+                if (SetProperty(ref _swathCount, clamped) && !_isLoading)
+                    IsDirty = true;
+            }
+        }
+
+        // Head 길이(mm) — 기타정보 화면 텍스트박스에 바인딩
+        private double _headLength;
+        public double HeadLength
+        {
+            get => _headLength;
+            set
+            {
+                double clamped = Math.Max(0, value);
+                if (SetProperty(ref _headLength, clamped) && !_isLoading)
                     IsDirty = true;
             }
         }
@@ -385,6 +425,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 // PurgeTime 컬럼 마이그레이션
                 try { db.Execute("ALTER TABLE Recipes ADD COLUMN PurgeTime INTEGER DEFAULT 0"); }
                 catch { /* 이미 존재하면 무시 */ }
+
+                // Swath(프린팅수) / HeadLength(head 길이 mm) 컬럼 마이그레이션
+                try { db.Execute("ALTER TABLE Recipes ADD COLUMN Swath INTEGER DEFAULT 1"); }
+                catch { /* 이미 존재하면 무시 */ }
+                try { db.Execute("ALTER TABLE Recipes ADD COLUMN HeadLength REAL DEFAULT 0"); }
+                catch { /* 이미 존재하면 무시 */ }
             }
         }
 
@@ -456,6 +502,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     LoadMotorData(db, recipeName);
                     PurgeTime = db.QueryFirstOrDefault<int?>(
                         "SELECT PurgeTime FROM Recipes WHERE Name=@recipeName",
+                        new { recipeName }) ?? 0;
+                    SwathCount = db.QueryFirstOrDefault<int?>(
+                        "SELECT Swath FROM Recipes WHERE Name=@recipeName",
+                        new { recipeName }) ?? 1;
+                    HeadLength = db.QueryFirstOrDefault<double?>(
+                        "SELECT HeadLength FROM Recipes WHERE Name=@recipeName",
                         new { recipeName }) ?? 0;
                 }
 
@@ -759,9 +811,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                          }, trans);
                         }
 
-                        // PurgeTime 저장
-                        db.Execute("UPDATE Recipes SET PurgeTime=@purgeTime WHERE Name=@name",
-                            new { purgeTime = PurgeTime, name = SelectedRecipeName }, trans);
+                        // PurgeTime / Swath / HeadLength 저장
+                        db.Execute("UPDATE Recipes SET PurgeTime=@purgeTime, Swath=@swath, HeadLength=@headLength WHERE Name=@name",
+                            new { purgeTime = PurgeTime, swath = SwathCount, headLength = HeadLength, name = SelectedRecipeName }, trans);
 
                         // 티칭 포인트 저장
                         if (TeachingPoints.Count > 0)
@@ -1079,8 +1131,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         WHERE RecipeId = (SELECT Id FROM Recipes WHERE Name = @oldName)",
                             new { newId, oldName = SelectedRecipeName }, trans);
 
-                        // C. PurgeTime 복사
-                        db.Execute("UPDATE Recipes SET PurgeTime=(SELECT PurgeTime FROM Recipes WHERE Name=@oldName) WHERE Id=@newId",
+                        // C. PurgeTime / Swath / HeadLength 복사
+                        db.Execute(@"UPDATE Recipes SET
+                                         PurgeTime  = (SELECT PurgeTime  FROM Recipes WHERE Name=@oldName),
+                                         Swath      = (SELECT Swath      FROM Recipes WHERE Name=@oldName),
+                                         HeadLength = (SELECT HeadLength FROM Recipes WHERE Name=@oldName)
+                                     WHERE Id=@newId",
                             new { oldName = SelectedRecipeName, newId }, trans);
 
                         // D. 티칭 포인트 복사

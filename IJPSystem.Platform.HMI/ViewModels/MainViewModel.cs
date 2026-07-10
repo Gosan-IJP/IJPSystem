@@ -299,7 +299,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     motionAdapter,
                     raiseAlarm: code => _alarmVM.RaiseAlarm(code),
                     getPointAxisMm: motionAdapter.GetAxisPositionMm,
-                    hasActiveAlarm: () => HasActiveAlarm
+                    hasActiveAlarm: () => HasActiveAlarm,
+                    getSwathCount: () => RecipeVM.ActiveSwath,
+                    getHeadLength: () => RecipeVM.ActiveHeadLength
                 );
 
             RecipeVM.PropertyChanged += (s, e) =>

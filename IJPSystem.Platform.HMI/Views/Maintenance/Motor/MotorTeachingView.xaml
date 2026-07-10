@@ -133,10 +133,16 @@
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="SELECT AXIS" Foreground="#94A3B8" FontSize="10" FontWeight="Bold" Margin="0,0,0,8"/>
                         <ComboBox Style="{StaticResource ModernComboBoxStyle}"
-                                  ItemsSource="{Binding AxisList}" 
-                                  SelectedItem="{Binding SelectedAxis}" 
-                                  DisplayMemberPath="Info.Name" Width="170"
-                                  Height="35" FontSize="14" FontWeight="Bold" Foreground="Black"/>
+                                  ItemsSource="{Binding AxisList}"
+                                  SelectedItem="{Binding SelectedAxis}"
+                                  Width="170"
+                                  Height="35" FontSize="14" FontWeight="Bold" Foreground="Black">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Info.Name}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                         
                         <UniformGrid Columns="2" Margin="0,15,0,0">
                             <Button Style="{StaticResource ModernAxisButtonStyle}" Margin="0,0,5,0"
@@ -258,10 +264,11 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
+                        <!-- Z 축은 위(▲)=마이너스, 아래(▼)=플러스 (설비 기계방향에 맞춤) -->
                         <Button Grid.Column="0" Tag="Z" Width="Auto" Height="52"
                                 Style="{StaticResource JogControlStyle}"
                                 Background="#78350F" BorderBrush="#F59E0B"
-                                PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="Jog_MouseUp">
+                                PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="Jog_MouseUp">
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Z" Foreground="#F59E0B" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
                                 <TextBlock Text="▲" Foreground="White" FontSize="17" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
@@ -271,7 +278,7 @@
                         <Button Grid.Column="2" Tag="Z" Width="Auto" Height="52"
                                 Style="{StaticResource JogControlStyle}"
                                 Background="#78350F" BorderBrush="#F59E0B"
-                                PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="Jog_MouseUp">
+                                PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="Jog_MouseUp">
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Z" Foreground="#F59E0B" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
                                 <TextBlock Text="▼" Foreground="White" FontSize="17" HorizontalAlignment="Center" Margin="0,-2,0,0"/>

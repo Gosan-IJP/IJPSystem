@@ -28,6 +28,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // (pointName, axisName) → mm — 활성 레시피의 스캔축 티칭 좌표 조회용
         private readonly Func<string, string, double?>? _getPointAxisMm;
         private readonly Func<bool>? _hasActiveAlarm;
+        // 활성 레시피의 프린팅수(Swath) / 헤드길이 — 오토프린트 시퀀스 생성용
+        private readonly Func<int>? _getSwathCount;
+        private readonly Func<double>? _getHeadLength;
 
         // 프린팅 스캔(스테이지 이송) 축. 실장 구조: 헤드(X축)는 고정, 스테이지(Y축)가 이동하며 인쇄한다.
         // 메인 대시보드 애니메이션은 이 축의 모터 위치·티칭 좌표로 스테이지 이동/인쇄 진행을 구동한다.
@@ -37,9 +40,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly IMotionService _motion;
         private CancellationTokenSource? _cts;
         private CancellationTokenSource? _stepCts;   // 스텝 단위 취소 (일시정지 시 사용)
-
-        // 연속 운전 모드 — true 면 한 사이클 완료 후 자동으로 다음 사이클을 반복(정지 전까지).
-        private bool _continuousMode;
 
         // 초기화(INITIALIZE) 수행에 의한 오토런 리셋 진행 플래그.
         // 진행 중이던 런을 취소한 뒤, 런의 finally 에서 ABORTED 대신 IDLE 초기상태로 정리하기 위함.
@@ -143,6 +143,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set => SetProperty(ref _totalCount, value);
         }
 
+        // 활성 레시피의 프린팅수(Swath) — 메인화면 표시용. 센서 폴링에서 갱신.
+        private int _swathCount = 1;
+        public int SwathCount
+        {
+            get => _swathCount;
+            set => SetProperty(ref _swathCount, value);
+        }
+
         public double TactTime
         {
             get => _tactTime;
@@ -188,11 +196,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set => SetProperty(ref _activeRecipeName, value);
         }
 
+        // 연속 운전 모드(UI 토글, 단일 소스). 런 루프가 매 사이클 이 값을 실시간으로 읽으므로
+        // 단일/연속 운전 중에 토글을 바꾸면 다음 사이클부터 즉시 반영된다.
+        private bool _isContinuousMode;
+        public bool IsContinuousMode
+        {
+            get => _isContinuousMode;
+            set => SetProperty(ref _isContinuousMode, value);
+        }
+
         #endregion
 
         #region Commands
         public ICommand StartCommand { get; }
-        public ICommand StartContinuousCommand { get; }   // 연속 운전 시작
         public ICommand StopCommand { get; }
         public ICommand ResetCommand { get; }
 
@@ -278,19 +294,24 @@ namespace IJPSystem.Platform.HMI.ViewModels
             IMotionService motion,
             Action<string>? raiseAlarm = null,
             Func<string, string, double?>? getPointAxisMm = null,
-            Func<bool>? hasActiveAlarm = null)
+            Func<bool>? hasActiveAlarm = null,
+            Func<int>? getSwathCount = null,
+            Func<double>? getHeadLength = null)
         {
             _logAction       = logAction;
             _onAlarmChanged  = onAlarmChanged;
             _raiseAlarm      = raiseAlarm;
             _getPointAxisMm  = getPointAxisMm;
             _hasActiveAlarm  = hasActiveAlarm;
+            _getSwathCount   = getSwathCount;
+            _getHeadLength   = getHeadLength;
             _machine = machine;
             _motion = motion;
 
             ActiveRecipeName = initialActiveRecipe;
 
-            // 정지 상태면 시퀀스 시작(1회), 일시정지 상태면 재개
+            // 시작 — 정지 상태면 시퀀스 시작, 일시정지 상태면 재개.
+            // 연속 여부는 IsContinuousMode 토글로 결정(별도 연속 버튼 없음).
             StartCommand = new RelayCommand(async _ =>
             {
                 if (IsRunning && IsPaused)
@@ -301,36 +322,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 }
                 if (!IsRunning)
                 {
-                    _continuousMode = false;       // 1회 운전
-                    await RunAutoPrintAsync();
-                }
-            }, _ => !IsRunning || IsPaused);
-
-            // 연속 운전 시작 — 한 사이클 완료 후 정지 전까지 자동 반복. 일시정지 상태면 재개.
-            StartContinuousCommand = new RelayCommand(async _ =>
-            {
-                if (IsRunning && IsPaused)
-                {
-                    _continuousMode = true;        // 연속 버튼으로 재개 → 연속 모드 재개
-                    IsPaused = false;
-                    _logAction?.Invoke(T("Log_AutoPrintResume"), LogLevel.Info);
-                    return;
-                }
-                if (!IsRunning)
-                {
-                    _continuousMode = true;        // 연속 운전
-                    _logAction?.Invoke(T("Log_AutoPrintContinuousStart"), LogLevel.Info);
+                    // 반복 여부는 런 루프가 IsContinuousMode 를 실시간으로 읽어 결정
+                    if (IsContinuousMode)
+                        _logAction?.Invoke(T("Log_AutoPrintContinuousStart"), LogLevel.Info);
                     await RunAutoPrintAsync();
                 }
             }, _ => !IsRunning || IsPaused);
 
             // STOP 은 취소가 아니라 일시정지 — 현재 step 끝까지 마무리 후 다음 step 진입 전 멈춤. 재시작은 START.
-            // 연속 운전 중이면 반복도 중지(현재 사이클까지 마치고 더 이상 반복하지 않음).
+            // 연속 토글도 함께 끔 → 재개 시 현재 사이클까지만 마치고 반복 종료(연속 취소를 시각적으로도 반영).
             StopCommand = new RelayCommand(_ =>
             {
                 if (IsRunning && !IsPaused)
                 {
-                    _continuousMode = false;       // 연속 반복 중지
+                    IsContinuousMode = false;      // 연속 반복 중지(토글 OFF)
                     IsPaused = true;
                     _logAction?.Invoke(T("Log_AutoPrintStopPause"), LogLevel.Warning);
                 }
@@ -392,7 +397,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private void BuildSteps()
         {
             Steps.Clear();
-            foreach (var def in AutoPrintSequence.Build(_machine, _motion))
+            int swath = _getSwathCount?.Invoke() ?? 1;
+            double headLen = _getHeadLength?.Invoke() ?? 0;
+            foreach (var def in AutoPrintSequence.Build(_machine, _motion, swath, headLen))
             {
                 Steps.Add(new SequenceStep
                 {
@@ -437,7 +444,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             try
             {
-                // ── 연속 운전 루프 — _continuousMode 면 정지/취소 전까지 사이클 반복 ──
+                // ── 연속 운전 루프 — IsContinuousMode(토글)를 매 사이클 실시간 확인해 반복 ──
                 do
                 {
                 cycle++;
@@ -501,14 +508,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 TotalCount++;
                 if (TotalCount >= 1000) TotalCount = 0;
                 TactTime = Math.Round((DateTime.Now - startTime).TotalSeconds, 1);
-                CurrentStepName = _continuousMode ? $"CYCLE {cycle} DONE  ·  TOTAL {TotalCount}" : "COMPLETED";
+                CurrentStepName = IsContinuousMode ? $"CYCLE {cycle} DONE  ·  TOTAL {TotalCount}" : "COMPLETED";
                 _logAction?.Invoke(T("Log_AutoPrintCompleted", TactTime), LogLevel.Success);
 
-                // 연속 운전이면 다음 사이클 전 짧은 대기(취소 감지 포함)
-                if (_continuousMode && !_cts.Token.IsCancellationRequested)
+                // 연속 토글이 켜져 있으면 다음 사이클 전 짧은 대기(취소 감지 포함)
+                if (IsContinuousMode && !_cts.Token.IsCancellationRequested)
                     await Task.Delay(500, _cts.Token);
                 }
-                while (_continuousMode && !_cts.Token.IsCancellationRequested);
+                while (IsContinuousMode && !_cts.Token.IsCancellationRequested);
 
                 CurrentStepName = "COMPLETED";
                 _machine.SetSystemStatus(MachineState.Standby);
@@ -564,7 +571,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public void ResetForInitialize()
         {
             _resettingForInit = true;
-            _continuousMode   = false;   // 연속 반복 중단
+            IsContinuousMode  = false;   // 연속 토글 OFF(반복 중단)
             IsPaused          = false;   // 일시정지 게이트 해제 → 루프가 취소를 감지
             _stepCts?.Cancel();
             _cts?.Cancel();
@@ -628,6 +635,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             IsGlassDetected = _machine.IsGlassDetected();
             IsDoorLocked = _machine.IsDoorLocked();
             IsEmoActive = _machine.IsEmoActive();
+
+            // 활성 레시피 프린팅수 표시 갱신(APPLY 반영). SetProperty 라 값 변할 때만 알림.
+            SwathCount = _getSwathCount?.Invoke() ?? 1;
 
             // HMI 표기는 X/Y/Z/Q 인데 모션 드라이버는 회전축을 "T" 로 식별
             if (_machine.Motion != null)

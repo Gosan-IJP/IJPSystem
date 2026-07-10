@@ -30,6 +30,16 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         private readonly HashSet<AxisId> _homedAxes = new();
         private readonly object _homedSync = new();
 
+        // 부팅 잔류 폴트 자동 해제(실장: Y축 raw=0x8038 ServoFault).
+        // Connect 직후엔 EtherCAT 개별 드라이브가 아직 addressable 하지 않아 리셋이 -20280 로 실패한다.
+        // → 상태 폴링에서 첫 GetState 성공(=네트워크 준비) 시점에 축별 1회 리셋하고, 짧은 유예 뒤에도
+        //   폴트가 남아 있으면 그때 알람으로 넘긴다. 지속 폴트(STO/배선)는 유예 후 재폴트되어 정상 알람.
+        private readonly object _bootSync = new();
+        private readonly HashSet<AxisId> _bootClearPending = new();
+        private readonly Dictionary<AxisId, long> _bootFaultGraceUntil = new();
+        private bool _bootClearErrLogged;
+        private const int BootFaultGraceMs = 700;
+
         private IComiMotion? _comi;
 
         // 진단 로그 1회성 플래그(폴링 스팸 방지)
@@ -53,33 +63,44 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 _comi = comi;
                 LoggerService.WriteToFile("INFO", "[Comizoa Motion] Init 성공 — 실제 하드웨어 연결됨");
 
-                // 축별 기본 속도 프로파일 적용(Move 기준)
+                // 축별 파라미터를 드라이브에 다운로드(LabVIEW Init 과 동일 취지).
+                // 콜드부팅 후에도 첫 실행에서 정상 원점복귀/이동하도록, 엔코더 분해능·속도·원점 파라미터를 세팅.
                 foreach (var c in _configs)
                 {
                     if (!_axisMap.TryGetValue(c.AxisNo, out var ax)) continue;
+
+                    // 1) 엔코더 분해능(unit dist) — 속도/원점 해석의 기준이므로 먼저 설정. config 값 있을 때만.
+                    if (c.EncoderPulsePerUnit is double ppu && ppu > 0)
+                        TrySetup(() => comi.SetEncoderResolution(ax, ppu), c.AxisNo, "엔코더 분해능");
+
+                    // 2) 기본 이동 속도 프로파일(Move 기준)
                     var mv = c.MotionConfig?.Move;
-                    if (mv != null)
-                        comi.SetVelocity(ax, new VelocityProfile
+                    if (mv != null && mv.Velocity > 0)
+                        TrySetup(() => comi.SetVelocity(ax, new VelocityProfile
                         {
                             Velocity = mv.Velocity,
                             Acceleration = mv.Acceleration,
                             Deceleration = mv.Deceleration
-                        });
+                        }), c.AxisNo, "이동 속도");
+
+                    // 3) 원점복귀 속도 패턴 — config 에 있을 때만 다운로드(콜드부팅 Y 고속 주행 해결).
+                    //    LabVIEW Set Home Parameters.vi 와 동일하게 '속도 패턴만' 설정(모드/방향/오프셋 미변경 → 안전).
+                    //    없으면 미설정(현행 = 드라이브 기본값 유지).
+                    if (c.Home is Platform.Domain.Models.Motion.HomeConfig h)
+                        TrySetup(() => comi.SetHomeSpeedPattern(ax, h.Velocity, h.Acceleration, h.Deceleration, h.SpecVelocity),
+                            c.AxisNo, $"원점 속도패턴(vel={h.Velocity}, acc={h.Acceleration}, dec={h.Deceleration}, spec={h.SpecVelocity})");
                 }
 
                 // 전원투입 시 드라이브가 래치된 폴트 상태로 부팅되는 경우가 있다(실장: Y축 raw=0x8038, bit3 ServoFault).
-                // 수동으로 알람 해제하면 사라지고, 재실행하면 안 나타나는 전형적 잔류 폴트다.
-                // → 상태 폴링(알람 감시) 시작 전에 각 축 폴트를 1회 리셋. 실제 지속 폴트(STO/배선 등)는
-                //   리셋해도 즉시 재폴트하므로 감시에서 그대로 잡혀, 정상 알람은 놓치지 않는다.
-                foreach (var ax in _axisMap.Values)
+                // 이 시점에는 EtherCAT 개별 드라이브가 아직 addressable 하지 않아 즉시 리셋하면 -20280 로 실패한다.
+                // → 여기서는 대상만 등록해두고, 실제 리셋은 상태 폴링(네트워크 준비 후)에서 축별 1회 수행한다.
+                lock (_bootSync)
                 {
-                    try { comi.SetAlarmState(ax, reset: true); }
-                    catch (Exception ex)
-                    {
-                        LoggerService.WriteToFile("WARN",
-                            $"[Comizoa Motion] 기동 폴트 리셋 실패(축 {(int)ax}): {ex.GetType().Name}: {ex.Message}");
-                    }
+                    _bootClearPending.Clear();
+                    _bootFaultGraceUntil.Clear();
+                    foreach (var ax in _axisMap.Values) _bootClearPending.Add(ax);
                 }
+                _bootClearErrLogged = false;
 
                 IsConnected = true;
                 return true;
@@ -92,6 +113,21 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                     $"[Comizoa Motion] 연결 실패 — 모든 축 명령이 무시됩니다(시뮬레이션처럼 보임): {ex.GetType().Name}: {ex.Message}");
                 IsConnected = false;
                 return false;
+            }
+        }
+
+        /// <summary>Connect 중 파라미터 세팅을 안전 실행 — 실패해도 연결은 유지하고 경고만 로깅.</summary>
+        private static void TrySetup(Action setup, string axisNo, string what)
+        {
+            try
+            {
+                setup();
+                LoggerService.WriteToFile("INFO", $"[Comizoa Motion] {axisNo} {what} 설정 완료");
+            }
+            catch (Exception ex)
+            {
+                LoggerService.WriteToFile("WARN",
+                    $"[Comizoa Motion] {axisNo} {what} 설정 실패(무시하고 진행): {ex.GetType().Name}: {ex.Message}");
             }
         }
 
@@ -157,16 +193,23 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 s.CurrentPos   = st.Position;
                 s.IsMoving     = st.IsMoving;
                 s.IsServoOn    = st.ServoOn;
+
+                // 부팅 잔류 폴트 자동 해제: 여기까지 왔다는 건 GetState 성공 = 네트워크 준비 완료.
+                // 축별 1회 리셋 후 유예 동안 폴트를 보류한다(지속 폴트는 유예 뒤 재폴트되어 정상 알람).
+                bool alarm = st.Alarm;
+                if (alarm)
+                    alarm = HandleBootFaultClear(axisNo, ax);
+
                 // 하드웨어 HomeAttained 는 홈 직후 일반 이동하면 사라지므로 소프트 래치를 신뢰.
                 // 알람이 서면 원점 신뢰 불가 → 래치 해제.
-                if (st.Alarm)
+                if (alarm)
                 {
                     lock (_homedSync) _homedAxes.Remove(ax);
                 }
                 bool homed;
                 lock (_homedSync) homed = _homedAxes.Contains(ax);
                 s.IsHomeDone   = homed;
-                s.IsAlarm      = st.Alarm;
+                s.IsAlarm      = alarm;
                 s.CwLimit      = st.PositiveLimit;
                 s.CcwLimit     = st.NegativeLimit;
                 s.IsInPosition = !st.IsMoving;
@@ -181,6 +224,50 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                         $"[Comizoa Motion] 상태 읽기 실패({axisNo}) — 마지막 상태 유지: {ex.GetType().Name}: {ex.Message}");
                 }
             }
+        }
+
+        /// <summary>
+        /// 부팅 잔류 폴트를 축별 1회 자동 리셋한다. 반환값은 이번 주기에 알람으로 보고할지 여부.
+        /// - 아직 리셋 안 한 축: 리셋 시도(성공 시 유예 시작·이번 주기 보류, 실패 시 다음 폴링 재시도)
+        /// - 유예 중: 보류(드라이브가 폴트를 정리할 시간)
+        /// - 유예 경과 후에도 폴트: 지속 폴트로 판단 → 알람 보고
+        /// </summary>
+        private bool HandleBootFaultClear(string axisNo, AxisId ax)
+        {
+            long now = Environment.TickCount64;
+            lock (_bootSync)
+            {
+                if (_bootClearPending.Contains(ax))
+                {
+                    try
+                    {
+                        _comi!.SetAlarmState(ax, reset: true);
+                        _bootClearPending.Remove(ax);
+                        _bootFaultGraceUntil[ax] = now + BootFaultGraceMs;
+                        LoggerService.WriteToFile("INFO",
+                            $"[Comizoa Motion] 부팅 잔류 폴트 자동 리셋({axisNo}) — {BootFaultGraceMs}ms 유예 후에도 지속 시 알람");
+                        return false;   // 이번 주기 보류
+                    }
+                    catch (Exception ex)
+                    {
+                        // 네트워크 미준비 등 → 소진하지 않고 다음 폴링에서 재시도
+                        if (!_bootClearErrLogged)
+                        {
+                            _bootClearErrLogged = true;
+                            LoggerService.WriteToFile("WARN",
+                                $"[Comizoa Motion] 부팅 폴트 자동 리셋 실패({axisNo}) — 다음 폴링 재시도: {ex.GetType().Name}: {ex.Message}");
+                        }
+                        return false;   // 아직 판단 보류(네트워크 준비 전)
+                    }
+                }
+
+                if (_bootFaultGraceUntil.TryGetValue(ax, out long until))
+                {
+                    if (now < until) return false;      // 유예 중 — 폴트 정리 대기
+                    _bootFaultGraceUntil.Remove(ax);    // 유예 종료 — 이후엔 지속 폴트로 정상 알람
+                }
+            }
+            return true;   // 지속 폴트 → 알람 보고
         }
 
         // ── 구동 명령 ──

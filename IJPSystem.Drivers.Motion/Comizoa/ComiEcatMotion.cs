@@ -267,6 +267,14 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             CheckCmd(rc, err, "Home");
         }
 
+        public void SetHomeSpeedPattern(AxisId a, double vel, double acc, double dec, double specVel)
+        {
+            Need();
+            // LabVIEW Set Home Parameters.vi 와 동일: 홈 속도 패턴만 설정(모드/방향/오프셋 미변경).
+            int rc = ecmHomeCfg_SetSpeedPatt(NetID, (int)a, ecmSMODE_TRAPE, vel, acc, dec, specVel, out int err);
+            CheckCmd(rc, err, "SetHomeSpeedPatt");
+        }
+
         public void SetSoftLimit(AxisId a, SoftLimit l)
         {
             Need();

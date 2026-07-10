@@ -28,6 +28,8 @@
     <!-- 버튼 — 메인 대시보드 -->
     <system:String x:Key="Btn_Start">▶ 시작</system:String>
     <system:String x:Key="Btn_StartContinuous">▶▶ 연속</system:String>
+    <system:String x:Key="Lbl_ContinuousMode">연속 운전</system:String>
+    <system:String x:Key="Lbl_ContinuousModeHint">ON — 한 사이클 완료 후 자동 반복</system:String>
     <system:String x:Key="Btn_Stop">■ 정지</system:String>
     <system:String x:Key="Btn_EmergencyReset">⚠️ 비상 리셋</system:String>
 
@@ -127,6 +129,9 @@
     <system:String x:Key="Status_SystemTime">시스템 시간</system:String>
 
     <!-- 기타 -->
+    <system:String x:Key="Lbl_PrintSettings">프린트 설정</system:String>
+    <system:String x:Key="Lbl_Swath">프린팅수 (Swath)</system:String>
+    <system:String x:Key="Lbl_HeadLength">Head 길이</system:String>
     <system:String x:Key="Btn_Logout">로그아웃</system:String>
     <system:String x:Key="Btn_ClearLog">지우기</system:String>
     <system:String x:Key="Recipe_SaveApplyHint">* SAVE: 기록 저장 | APPLY: 설비 파라미터 즉시 반영</system:String>
@@ -241,8 +246,10 @@
     <system:String x:Key="Step_AutoPrint_VacuumStabilize">진공 안정화 대기 (1s)</system:String>
     <system:String x:Key="Step_AutoPrint_MoveStart">인쇄 시작 위치(PRINT START) 이동</system:String>
     <system:String x:Key="Step_AutoPrint_MoveStartDone">인쇄 시작 위치 InPosition 확인</system:String>
-    <system:String x:Key="Step_AutoPrint_Print">인쇄 진행 — 종점(PRINT END)까지 토출</system:String>
+    <system:String x:Key="Step_AutoPrint_Print">인쇄 진행 — 스캔(Y) 토출</system:String>
     <system:String x:Key="Step_AutoPrint_PrintDone">인쇄 완료 InPosition 확인</system:String>
+    <system:String x:Key="Step_AutoPrint_SwathStep">스와스 스텝오버 — X축 헤드길이 이동</system:String>
+    <system:String x:Key="Step_AutoPrint_SwathStepDone">스텝오버 InPosition 확인</system:String>
     <system:String x:Key="Step_AutoPrint_VacuumOff">V/C 척 진공 해제 (글래스 배출 준비)</system:String>
     <system:String x:Key="Step_AutoPrint_MoveReady">대기 위치(READY) 이동</system:String>
     <system:String x:Key="Step_AutoPrint_MoveReadyDone">READY 위치 InPosition 확인</system:String>

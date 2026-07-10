@@ -394,6 +394,47 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- ── 프린트 설정 카드 (프린팅수 Swath / Head 길이) ── -->
+                        <Border Grid.Column="1" Background="#1E293B" CornerRadius="10"
+                                BorderBrush="#334155" BorderThickness="1"
+                                Margin="0,20,20,20" Padding="20"
+                                VerticalAlignment="Top" HorizontalAlignment="Left" MinWidth="340">
+                            <StackPanel>
+                                <!-- 타이틀 -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                    <TextBlock Text="🖨" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Lbl_PrintSettings}" Foreground="White"
+                                               FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- 프린팅수 (Swath) -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <TextBlock Text="{DynamicResource Lbl_Swath}" Foreground="#94A3B8" FontSize="13"
+                                               Width="160" VerticalAlignment="Center"/>
+                                    <ComboBox Width="120" Height="32"
+                                              Style="{StaticResource ModernComboBoxStyle}"
+                                              ItemsSource="{Binding SwathOptions}"
+                                              SelectedItem="{Binding SwathCount, Mode=TwoWay}"/>
+                                </StackPanel>
+
+                                <!-- Head 길이 (mm) -->
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{DynamicResource Lbl_HeadLength}" Foreground="#94A3B8" FontSize="13"
+                                               Width="160" VerticalAlignment="Center"/>
+                                    <Border BorderBrush="#475569" BorderThickness="1" CornerRadius="6"
+                                            Background="#0F172A" Width="120" Height="32">
+                                        <TextBox Text="{Binding HeadLength, Mode=TwoWay, StringFormat={}{0:F3}, UpdateSourceTrigger=LostFocus}"
+                                                 Foreground="White" Background="Transparent" BorderThickness="0"
+                                                 FontSize="15" FontFamily="Consolas"
+                                                 VerticalContentAlignment="Center" Padding="8,0"
+                                                 Style="{StaticResource NumericEditingStyle}"/>
+                                    </Border>
+                                    <TextBlock Text=" mm" Foreground="#64748B" FontSize="13"
+                                               VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
                     </Grid>
                 </Border>
 

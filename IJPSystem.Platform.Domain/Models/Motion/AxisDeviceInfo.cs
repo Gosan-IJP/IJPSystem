@@ -27,7 +27,24 @@ namespace IJPSystem.Platform.Domain.Models.Motion
         // 배선상 논리축(X/Y/Z)이 다른 하드웨어 축에 물린 경우(예: X↔Y 뒤바뀜) 여기서 교정한다.
         public int? HwAxis { get; set; }
 
+        // 엔코더 분해능(논리단위 1 이동에 필요한 펄스 수 = SetUnitDist). null/0 이면 드라이브 기본값 사용.
+        public double? EncoderPulsePerUnit { get; set; }
+
+        // 원점복귀 속도 패턴. null이면 드라이브 기본값 사용(현행 동작).
+        // 설정하면 Connect 시 드라이브에 다운로드(ecmHomeCfg_SetSpeedPatt) → 콜드부팅 후 첫 실행에도 정상.
+        // LabVIEW Set Home Parameters.vi 와 동일하게 '속도 패턴만' 설정(모드/방향/오프셋은 미변경 → 안전).
+        public HomeConfig? Home { get; set; }
+
         public MotionDetailConfig MotionConfig { get; set; } = new();
+    }
+
+    // 원점복귀 속도 패턴(JSON). LabVIEW 클러스터 순서 Vel/Acc/Dec/HomeSpecVel 에 대응.
+    public class HomeConfig
+    {
+        public double Velocity { get; set; }       // 고속(탐색) 속도 — LabVIEW Vel
+        public double Acceleration { get; set; }   // 가속 — Acc
+        public double Deceleration { get; set; }   // 감속 — Dec
+        public double SpecVelocity { get; set; }   // 저속(크립/근접) 속도 — HomeSpecVel
     }
 
     // 3. 축별 상세 구동 설정 (계층 구조의 핵심)
