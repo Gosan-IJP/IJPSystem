@@ -456,12 +456,14 @@
 
             <Separator Grid.Column="3" Background="#334155" Width="1" Margin="5,8"/>
 
-            <!-- Col 4: 마지막 로그 메시지 -->
-            <StatusBarItem Grid.Column="4" HorizontalContentAlignment="Stretch">
-                <TextBlock Text="{Binding LastLogMessage}"
-                           Foreground="#64748B" Margin="15,0"
-                           FontSize="11" FontStyle="Italic"
-                           TextTrimming="CharacterEllipsis"/>
+            <!-- Col 4: 활성 레시피 프린팅수(Swath) — 값 변경 시에만 갱신(폴링 없음) -->
+            <StatusBarItem Grid.Column="4" HorizontalContentAlignment="Left">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0">
+                    <TextBlock Text="SWATH :  " Foreground="#94A3B8" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <TextBlock Foreground="#60A5FA" FontSize="12" FontWeight="Bold" VerticalAlignment="Center">
+                        <Run Text="{Binding RecipeVM.ActiveSwath, Mode=OneWay}"/><Run Text=" pass" Foreground="#64748B" FontSize="10"/>
+                    </TextBlock>
+                </StackPanel>
             </StatusBarItem>
 
             <!-- Col 5: 알람 카운트 + RECIPE -->

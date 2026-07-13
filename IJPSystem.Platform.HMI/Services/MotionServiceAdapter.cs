@@ -45,6 +45,17 @@ namespace IJPSystem.Platform.HMI.Services
         {
             var usedAxes = GetUsedAxesForPoint(pointName);
 
+            // 진단: 이 포인트로 어떤 축을 어디로 이동시키는지 명시. 비어 있으면 활성 스냅샷 문제(레시피
+            // APPLY/저장 안 됐거나 IsUsed=0) — READY 미이동 등의 원인을 로그로 즉시 판별.
+            if (usedAxes.Count == 0)
+                _mainVM.AddLog(
+                    $"[MOTION] {pointName} 이동 — 사용 축 없음(활성 스냅샷 비어있음). 레시피를 저장/적용하세요.",
+                    LogLevel.Warning);
+            else
+                _mainVM.AddLog(
+                    $"[MOTION] {pointName} 이동 → " + string.Join(", ", usedAxes.Select(kv => $"{kv.Key}={kv.Value:F1}")),
+                    LogLevel.Info);
+
             var tasks = _mainVM.SharedAxisList
                 .Where(ax => usedAxes.ContainsKey(ax.Info.Name))
                 .Select(async ax =>

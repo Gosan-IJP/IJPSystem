@@ -60,8 +60,23 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                       && !double.IsNaN(PrintStartScanMm)
                                       && Math.Abs(PrintStartScanMm - ReadyScanMm) > 0.001;
 
-        // View 60fps 프레임 타이머용 — 100ms 주기 캐시 대신 매 호출 스캔축(이송축) 실측치 반환
-        public double GetLiveScanMm() => _machine.Motion?.GetActualPosition(ScanAxis) ?? 0.0;
+        // View 60fps 프레임 콜백이 매 프레임 호출. 예전엔 매 호출마다 GetActualPosition(=EtherCAT 상태읽기)을
+        // 수행해, 프린팅(Y 이송) 중 모션제어와 버스 경합으로 프레임 스파이크(버벅임)가 발생했다.
+        // → 하드웨어 실측을 스로틀(≈25Hz)해 캐시로 반환한다. 60fps 애니메이션엔 충분히 매끄럽고
+        //   하드웨어 부하는 1/2 이하로 줄어든다.
+        private double _liveScanCache;
+        private long _liveScanReadTick;
+        private const long LiveScanThrottleMs = 40;   // 스캔축 실측 최대 ~25Hz
+        public double GetLiveScanMm()
+        {
+            long now = Environment.TickCount64;
+            if (now - _liveScanReadTick >= LiveScanThrottleMs || _liveScanReadTick == 0)
+            {
+                _liveScanCache = _machine.Motion?.GetActualPosition(ScanAxis) ?? 0.0;
+                _liveScanReadTick = now;
+            }
+            return _liveScanCache;
+        }
 
         private void CachePrintRange()
         {
@@ -399,6 +414,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             Steps.Clear();
             int swath = _getSwathCount?.Invoke() ?? 1;
             double headLen = _getHeadLength?.Invoke() ?? 0;
+            // 애니메이션(OnFrameTick)이 참조하는 SwathCount 를 시퀀스 생성 시 1회 확정.
+            // (센서 100ms 폴링으로 매번 읽지 않음 — 값은 사이클 시작 때만 바뀌므로 폴링 불필요)
+            SwathCount = swath;
             foreach (var def in AutoPrintSequence.Build(_machine, _motion, swath, headLen))
             {
                 Steps.Add(new SequenceStep
@@ -636,8 +654,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             IsDoorLocked = _machine.IsDoorLocked();
             IsEmoActive = _machine.IsEmoActive();
 
-            // 활성 레시피 프린팅수 표시 갱신(APPLY 반영). SetProperty 라 값 변할 때만 알림.
-            SwathCount = _getSwathCount?.Invoke() ?? 1;
+            // (SwathCount 는 BuildSteps 에서 1회 확정 — 100ms 폴링 제거)
 
             // HMI 표기는 X/Y/Z/Q 인데 모션 드라이버는 회전축을 "T" 로 식별
             if (_machine.Motion != null)

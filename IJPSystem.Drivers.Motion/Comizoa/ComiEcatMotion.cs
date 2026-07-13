@@ -77,6 +77,8 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         [DllImport(Dll)] private static extern int ecmSxSt_WaitCompt(int netId, int axis, out int errCode);
         [DllImport(Dll)] private static extern ushort ecmSxSt_GetFlags(int netId, int axis, out int errCode);
         [DllImport(Dll)] private static extern double ecmSxSt_GetPosition(int netId, int axis, int targCntr, out int errCode);
+        // 축 전용 디지털 입력(하드리밋 ±/원점 등). 반환은 t_word 비트필드(TEcmSxSt_DI).
+        [DllImport(Dll)] private static extern ushort ecmSxSt_GetDI(int netId, int axis, out int errCode);
 
         // -- 원점복귀 --
         [DllImport(Dll)] private static extern int ecmHomeCfg_SetMode(int netId, int axis, int homeOpMode, out int errCode);
@@ -91,6 +93,14 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         private readonly System.Collections.Generic.Dictionary<AxisId, int> _homeDir = new();
         // 알람 진단: 축별 마지막으로 로깅한 상태 워드(변화 시에만 1회 로깅 — 폴링 스팸 방지).
         private readonly System.Collections.Generic.Dictionary<AxisId, ushort> _lastAlarmFlags = new();
+        // 센서(DI) 진단: 축별 마지막 DI 워드(변화 시에만 로깅). 비트 매핑 실장 검증용.
+        private readonly System.Collections.Generic.Dictionary<AxisId, ushort> _lastDi = new();
+
+        // 축 전용 DI 비트 매핑(가장 일반적인 Comizoa 레이아웃 — 실장에서 raw 로그로 검증/보정).
+        //   bit0 +EL(CW 하드리밋), bit1 -EL(CCW 하드리밋), bit2 ORG(원점/HOME)
+        private const int DI_BIT_LIMIT_P = 0;   // +EL / CW
+        private const int DI_BIT_LIMIT_N = 1;   // -EL / CCW
+        private const int DI_BIT_ORG     = 2;   // ORG / HOME
 
         /// <summary>cmdidx(=0 실패) 반환 명령 함수 검사. 실패 시 오류코드를 이름·설명으로 디코딩.</summary>
         private static void CheckCmd(int cmdidx, int err, string op)
@@ -324,6 +334,21 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 _lastAlarmFlags.Remove(a);
             }
 
+            // 축 전용 DI(±하드리밋 / 원점) 읽기 — GetFlags(상태워드)엔 없으므로 ecmSxSt_GetDI 사용.
+            ushort di = ecmSxSt_GetDI(NetID, (int)a, out _);
+            bool limitP = (di & (1 << DI_BIT_LIMIT_P)) != 0;   // CW  (+EL)
+            bool limitN = (di & (1 << DI_BIT_LIMIT_N)) != 0;   // CCW (-EL)
+            bool orgSns = (di & (1 << DI_BIT_ORG))     != 0;   // HOME(ORG)
+
+            // 센서 비트 매핑 검증용: DI 워드가 바뀔 때만 raw 를 1회 로깅(폴링 스팸 방지).
+            // 실장에서 각 센서를 물리적으로 눌러 어느 비트가 서는지 확인 → 매핑 상수 보정.
+            if (!_lastDi.TryGetValue(a, out var prevDi) || prevDi != di)
+            {
+                _lastDi[a] = di;
+                LoggerService.WriteToFile("INFO",
+                    $"[ComiEcat] Axis {(int)a} DI raw=0x{di:X4} (CW={(limitP ? 1 : 0)}, CCW={(limitN ? 1 : 0)}, HOME={(orgSns ? 1 : 0)})");
+            }
+
             return new AxisState
             {
                 Position      = pos,
@@ -332,9 +357,9 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 IsHomed       = homeAttained,
                 HomeBusy      = homeBusy,
                 Alarm         = alarm,
-                // 하드웨어 EL 리밋은 GetFlags 에 직접 없음(필요 시 ecmSxSt_GetDI 로 확장). 현재 미매핑.
-                PositiveLimit = false,
-                NegativeLimit = false
+                PositiveLimit = limitP,   // CW  하드리밋
+                NegativeLimit = limitN,   // CCW 하드리밋
+                HomeSensor    = orgSns    // 원점(HOME) 센서
             };
         }
 
@@ -351,7 +376,9 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         }
 
         // 원점복귀 완료 대기. 홈 모션은 단축모션(ecmSx) busy 와 무관하므로 WaitForDone(IsMoving) 로는
-        // 완료를 못 잡는다(busy 가 안 떨어져 타임아웃까지 매달림). 홈 전용 플래그(HomeBusy/HomeAttained)로 판정.
+        // 완료를 못 잡는다. 홈 전용 플래그(HomeBusy/HomeAttained)로 1차 판정하되,
+        // ★ 드라이브가 HomeAttained(bit14)를 모션 정지 전에 미리 세우는 사례가 있어(실장: 홈 done 직후
+        //   축이 계속 이동 → 이어지는 절대이동이 err=-1020 로 거부됨), 실제 '위치 정지'까지 함께 확인한다.
         public bool WaitForHomeDone(AxisId a, int timeoutMs)
         {
             Need();
@@ -359,14 +386,33 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             Thread.Sleep(100);
             var sw = Stopwatch.StartNew();
             bool sawBusy = false;
+
+            // 정지 판정: 위치가 최근 SettleWindowMs 동안 SettleBand(mm) 범위를 벗어나지 않으면 '정지'.
+            //  · 서보 미세진동(수십 µm)은 밴드보다 작아 흡수 → 오래 매달리지 않음(0.005mm 정밀판정의 문제 해결)
+            //  · 잔여 이송/크리프는 밴드를 벗어나 기준을 리셋 → 진짜 멈출 때만 확정
+            //  · ecmSx IsBusy 는 홈 후 오래 stuck 되어 부적합하므로 사용하지 않음
+            const double SettleBand = 0.1;
+            const long SettleWindowMs = 250;
+            double refPos = double.NaN;
+            long refMs = 0;
+
             while (sw.ElapsedMilliseconds < timeoutMs)
             {
                 var st = GetState(a);
                 if (st.HomeBusy) sawBusy = true;
-                // 완료: 홈 busy 해제 && (홈 busy 를 관측했거나 이미 원점 도달 표시)
-                if (!st.HomeBusy && (sawBusy || st.IsHomed))
+
+                long nowMs = sw.ElapsedMilliseconds;
+                if (double.IsNaN(refPos) || Math.Abs(st.Position - refPos) > SettleBand)
+                {
+                    refPos = st.Position;   // 밴드 이탈(이동 중) → 기준 갱신
+                    refMs = nowMs;
+                }
+                bool settled = (nowMs - refMs) >= SettleWindowMs;
+
+                bool homeFlagDone = !st.HomeBusy && (sawBusy || st.IsHomed);
+                if (homeFlagDone && settled)
                     return st.IsHomed;
-                Thread.Sleep(5);
+                Thread.Sleep(10);
             }
             return false;
         }

@@ -20,8 +20,12 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <TextBlock Text="TEACHING POINT MATRIX" Foreground="#3B82F6" 
-                   FontWeight="Bold" Margin="5,0,0,15"/>
+                <DockPanel Grid.Row="0" LastChildFill="False" Margin="5,0,0,15">
+                    <TextBlock Text="TEACHING POINT MATRIX" Foreground="#3B82F6"
+                               FontWeight="Bold" VerticalAlignment="Center" DockPanel.Dock="Left"/>
+                    <TextBlock Text="※ Check 시 축 사용" Foreground="#94A3B8" FontSize="11"
+                               VerticalAlignment="Center" Margin="0,0,5,0" DockPanel.Dock="Right"/>
+                </DockPanel>
 
                 <DataGrid x:Name="PointGrid"
                           Grid.Row="1"

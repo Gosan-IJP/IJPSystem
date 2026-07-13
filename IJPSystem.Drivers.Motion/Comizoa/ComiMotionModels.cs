@@ -39,7 +39,8 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         public bool IsHomed { get; set; }
         public bool HomeBusy { get; set; }   // 원점복귀 진행 중(홈 모션 busy). 홈 완료 판정용.
         public bool Alarm { get; set; }
-        public bool PositiveLimit { get; set; }
-        public bool NegativeLimit { get; set; }
+        public bool PositiveLimit { get; set; }   // +하드리밋(CW)
+        public bool NegativeLimit { get; set; }   // -하드리밋(CCW)
+        public bool HomeSensor { get; set; }      // 원점(ORG/HOME) 센서
     }
 }

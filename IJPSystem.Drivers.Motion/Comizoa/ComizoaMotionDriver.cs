@@ -210,8 +210,9 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 lock (_homedSync) homed = _homedAxes.Contains(ax);
                 s.IsHomeDone   = homed;
                 s.IsAlarm      = alarm;
-                s.CwLimit      = st.PositiveLimit;
-                s.CcwLimit     = st.NegativeLimit;
+                s.CwLimit      = st.PositiveLimit;    // +하드리밋(CW)
+                s.CcwLimit     = st.NegativeLimit;    // -하드리밋(CCW)
+                s.HomeSensor   = st.HomeSensor;       // 원점(HOME) 센서
                 s.IsInPosition = !st.IsMoving;
             }
             catch (Exception ex)
@@ -317,7 +318,35 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                     move(ax);
                     return _comi.WaitForDone(ax, DefaultMoveTimeoutMs);
                 }
-                catch { return false; }
+                catch
+                {
+                    // 홈 직후 등 ecmSx busy stuck 으로 -1020 거부되는 경우 대비: Stop 으로 상태 정리 후 1회 재시도.
+                    // (시퀀스 이동은 완료대기로 직렬화되어 있어 여기서 busy 는 정상 모션이 아니라 stuck 이다.)
+                    try
+                    {
+                        _comi!.Stop(ax);
+                        System.Threading.Thread.Sleep(50);
+                        _comi.SetVelocity(ax, new VelocityProfile { Velocity = vel, Acceleration = acc, Deceleration = dec });
+                        move(ax);
+                        return _comi.WaitForDone(ax, DefaultMoveTimeoutMs);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 재시도까지 실패 → 무음 실패 방지 위해 사유·드라이브 상태 로깅.
+                        // cmdidx=0(드라이브 거부: 서보 미Enable/원점 미완/busy 등)이면 ex.Message 에 err 코드가 담긴다.
+                        string state = "";
+                        try
+                        {
+                            var s = _comi!.GetState(ax);
+                            state = $" | 상태(servoOn={s.ServoOn}, moving={s.IsMoving}, homed={s.IsHomed}, " +
+                                    $"homeBusy={s.HomeBusy}, alarm={s.Alarm}, pos={s.Position:F3})";
+                        }
+                        catch { /* 상태 읽기도 실패 시 무시 */ }
+                        LoggerService.WriteToFile("ERROR",
+                            $"[Comizoa Motion] 이동 명령 실패({axisNo}, vel={vel}): {ex.GetType().Name}: {ex.Message}{state}");
+                        return false;
+                    }
+                }
             });
         }
 
@@ -355,13 +384,33 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                             $"[Comizoa Motion] Home({axisNo}) — 서보 Enable 대기 시간초과, 그대로 진행");
                     // 홈은 단축모션 busy 가 아닌 홈 전용 완료 플래그로 대기.
                     lock (_homedSync) _homedAxes.Remove(ax);   // 새 홈 시작 — 이전 래치 무효화
-                    _comi!.Home(ax);
+                    var pre = _comi!.GetState(ax);
+                    var swHome = System.Diagnostics.Stopwatch.StartNew();
+                    _comi.Home(ax);
                     bool done = _comi.WaitForHomeDone(ax, DefaultMoveTimeoutMs);
+                    swHome.Stop();
                     if (done)
+                    {
                         lock (_homedSync) _homedAxes.Add(ax);   // 완료 래치(이후 일반 이동해도 유지)
+                        // ★ 홈(ecmHomeMot) 직후 단축모션(ecmSx) IsBusy 가 stuck(True)으로 남아, 곧바로 절대이동하면
+                        //   드라이브가 -1020(busy)로 거부한다(실장: 첫 실행 READY 미이동, 2차엔 정상).
+                        //   → Stop 으로 ecmSx 모션상태를 정리해 busy 를 해제한다(축은 이미 원점 정지 상태라 안전).
+                        try { _comi.Stop(ax); System.Threading.Thread.Sleep(30); } catch { /* 무시 */ }
+                    }
+                    // 진단: 소요시간·위치변화로 실제 홈 동작이 오래 걸리는지(물리) vs 완료판정 지연인지 구분.
+                    var post = _comi.GetState(ax);
+                    LoggerService.WriteToFile("INFO",
+                        $"[Comizoa Motion] Home({axisNo}) 결과 done={done} 소요={swHome.ElapsedMilliseconds}ms | " +
+                        $"전(servoOn={pre.ServoOn}, homed={pre.IsHomed}, pos={pre.Position:F3}) → " +
+                        $"후(servoOn={post.ServoOn}, homed={post.IsHomed}, homeBusy={post.HomeBusy}, pos={post.Position:F3})");
                     return done;
                 }
-                catch { return false; }
+                catch (Exception ex)
+                {
+                    LoggerService.WriteToFile("ERROR",
+                        $"[Comizoa Motion] Home 명령 실패({axisNo}): {ex.GetType().Name}: {ex.Message}");
+                    return false;
+                }
             });
         }
 

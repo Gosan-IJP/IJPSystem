@@ -164,6 +164,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // 초기화를 수행하면 진행/일시정지 중이던 오토런도 함께 초기화(백그라운드 런·화면 상태 정리).
             _mainVM.ResetAutoRunForInitialize();
 
+            // 시퀀스가 참조하는 활성 스냅샷을 DB 최신값으로 갱신 — 티칭 저장 후 READY 좌표가
+            // 반영되도록(스냅샷 미갱신으로 READY 미이동하던 문제 방지). ActiveRecipeName 기준.
+            _mainVM.RecipeVM.RefreshActivePointsSnapshot();
+
             BuildSteps();
             ExecutionLogs.Clear();
             IsError = false;

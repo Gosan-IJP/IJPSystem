@@ -207,6 +207,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand ServoCommand { get; }
         public ICommand StopCommand { get; }
         public ICommand HomeCommand { get; }
+        public ICommand ResetCommand { get; }
 
         #endregion
 
@@ -225,6 +226,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ServoCommand = new RelayCommand(async _ => await ServoOnOffAsync());
             StopCommand = new RelayCommand(async _ => await StopAsync());
             HomeCommand = new RelayCommand(async _ => await HomeAsync());
+            ResetCommand = new RelayCommand(async _ => await ResetAlarmAsync());
         }
 
         public async Task ServoOnOffAsync()
@@ -289,6 +291,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 MotionProfileKind.Jog      => Info.MotionConfig.Jog,
                 _                          => Info.MotionConfig.Move,
             });
+
+            // 안전장치: 속도/가감속이 0이면 드라이브가 모션을 시작하지 않는다. 그러면 명령은 나갔지만
+            // 실제로 안 움직이고 InPosition(=!IsMoving)이 즉시 통과해, 시퀀스가 '미이동 상태로 완료'된다
+            // (실장 재현: 레시피 모터 속도 미설정 → X 미이동·초기화 완료). MotorConfig.json 에도 Move 프로파일이
+            // 없어 fallback 이 0 이 되는 구조라, 여기서 안전 최소 프로파일로 보정하고 경고를 남긴다.
+            if (profile.Velocity <= 0 || profile.Acceleration <= 0 || profile.Deceleration <= 0)
+            {
+                double v = profile.Velocity > 0 ? profile.Velocity
+                         : (Info.MotionConfig.Move.Velocity > 0 ? Info.MotionConfig.Move.Velocity : 20.0);
+                double a = profile.Acceleration > 0 ? profile.Acceleration : 200.0;
+                double d = profile.Deceleration > 0 ? profile.Deceleration : 200.0;
+                _mainViewModel.AddLog(
+                    $"[MOTION] {Info.Name} 이동 프로파일 미설정(vel={profile.Velocity}) — 안전 최소값(vel={v}, acc={a}, dec={d}) 적용. 레시피 모터 속도를 설정하세요.",
+                    LogLevel.Warning);
+                profile = new Profile { Velocity = v, Acceleration = a, Deceleration = d };
+            }
 
             try
             {
@@ -355,6 +373,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             _mainViewModel.AddLog($"[MOTION] {Info.Name} Home Searching Start.");
             await _driver.Home(Info.AxisNo);
+        }
+
+        // 축 알람(서보 폴트) 리셋 — 드라이버 ResetAlarm 호출. 상태는 폴링으로 갱신됨.
+        public async Task ResetAlarmAsync()
+        {
+            _mainViewModel.AddLog($"[MOTION] {Info.Name} (Axis:{Info.AxisNo}) Alarm Reset Command.");
+            bool ok = await _driver.ResetAlarm(Info.AxisNo);
+            if (!ok)
+                _mainViewModel.AddLog($"[MOTION] {Info.Name} 알람 리셋 실패(무시하고 진행)", LogLevel.Warning);
         }
 
         // driver 의 실시간 IsInPosition (UpdateMotorStatus 100ms 캐시 우회)

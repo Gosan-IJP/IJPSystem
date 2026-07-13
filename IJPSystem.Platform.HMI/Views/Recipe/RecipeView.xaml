@@ -502,11 +502,20 @@
                                            VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
-                        <!-- DIFF 버튼 — 활성/선택 레시피 비교 (또는 임의 두 레시피) -->
+                        <!-- DIFF 버튼 — 활성/선택 레시피 비교 (또는 임의 두 레시피). Admin 모드에서만 표시 -->
                         <Button Command="{Binding OpenDiffCommand}"
-                                Style="{StaticResource MainDashboardButtonStyle}"
                                 Width="160" Height="45" Background="#7C3AED" Margin="0,0,10,0"
                                 ToolTip="두 레시피의 모든 파라미터/티칭 좌표 차이를 비교">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource MainDashboardButtonStyle}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.CurrentUserRole, RelativeSource={RelativeSource AncestorType=Window}}" Value="Admin">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="⇄" FontSize="14" Margin="0,0,6,0"
                                             VerticalAlignment="Center"/>

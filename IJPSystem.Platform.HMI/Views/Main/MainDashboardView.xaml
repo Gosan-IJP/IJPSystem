@@ -296,7 +296,7 @@
                                 <TextBlock Text="{Binding MotorZPosition, StringFormat={}{0:F3}}" Foreground="#3B82F6" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Margin="6,0,0,0"/>
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,1,0,1">
-                                <TextBlock Text="Q :" Foreground="#94A3B8" FontFamily="Consolas" FontSize="13"/>
+                                <TextBlock Text="T :" Foreground="#94A3B8" FontFamily="Consolas" FontSize="13"/>
                                 <TextBlock Text="{Binding MotorQPosition, StringFormat={}{0:F3}}" Foreground="#3B82F6" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Margin="6,0,0,0"/>
                             </StackPanel>
                         </Grid>
@@ -345,20 +345,7 @@
                              Foreground="#3B82F6" Background="#1E293B" BorderThickness="0"
                              Margin="0,0,0,12"/>
 
-                <!-- 활성 레시피 프린팅수(Swath) 표시 -->
-                <Border Background="#0F2B4A" CornerRadius="8" Padding="14,8" Margin="0,0,0,12"
-                        BorderBrush="#1D4ED8" BorderThickness="1">
-                    <Grid>
-                        <TextBlock Text="{DynamicResource Lbl_Swath}" Foreground="#93C5FD"
-                                   FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding SwathCount}" Foreground="#60A5FA"
-                                       FontSize="22" FontWeight="Black" FontFamily="Consolas" VerticalAlignment="Center"/>
-                            <TextBlock Text=" pass" Foreground="#64748B" FontSize="12" FontWeight="Bold"
-                                       VerticalAlignment="Bottom" Margin="4,0,0,3"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+                <!-- 프린팅수(Swath) 표시는 하단 네비게이터(RECIPE 옆)로 이동 -->
 
                 <Border Background="#111827" CornerRadius="12" Padding="14" Margin="0,0,0,12" BorderBrush="#1E293B" BorderThickness="2">
                     <ItemsControl ItemsSource="{Binding Steps}">

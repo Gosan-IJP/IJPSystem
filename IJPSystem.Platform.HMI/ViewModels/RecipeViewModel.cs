@@ -63,7 +63,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             = new(StringComparer.OrdinalIgnoreCase);
 
         // 활성(APPLY된) 레시피의 프린팅수(Swath)/헤드길이 — 오토프린트 시퀀스 생성에 사용
-        public int ActiveSwath { get; private set; } = 1;
+        // ActiveSwath 는 하단 네비게이터 표시에 바인딩되므로 값 변경 시 알림(반응형).
+        private int _activeSwath = 1;
+        public int ActiveSwath { get => _activeSwath; private set => SetProperty(ref _activeSwath, value); }
         public double ActiveHeadLength { get; private set; } = 0;
 
         public IReadOnlyDictionary<string, double>? GetActivePoint(string pointName) =>

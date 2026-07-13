@@ -141,7 +141,13 @@
       "Read(//c/Windows/System32/**)",
       "Bash(xxd)",
       "Bash(rm -rf C:/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/dbq)",
-      "Bash(mkdir -p C:/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/dbq)"
+      "Bash(mkdir -p C:/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/dbq)",
+      "Bash(find . -iname \"ComiEcat*.dll\")",
+      "Bash(ls -la /c/Windows/System32/ComiEcatSdk.dll)",
+      "Bash(ls Installer/native/)",
+      "Bash(which strings *)",
+      "Read(//c/Program Files \\\\\\(x86\\\\\\)/Microsoft Visual Studio/**)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Professional/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/dumpbin.exe\" //exports ComiEcatSdk.dll)"
     ],
     "additionalDirectories": [
       "d:\\tmp",
