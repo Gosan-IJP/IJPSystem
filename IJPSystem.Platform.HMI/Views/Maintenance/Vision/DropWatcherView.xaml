@@ -167,21 +167,29 @@
                 </Border>
 
                 <!-- 하단 상태바 -->
+                <!-- 하단 상태바: 좌(분석 결과) / 우(오버레이 범례). 두 영역을 별도 컬럼으로 분리해
+                     텍스트가 길어져도 서로 겹치지 않게 한다(좌측은 넘치면 말줄임). -->
                 <Border Grid.Row="3" Background="#1E293B" CornerRadius="0,0,12,12" Padding="16,9">
                     <Grid>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="1624x1240  0.45X  8-bit image" Foreground="#64748B"
-                                       FontSize="11" FontFamily="Consolas"/>
-                            <TextBlock Text="    LAST : " Foreground="#475569"
-                                       FontSize="11" FontFamily="Consolas"/>
-                            <TextBlock Text="{Binding CaptureTimeText}" Foreground="#94A3B8"
-                                       FontSize="11" FontFamily="Consolas" FontWeight="Bold"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                            <TextBlock Text="Green = Velocity (m/s)" Foreground="#22C55E"
-                                       FontSize="11" FontWeight="Bold"/>
-                            <TextBlock Text="    Blue = Volume (pl)" Foreground="#38BDF8"
-                                       FontSize="11" FontWeight="Bold"/>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                                   FontSize="11" FontFamily="Consolas"
+                                   TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                                   ToolTip="{Binding LastResultText}">
+                            <Run Text="LAST : " Foreground="#475569"/>
+                            <Run Text="{Binding CaptureTimeText, Mode=OneWay}" Foreground="#94A3B8" FontWeight="Bold"/>
+                            <Run Text="  ▶  " Foreground="#475569"/>
+                            <Run Text="{Binding LastResultText, Mode=OneWay}" Foreground="#FCD34D" FontWeight="Bold"/>
+                        </TextBlock>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                            <TextBlock Text="Green = Velocity" Foreground="#22C55E" FontSize="11" FontWeight="Bold"/>
+                            <TextBlock Text="  Cyan = Measure Area" Foreground="#22D3EE" FontSize="11" FontWeight="Bold"/>
+                            <TextBlock Text="  Magenta = Column" Foreground="#E879F9" FontSize="11" FontWeight="Bold"/>
                         </StackPanel>
                     </Grid>
                 </Border>

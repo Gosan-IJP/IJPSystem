@@ -15,6 +15,9 @@
     <PackageReference Include="NModbus.Serial" Version="3.0.81" />
     <!-- Devices/DropWatcher (iCore Strobe 시리얼) -->
     <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+    <!-- Devices/DropWatcher 액적 영상분석(OpenCV). runtime.win 은 x86/x64 네이티브 모두 포함 → win-x86 빌드 지원 -->
+    <PackageReference Include="OpenCvSharp4" Version="4.10.0.20241108" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.10.0.20241108" />
   </ItemGroup>
 
   <ItemGroup>

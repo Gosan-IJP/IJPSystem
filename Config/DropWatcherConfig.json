@@ -1,0 +1,18 @@
+{
+  "_comment": "드랍와쳐 OpenCV 액적분석 파라미터. MicronsPerPixel 은 실장 교정 필수(부피/직경/속도 절대값이 비례).",
+  "MicronsPerPixel": 5.0,
+  "DropletsAreDark": true,
+  "ThresholdValue": 0,
+  "MinAreaPx": 20,
+  "MaxAreaPx": 200000,
+  "_BackgroundKernel": "배경 억제(BlackHat) 커널[px]. 액적 직경의 2~3배. 0=비활성(전역 임계)",
+  "BackgroundKernel": 81,
+  "_MorphKernel": "open 커널. 0=비활성 권장. 전역 임계와 함께 쓰면 배경 조각으로 과검출 발생",
+  "MorphKernel": 0,
+  "RoiX": 0,
+  "RoiY": 0,
+  "RoiWidth": 0,
+  "RoiHeight": 0,
+  "MeasureAreaXUm": 60.0,
+  "SweepFrames": 15
+}

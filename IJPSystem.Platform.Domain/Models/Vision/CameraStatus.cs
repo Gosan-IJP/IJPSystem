@@ -6,7 +6,20 @@ namespace IJPSystem.Platform.Domain.Models.Vision
     public class CameraStatus : ViewModelBase
     {
         public string CameraId { get; set; } = string.Empty;
+
+        /// <summary>하드웨어 식별자(IMAQdx 카메라 이름). 표시에는 <see cref="DisplayName"/> 사용.</summary>
         public string Name     { get; set; } = string.Empty;
+
+        /// <summary>화면 표시명. 비어 있으면 <see cref="Name"/> → <see cref="CameraId"/> 순으로 대체.</summary>
+        public string DisplayName { get; set; } = string.Empty;
+
+        /// <summary>Visual Monitor 소스 목록 노출 여부.</summary>
+        public bool ShowInMonitor { get; set; } = true;
+
+        /// <summary>표시에 쓸 최종 이름(DisplayName → Name → CameraId).</summary>
+        public string DisplayLabel =>
+            !string.IsNullOrWhiteSpace(DisplayName) ? DisplayName
+            : !string.IsNullOrWhiteSpace(Name) ? Name : CameraId;
 
         private bool _isConnected;
         public bool IsConnected

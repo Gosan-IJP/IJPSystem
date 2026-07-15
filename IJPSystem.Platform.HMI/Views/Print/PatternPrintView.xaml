@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:ctl="clr-namespace:IJPSystem.Platform.HMI.Common.Controls"
+             xmlns:views="clr-namespace:IJPSystem.Platform.HMI.Views"
              mc:Ignorable="d" d:DesignHeight="780" d:DesignWidth="1280"
              Background="#0B0F1A">
 
@@ -36,12 +37,15 @@
             <Setter Property="Width"  Value="30"/>
             <Setter Property="Height" Value="28"/>
             <Setter Property="Foreground" Value="#CBD5E1"/>
+            <!-- Background 는 Setter 로 두고 템플릿에서 TemplateBinding 으로 받는다.
+                 (하드코딩하면 파생 스타일/트리거의 Background 변경이 조용히 무시됨) -->
+            <Setter Property="Background" Value="#1E293B"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="4">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="#334155" BorderThickness="1" CornerRadius="4">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -234,44 +238,59 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="Visual Monitor"
                                    Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
-                        <!-- 도구 (zoom / select / pan) -->
+                        <!-- 도구: 돋보기=확대(즉시), ⤢=화면 맞춤, 손=이동 모드 -->
                         <StackPanel Grid.Column="2" Orientation="Horizontal">
-                            <Button Style="{StaticResource ToolbarBtn}" Content="🔍" Margin="0,0,4,0"/>
-                            <Button Style="{StaticResource ToolbarBtn}" Content="⤢"  Margin="0,0,4,0"/>
-                            <Button Style="{StaticResource ToolbarBtn}" Content="✋"/>
+                            <Button Style="{StaticResource ToolbarBtn}" Content="🔍" Margin="0,0,4,0"
+                                    Command="{Binding Monitor.ZoomInCommand}"
+                                    ToolTip="확대 (휠로 확대/축소도 가능)"/>
+                            <Button Style="{StaticResource ToolbarBtn}" Content="⤢"  Margin="0,0,4,0"
+                                    Command="{Binding Monitor.FitCommand}"
+                                    ToolTip="화면 맞춤 (이미지 전체 보기)"/>
+                            <Button Content="✋" Margin="0,0,0,0"
+                                    Command="{Binding Monitor.SetToolCommand}" CommandParameter="Pan"
+                                    ToolTip="이동 (드래그로 화면 이동)">
+                                <Button.Style>
+                                    <!-- 이동 모드일 때 활성 표시 -->
+                                    <Style TargetType="Button" BasedOn="{StaticResource ToolbarBtn}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Monitor.Tool}" Value="Pan">
+                                                <Setter Property="Background" Value="#1D4ED8"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </StackPanel>
-                        <!-- 우측: Toggle Cross line + Glass View -->
+                        <!-- 우측: Toggle Cross line + 카메라 소스(기본 드랍와쳐) -->
                         <StackPanel Grid.Column="4" Orientation="Horizontal">
-                            <Button Style="{StaticResource ActionBtn}" Content="Toggle Cross line"
-                                    Height="28" Margin="0,0,6,0"/>
+                            <Button Content="Toggle Cross line" Height="28" Margin="0,0,6,0"
+                                    Command="{Binding Monitor.ToggleCrossLineCommand}"
+                                    ToolTip="크로스라인 표시/숨김">
+                                <Button.Style>
+                                    <!-- 켜져 있으면 강조해 현재 상태를 알 수 있게 함 -->
+                                    <Style TargetType="Button" BasedOn="{StaticResource ActionBtn}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Monitor.CrossLineVisible}" Value="True">
+                                                <Setter Property="Background" Value="#B91C1C"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                             <ComboBox Width="120" Height="28" Background="#0D1520" Foreground="Black"
-                                      BorderBrush="#334155" VerticalContentAlignment="Center" FontWeight="Bold">
-                                <ComboBoxItem Content="Glass View" IsSelected="True"/>
-                                <ComboBoxItem Content="NJI View"/>
-                                <ComboBoxItem Content="Drop Watcher"/>
-                            </ComboBox>
+                                      BorderBrush="#334155" VerticalContentAlignment="Center" FontWeight="Bold"
+                                      ItemsSource="{Binding Monitor.Sources}"
+                                      SelectedItem="{Binding Monitor.SelectedSource}"
+                                      ToolTip="카메라 소스"/>
                         </StackPanel>
                     </Grid>
 
-                    <!-- 카메라 이미지 영역 (스크롤바 룩) -->
-                    <Grid Grid.Row="2">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="14"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*"/>
-                            <RowDefinition Height="14"/>
-                        </Grid.RowDefinitions>
-
-                        <Border Grid.Row="0" Grid.Column="0" Background="Black"
-                                BorderBrush="#1E293B" BorderThickness="1" CornerRadius="2">
-                            <TextBlock Text="NO IMAGE" Foreground="#1E293B" FontSize="20" FontWeight="Bold"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ScrollBar Grid.Row="0" Grid.Column="1" Orientation="Vertical" IsEnabled="False" Opacity="0.5"/>
-                        <ScrollBar Grid.Row="1" Grid.Column="0" Orientation="Horizontal" IsEnabled="False" Opacity="0.5"/>
-                    </Grid>
+                    <!-- 카메라 이미지 영역 — 공용 VisualMonitorView 재사용(라이브 프레임/크로스라인/줌/팬).
+                         ShowToolbar=False: 위 카드 툴바를 쓰므로 내장 툴바는 숨긴다. -->
+                    <Border Grid.Row="2" Background="Black"
+                            BorderBrush="#1E293B" BorderThickness="1" CornerRadius="2">
+                        <views:VisualMonitorView DataContext="{Binding Monitor}" ShowToolbar="False"/>
+                    </Border>
                 </Grid>
             </Border>
 

@@ -27,15 +27,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         public ObservableCollection<string> Sources { get; } = new();
 
-        public VisualMonitorViewModel(MainViewModel mainVM)
+        /// <param name="preferredSource">
+        /// 기본 선택 소스의 이름 일부(예: "Drop"). 일치하는 소스가 없으면 첫 번째 소스를 쓴다.
+        /// </param>
+        public VisualMonitorViewModel(MainViewModel mainVM, string? preferredSource = null)
         {
             _mainVM = mainVM;
             var vision = mainVM.GetController().GetMachine().Vision;
 
-            // 설정된 카메라를 각각 뷰 소스로(공용 IVisionDriver 어댑터)
+            // 설정된 카메라를 각각 뷰 소스로(공용 IVisionDriver 어댑터).
+            // 표시명은 DisplayLabel(=DisplayName→Name→CameraId), 노출 여부는 ShowInMonitor(Config) 를 따른다.
             foreach (var st in vision.GetAllStatus())
             {
-                string name = string.IsNullOrEmpty(st.Name) ? st.CameraId : st.Name;
+                if (!st.ShowInMonitor) continue;   // 전용 화면만 쓰는 카메라는 모니터 소스에서 제외
+                string name = st.DisplayLabel;
                 if (_sources.ContainsKey(name)) name = st.CameraId;   // 이름 중복 시 ID 로
                 _sources[name] = new VisionDriverImageSource(name, vision, st.CameraId);
                 Sources.Add(name);
@@ -46,11 +51,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 _sources[v.Name] = v;
                 Sources.Add(v.Name);
             }
-            _selectedSource = Sources[0];
+            _selectedSource = PickDefaultSource(preferredSource);
 
             ToggleCrossLineCommand = new RelayCommand(_ => CrossLineVisible = !CrossLineVisible);
             CenterCrossCommand     = new RelayCommand(_ => CenterCross());
             SetToolCommand         = new RelayCommand(t => { if (Enum.TryParse<ViewTool>(t?.ToString(), out var vt)) Tool = vt; });
+            // 버튼을 누르면 바로 눈에 보이게 동작하도록 확대/축소/맞춤은 툴 모드와 무관한 즉시 동작으로 둔다.
+            ZoomInCommand          = new RelayCommand(_ => Zoom *= 1.25);
+            ZoomOutCommand         = new RelayCommand(_ => Zoom /= 1.25);
+            FitCommand             = new RelayCommand(_ => FitRequested?.Invoke(this, EventArgs.Empty));
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };   // ~5 fps (파일 경유)
             _timer.Tick += async (_, _) => await UpdateFrameAsync();
@@ -82,7 +91,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public void CenterCross() { CrossXRatio = 0.5; CrossYRatio = 0.5; }
 
         // ── 뷰 툴 ────────────────────────────────────────────────────────────
-        private ViewTool _tool = ViewTool.Select;
+        // 기본은 Pan(드래그 이동) — 뷰어로서 가장 안전한 기본값.
+        // (Select 는 클릭 위치로 크로스라인을 옮기므로 기본값이면 실수로 움직이기 쉽다)
+        private ViewTool _tool = ViewTool.Pan;
         public ViewTool Tool { get => _tool; set => SetProperty(ref _tool, value); }
 
         // ── 줌 ───────────────────────────────────────────────────────────────
@@ -92,6 +103,38 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand ToggleCrossLineCommand { get; }
         public ICommand CenterCrossCommand     { get; }
         public ICommand SetToolCommand         { get; }
+        public ICommand ZoomInCommand          { get; }
+        public ICommand ZoomOutCommand         { get; }
+        public ICommand FitCommand             { get; }
+
+        /// <summary>
+        /// 화면 맞춤 요청. 뷰포트 크기는 View 만 알기 때문에 실제 계산은 View 가 수행한다.
+        /// </summary>
+        public event EventHandler? FitRequested;
+
+        // 기본 소스 선택: preferred(부분일치, 대소문자 무시) → 없으면 첫 번째.
+        private string PickDefaultSource(string? preferred)
+        {
+            if (!string.IsNullOrEmpty(preferred))
+            {
+                foreach (var s in Sources)
+                    if (s.IndexOf(preferred, StringComparison.OrdinalIgnoreCase) >= 0) return s;
+            }
+            return Sources[0];
+        }
+
+        /// <summary>라이브 갱신 시작. 화면이 보일 때만 호출(불필요한 백그라운드 캡쳐 방지).</summary>
+        public void Start()
+        {
+            OpenSelected();
+            if (!_timer.IsEnabled) _timer.Start();
+        }
+
+        /// <summary>라이브 갱신 정지. 화면을 벗어나면 호출.</summary>
+        public void Stop()
+        {
+            if (_timer.IsEnabled) _timer.Stop();
+        }
 
         private void OpenSelected()
         {

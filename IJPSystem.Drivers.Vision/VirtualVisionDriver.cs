@@ -18,6 +18,7 @@ namespace IJPSystem.Drivers.Vision
     {
         private readonly Dictionary<string, CameraStatus>      _statusMap  = new();
         private readonly Dictionary<string, CameraDeviceInfo>  _configMap  = new();
+        private readonly Dictionary<string, int>               _captureSeq = new();  // 카메라별 캡처 순번(액적 낙하 시뮬레이션용)
         private readonly Random _rng = new();
 
         // 하드웨어 트리거 시뮬레이션용 (CameraId → TCS)
@@ -62,6 +63,8 @@ namespace IJPSystem.Drivers.Vision
                 {
                     CameraId       = cfg.CameraId,
                     Name           = cfg.Name,
+                    DisplayName    = cfg.DisplayName,
+                    ShowInMonitor  = cfg.ShowInMonitor,
                     IsConnected    = true,
                     ExposureMs     = cfg.DefaultExposureMs,
                     Gain           = cfg.DefaultGain,
@@ -100,14 +103,38 @@ namespace IJPSystem.Drivers.Vision
 
             var cfg   = _configMap[cameraId];
             var now   = DateTime.Now;
+
+            // 캡처 순번 증가(위상 스윕에서 액적이 아래로 낙하하는 것을 시뮬레이션).
+            int seq = _captureSeq.TryGetValue(cameraId, out var s0) ? s0 + 1 : 0;
+            _captureSeq[cameraId] = seq;
+
+            // 드랍와쳐 카메라는 OpenCV 액적분석을 실제로 검증할 수 있도록 합성 액적(Mono8)을 생성한다.
+            // 그 외 카메라는 기존 24bit 가짜 이미지(파일)만 사용(검사도 가상 InspectAsync 랜덤 경로).
+            bool isDropWatcher = cameraId.IndexOf("DW", StringComparison.OrdinalIgnoreCase) >= 0;
+            byte[]? pixels = null;
+            string? filePath;
+            if (isDropWatcher)
+            {
+                int w = cfg.PixelWidth  > 0 ? cfg.PixelWidth  : 1280;
+                int h = cfg.PixelHeight > 0 ? cfg.PixelHeight : 512;
+                pixels = GenerateDropletMono8(w, h, seq);
+                filePath = SaveMono8Image(cameraId, now, pixels, w, h);   // 화면 표시용 + PixelData 로 in-memory 분석
+            }
+            else
+            {
+                filePath = SaveFakeImage(cameraId, now);
+            }
+
             var image = new VisionImage
             {
-                CameraId    = cameraId,
-                CaptureTime = now,
-                Width       = cfg.PixelWidth,
-                Height      = cfg.PixelHeight,
-                IsValid     = true,
-                FilePath    = SaveFakeImage(cameraId, now),
+                CameraId     = cameraId,
+                CaptureTime  = now,
+                Width        = isDropWatcher ? (cfg.PixelWidth  > 0 ? cfg.PixelWidth  : 1280) : cfg.PixelWidth,
+                Height       = isDropWatcher ? (cfg.PixelHeight > 0 ? cfg.PixelHeight : 512)  : cfg.PixelHeight,
+                IsValid      = true,
+                FilePath     = filePath,
+                PixelData    = pixels,
+                BitsPerPixel = 8,
             };
 
             status.IsCapturing      = false;
@@ -255,6 +282,100 @@ namespace IJPSystem.Drivers.Vision
             {
                 Debug.WriteLine($"[Virtual Vision] Image save failed: {ex.Message}");
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// 드랍와쳐 합성 프레임(Mono8) — 실측 Raw 와 같은 구조로 만든다:
+        /// 밝은 배경 위에 <b>노즐 피치로 가로로 늘어선 액적들</b>이 거의 같은 높이(낙하거리)에 찍힌 정지 화면.
+        /// (스트로브가 액적을 얼어붙게 하므로 실제로도 프레임마다 움직이지 않는다)
+        ///
+        /// ※ 액적 위치는 <b>프레임마다 고정</b>이어야 한다. 노즐별 편차도 seq/난수가 아니라
+        ///   결정적 함수로 준다 — 매 프레임 흔들리면 Live View 에서 화면이 출렁이는 것처럼 보인다.
+        ///   (배경 노이즈만 프레임마다 변해 '라이브' 느낌을 준다)
+        /// </summary>
+        private byte[] GenerateDropletMono8(int width, int height, int seq)
+        {
+            const byte bg   = 205;   // 밝은 배경(백라이트)
+            const byte drop = 35;    // 어두운 액적(실루엣)
+            var buf = new byte[width * height];
+
+            // 배경 + 약한 노이즈 (이 부분만 프레임마다 변함)
+            for (int i = 0; i < buf.Length; i++)
+                buf[i] = (byte)Math.Clamp(bg + _rng.Next(-8, 8), 0, 255);
+
+            int n     = Math.Max(4, width / 110);        // 노즐 수
+            int pitch = width / (n + 1);                 // 노즐 피치
+            int r     = Math.Max(5, height / 40);        // 액적 반경
+            int baseY = (int)(height * 0.62);            // 기준 낙하거리(노즐면=상단 가정)
+
+            for (int i = 0; i < n; i++)
+            {
+                int cx = pitch * (i + 1);
+                // 노즐별 속도 편차 → 낙하거리 편차. 결정적(sin)이라 프레임 간 고정.
+                int cy = baseY + (int)(Math.Sin(i * 1.7) * r * 0.9);
+                FillDisk(buf, width, height, cx, cy, r, drop);
+            }
+            return buf;
+        }
+
+        /// <summary>Mono8 버퍼를 8-bit 그레이스케일 BMP 로 저장(화면 표시용). 실패 시 null.</summary>
+        private string? SaveMono8Image(string cameraId, DateTime ts, byte[] mono, int w, int h)
+        {
+            try
+            {
+                string folder = Path.Combine(ImageSavePath, cameraId, ts.ToString("yyyy-MM-dd"));
+                Directory.CreateDirectory(folder);
+                string file = Path.Combine(folder, $"{ts:HHmmss_fff}.bmp");
+
+                int rowStride    = ((w + 3) / 4) * 4;   // 4바이트 정렬
+                int pixelBytes   = rowStride * h;
+                int paletteBytes = 256 * 4;
+                int offset       = 14 + 40 + paletteBytes;
+                int fileSize     = offset + pixelBytes;
+
+                using var fs = new FileStream(file, FileMode.Create, FileAccess.Write);
+                using var bw = new BinaryWriter(fs);
+                bw.Write((byte)'B'); bw.Write((byte)'M');
+                bw.Write(fileSize); bw.Write(0); bw.Write(offset);
+                bw.Write(40); bw.Write(w); bw.Write(-h);      // top-down
+                bw.Write((short)1); bw.Write((short)8);       // 8bpp
+                bw.Write(0); bw.Write(pixelBytes);
+                bw.Write(2835); bw.Write(2835);
+                bw.Write(256); bw.Write(0);
+                for (int i = 0; i < 256; i++) { bw.Write((byte)i); bw.Write((byte)i); bw.Write((byte)i); bw.Write((byte)0); }
+                var row = new byte[rowStride];
+                for (int y = 0; y < h; y++)
+                {
+                    int src = y * w;
+                    for (int x = 0; x < w; x++) row[x] = mono[src + x];
+                    for (int x = w; x < rowStride; x++) row[x] = 0;
+                    bw.Write(row);
+                }
+                return file;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Virtual Vision] Mono8 save failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>Mono8 버퍼에 (cx,cy) 중심 반경 r 의 어두운 원(액적)을 그린다.</summary>
+        private static void FillDisk(byte[] buf, int w, int h, int cx, int cy, int r, byte value)
+        {
+            int r2 = r * r;
+            int y0 = Math.Max(0, cy - r), y1 = Math.Min(h - 1, cy + r);
+            int x0 = Math.Max(0, cx - r), x1 = Math.Min(w - 1, cx + r);
+            for (int y = y0; y <= y1; y++)
+            {
+                int dy = y - cy;
+                int row = y * w;
+                for (int x = x0; x <= x1; x++)
+                {
+                    int dx = x - cx;
+                    if (dx * dx + dy * dy <= r2) buf[row + x] = value;
+                }
             }
         }
 

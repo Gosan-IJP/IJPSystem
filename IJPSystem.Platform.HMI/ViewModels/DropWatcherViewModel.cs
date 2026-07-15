@@ -3,11 +3,14 @@ using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.Domain.Enums;
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.Vision;
+using IJPSystem.Platform.Infrastructure.Config;
+using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
 using LiveChartsCore;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -29,6 +32,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly DispatcherTimer _pollTimer;
         private readonly DispatcherTimer _liveTimer;   // Live View 연속 캡쳐
         private bool _liveGrabbing;                     // 캡쳐 중복 방지
+
+        // OpenCV 액적 분석기. 파라미터는 Config/DropWatcherConfig.json 에서 로드(없으면 기본값).
+        // MicronsPerPixel 은 실장 교정값 — 부피/직경/속도 절대값이 여기 비례.
+        private readonly DropWatcherProcessorConfig _procCfg;
+        private readonly DropWatcherProcessor _proc;
+
+        // 측정 결과 요약(화면 표시용).
+        private string _lastResultText = "측정 전";
+        public string LastResultText
+        {
+            get => _lastResultText;
+            private set => SetProperty(ref _lastResultText, value);
+        }
 
         // 드랍와처 검사용 Raw 샘플 이미지 — 이 파일이 있으면 캡쳐 대신 사용한다.
         // 실제 카메라 연동 전, 실측 Raw 이미지로 화면/검사 로직을 확인하기 위함.
@@ -157,6 +173,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             _mainVM = mainVM;
             _vision = mainVM.GetController().GetMachine().Vision;
+            _procCfg = new ConfigLoader().LoadDropWatcherConfig(PathUtils.GetConfigPath("DropWatcherConfig.json"));
+            _proc   = new DropWatcherProcessor(_procCfg);
 
             SetDelay1Command           = new RelayCommand(_ => ExecuteSetDelay(1));
             SetDelay2Command           = new RelayCommand(_ => ExecuteSetDelay(2));
@@ -198,29 +216,44 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _mainVM.AddLog("[VISION] DropWatcher: Abort", LogLevel.Warning);
         }
 
-        // Measure Velocity / Time Interval Measure — 현재는 캡쳐만 수행하고 측정 알고리즘은 추후 연결
+        // Measure Velocity / Time Interval Measure — OpenCV(DropWatcherProcessor)로 액적 분석.
+        //
+        // 실측 DW Raw 는 "한 프레임에 노즐들이 가로로 늘어선" 구조다(스트로브가 액적을 얼림).
+        // 따라서 컬럼 = 노즐이고, 속도 = 낙하거리/스트로브 지연 → 단일 프레임 분석이 맞다.
+        // (위상 스윕으로 여러 장을 훑는 방식은 이 장비 구조와 맞지 않아 사용하지 않는다)
+        //
+        // 대상: Raw 샘플 이미지가 있으면 그것, 없으면 라이브 캡쳐 1장. 두 경로 모두 같은 분석을 탄다.
         private async Task ExecuteMeasureAsync(string action)
         {
             IsBusy = true;
             RaiseMeasureCanExecute();
             try
             {
-                // 샘플 Raw 이미지가 있으면 그것을 검사 대상으로 사용, 없으면 가상 캡쳐
+                VisionImage frame;
+                string src;
                 if (File.Exists(SampleImagePath))
                 {
-                    CurrentImagePath = SampleImagePath;
-                    _mainVM.AddLog($"[VISION] DropWatcher: {action} — Raw 샘플 이미지 사용 (측정 알고리즘 미구현)", LogLevel.Info);
+                    frame = new VisionImage { CameraId = CamId, FilePath = SampleImagePath, IsValid = true };
+                    src   = "Raw 샘플";
                 }
                 else
                 {
-                    var image = await _vision.CaptureAsync(CamId);
-                    if (image.IsValid)
-                        CurrentImagePath = image.FilePath;
-                    _mainVM.AddLog($"[VISION] DropWatcher: {action} — 캡쳐 완료 (측정 알고리즘 미구현)", LogLevel.Info);
+                    frame = await _vision.CaptureAsync(CamId);
+                    src   = "라이브 캡쳐";
                 }
 
-                // 측정 결과 그래프 갱신 (알고리즘 연결 전까지 대표 샘플 곡선)
-                BuildCharts(action.GetHashCode());
+                var drops = await Task.Run(() => _proc.DetectDroplets(frame));
+                double delayUs = AppliedDelayUs > 0 ? AppliedDelayUs : DelayTimeUs;
+
+                // 오버레이(컬럼 분할선/측정창/중심마커/속도) 생성 → 좌측 이미지로 표시.
+                string dir = Path.Combine(Path.GetTempPath(), "IJP_DropWatcher");
+                Directory.CreateDirectory(dir);
+                string annPath = Path.Combine(dir, $"annotated_{DateTime.Now:HHmmss_fff}.png");
+                string? saved = await Task.Run(() => _proc.SaveAnnotatedFrame(annPath, frame, drops, delayUs));
+                if (!string.IsNullOrEmpty(saved)) CurrentImagePath = saved;
+                else if (!string.IsNullOrEmpty(frame.FilePath)) CurrentImagePath = frame.FilePath;
+
+                ReportDroplets(action, drops, delayUs, src);
             }
             catch (Exception ex)
             {
@@ -231,6 +264,67 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 IsBusy = false;
                 RaiseMeasureCanExecute();
             }
+        }
+
+        // 다중노즐 단일 프레임 결과 보고 + 그래프(노즐별 속도/낙하위치/부피) 갱신.
+        private void ReportDroplets(string action, IReadOnlyList<DropletInfo> drops, double delayUs, string src)
+        {
+            if (drops == null || drops.Count == 0)
+            {
+                LastResultText = "액적 미검출";
+                _mainVM.AddLog($"[VISION] DropWatcher: {action}({src}) — 액적 미검출", LogLevel.Warning);
+                return;
+            }
+
+            double[] vel = _proc.ComputeDropletVelocities(drops, delayUs);
+            var okVel = vel.Where(v => !double.IsNaN(v)).ToArray();
+            double avgDia = drops.Average(d => d.DiameterMicron);
+            double avgVol = drops.Average(d => d.VolumePicoLiter);
+
+            LastResultText = okVel.Length > 0
+                ? $"노즐 {drops.Count}개 · 직경 {avgDia:F1}µm · 부피 {avgVol:F1}pL · 속도 {okVel.Average():F2}m/s (편차 {okVel.Max() - okVel.Min():F2})"
+                : $"노즐 {drops.Count}개 · 직경 {avgDia:F1}µm · 부피 {avgVol:F1}pL";
+            _mainVM.AddLog($"[VISION] DropWatcher: {action}({src}) — {LastResultText}", LogLevel.Info);
+
+            BuildDropletCharts(drops, vel);
+        }
+
+        // 다중노즐 프레임 그래프 — 오버레이와 동일한 데이터/컬럼 순서(노즐 번호 축).
+        private void BuildDropletCharts(IReadOnlyList<DropletInfo> drops, double[] vel)
+        {
+            int n = drops.Count;
+            double um = _procCfg.MicronsPerPixel;
+            string[] labels = Enumerable.Range(0, n).Select(i => i.ToString()).ToArray();
+            const string xName = "Nozzle #";
+
+            var posUm = new double[n];
+            var volPl = new double[n];
+            for (int i = 0; i < n; i++)
+            {
+                posUm[i] = (drops[i].CentroidYPixel - _procCfg.NozzleYPixel) * um;   // 낙하거리
+                volPl[i] = drops[i].VolumePicoLiter;
+            }
+
+            VelocitySeries = new ISeries[] { MakeLine("Drop", SKColors.LimeGreen, vel) };
+            PositionSeries = new ISeries[] { MakeLine("Drop", SKColors.DodgerBlue, posUm) };
+            SpitRateSeries = new ISeries[] { MakeLine("Drop", SKColors.Orange, volPl) };
+
+            VelocityXAxes = MakeXAxes(labels, xName);
+            PositionXAxes = MakeXAxes(labels, xName);
+            SpitRateXAxes = MakeXAxes(labels, xName);
+            VelocityYAxes = MakeYAxes("Velocity (m/s)");
+            PositionYAxes = MakeYAxes("Drop Position (um)");
+            SpitRateYAxes = MakeYAxes("Volume (pL)");
+
+            OnPropertyChanged(nameof(VelocitySeries));
+            OnPropertyChanged(nameof(PositionSeries));
+            OnPropertyChanged(nameof(SpitRateSeries));
+            OnPropertyChanged(nameof(VelocityXAxes));
+            OnPropertyChanged(nameof(PositionXAxes));
+            OnPropertyChanged(nameof(SpitRateXAxes));
+            OnPropertyChanged(nameof(VelocityYAxes));
+            OnPropertyChanged(nameof(PositionYAxes));
+            OnPropertyChanged(nameof(SpitRateYAxes));
         }
 
         // ── Live View: 연속 캡쳐로 최신 프레임을 계속 갱신 ─────────────────────
@@ -349,12 +443,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 LineSmoothness = 0.2,
             };
 
-        private static Axis[] MakeXAxes(string[] labels) => new[]
+        private static Axis[] MakeXAxes(string[] labels, string name = "Time (um)") => new[]
         {
             new Axis
             {
                 Labels          = labels,
-                Name            = "Time (um)",
+                Name            = name,
                 TextSize        = 10,
                 NamePaint       = new SolidColorPaint(AxisText),
                 LabelsPaint     = new SolidColorPaint(AxisText),

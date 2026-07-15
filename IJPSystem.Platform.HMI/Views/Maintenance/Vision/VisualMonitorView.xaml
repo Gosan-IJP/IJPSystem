@@ -17,7 +17,19 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="12">
+    <!-- ShowToolbar=False 로 두면 내장 툴바를 숨기고 뷰 영역만 제공한다.
+         (패턴인쇄 화면처럼 화면 고유 툴바를 이미 갖고 있는 곳에 끼워넣기 위함 — 로직은 여기 하나만 유지) -->
+    <Grid>
+        <Grid.Style>
+            <Style TargetType="Grid">
+                <Setter Property="Margin" Value="12"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding ShowToolbar, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="False">
+                        <Setter Property="Margin" Value="0"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Style>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -25,7 +37,9 @@
 
         <!-- ══ 툴바 ═══════════════════════════════════════════════════════ -->
         <Border Grid.Row="0" Background="#111827" CornerRadius="10" Padding="12,8" Margin="0,0,0,10"
-                BorderBrush="#334155" BorderThickness="1">
+                BorderBrush="#334155" BorderThickness="1"
+                Visibility="{Binding ShowToolbar, RelativeSource={RelativeSource AncestorType=UserControl},
+                                     Converter={StaticResource BooleanToVisibilityConverter}}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="💠  VISUAL MONITOR" Foreground="#3B82F6" FontWeight="Bold" FontSize="13"
                            VerticalAlignment="Center" Margin="0,0,16,0"/>
@@ -44,6 +58,8 @@
                     <TextBlock Text="➤ Select" Foreground="White"/></Button>
                 <Button Style="{StaticResource VmToolButton}" Command="{Binding SetToolCommand}" CommandParameter="Pan"    ToolTip="화면 이동">
                     <TextBlock Text="✋ Pan" Foreground="White"/></Button>
+                <Button Style="{StaticResource VmToolButton}" Command="{Binding FitCommand}" ToolTip="화면 맞춤 (이미지 전체 보기)">
+                    <TextBlock Text="⤢ Fit" Foreground="White"/></Button>
 
                 <Border Width="1" Background="#334155" Margin="14,2"/>
 
@@ -63,23 +79,30 @@
         <!-- ══ 뷰 영역 ════════════════════════════════════════════════════ -->
         <Border Grid.Row="1" Background="#111827" CornerRadius="10" BorderBrush="#334155" BorderThickness="1"
                 ClipToBounds="True">
-            <ScrollViewer x:Name="Scroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                <Grid x:Name="ViewHost" Background="#0D1117" MinWidth="200" MinHeight="200"
-                      MouseDown="Host_Down" MouseMove="Host_Move" MouseUp="Host_Up" MouseWheel="Host_Wheel">
-                    <!-- 프레임 이미지(줌 = LayoutTransform) -->
-                    <Image Source="{Binding Frame}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality">
-                        <Image.LayoutTransform>
+            <!-- ScrollViewer 없이 패널을 꽉 채운다.
+                 · Stretch=Uniform → 배율 1 = "화면 맞춤"(비율 유지한 채 패널을 채움), 스크롤바 없음
+                 · 확대/이동은 RenderTransform(Scale+Translate) 으로만 처리 → 레이아웃에 영향 없음
+                 (이전엔 ScrollViewer 가 자식에게 무한 폭을 줘서 Uniform 이 먹지 않고 원본 크기로 넘쳤다) -->
+            <Grid x:Name="ViewHost" Background="#0D1117" ClipToBounds="True"
+                  MouseDown="Host_Down" MouseMove="Host_Move" MouseUp="Host_Up" MouseWheel="Host_Wheel"
+                  SizeChanged="Host_SizeChanged">
+                <Image x:Name="Img" Source="{Binding Frame}" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       RenderTransformOrigin="0.5,0.5">
+                    <Image.RenderTransform>
+                        <TransformGroup>
                             <ScaleTransform x:Name="ZoomT" ScaleX="1" ScaleY="1"/>
-                        </Image.LayoutTransform>
-                    </Image>
+                            <TranslateTransform x:Name="PanT" X="0" Y="0"/>
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
 
-                    <!-- 크로스라인 오버레이(줌 무관, SW 그림) -->
-                    <Canvas x:Name="CrossOverlay" IsHitTestVisible="False" SizeChanged="Host_SizeChanged">
-                        <Line x:Name="CrossV" Stroke="#FF3B30" StrokeThickness="1"/>
-                        <Line x:Name="CrossH" Stroke="#FF3B30" StrokeThickness="1"/>
-                    </Canvas>
-                </Grid>
-            </ScrollViewer>
+                <!-- 크로스라인 오버레이(줌 무관, SW 그림) -->
+                <Canvas x:Name="CrossOverlay" IsHitTestVisible="False">
+                    <Line x:Name="CrossV" Stroke="#FF3B30" StrokeThickness="1"/>
+                    <Line x:Name="CrossH" Stroke="#FF3B30" StrokeThickness="1"/>
+                </Canvas>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>

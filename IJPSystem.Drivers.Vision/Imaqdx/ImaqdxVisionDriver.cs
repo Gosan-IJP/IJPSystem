@@ -73,6 +73,8 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
                 {
                     CameraId       = cfg.CameraId,
                     Name           = cfg.Name,
+                    DisplayName    = cfg.DisplayName,
+                    ShowInMonitor  = cfg.ShowInMonitor,
                     IsConnected    = opened,
                     ExposureMs     = cfg.DefaultExposureMs,
                     Gain           = cfg.DefaultGain,
@@ -143,49 +145,55 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             try
             {
                 var now = DateTime.Now;
-                string? path = await Task.Run(() => GrabToFile(session, cfg, now));
+                var (path, buffer) = await Task.Run(() => Grab(session, cfg, now));
 
                 status.LastCaptureTime = now;
                 status.TotalCaptureCount++;
 
                 return new VisionImage
                 {
-                    CameraId    = cameraId,
-                    CaptureTime = now,
-                    Width       = cfg.PixelWidth,
-                    Height      = cfg.PixelHeight,
-                    IsValid     = path != null,
-                    FilePath    = path,
+                    CameraId     = cameraId,
+                    CaptureTime  = now,
+                    Width        = cfg.PixelWidth,
+                    Height       = cfg.PixelHeight,
+                    IsValid      = buffer != null,   // 버퍼가 있으면 유효(파일 저장 실패와 무관하게 분석 가능)
+                    FilePath     = path,
+                    PixelData    = buffer,           // 분석(OpenCV)용 원본 Mono8 버퍼
+                    BitsPerPixel = 8,
                 };
             }
             finally { status.IsCapturing = false; }
         }
 
-        /// <summary>IMAQdx 최신 버퍼를 읽어 파일로 저장. (Mono8 가정 — 실 포맷에 맞게 조정)</summary>
-        private string? GrabToFile(uint session, CameraDeviceInfo cfg, DateTime ts)
+        /// <summary>
+        /// IMAQdx 최신 버퍼를 읽어 (분석용) 원본 버퍼를 확보하고, 부가로 BMP 파일로도 저장한다.
+        /// 파일 저장은 로깅/디버깅용이라 실패해도 버퍼는 그대로 반환한다. (Mono8 가정 — 실 포맷에 맞게 조정)
+        /// </summary>
+        private (string? path, byte[]? buffer) Grab(uint session, CameraDeviceInfo cfg, DateTime ts)
         {
             int w = cfg.PixelWidth, h = cfg.PixelHeight;
-            if (w <= 0 || h <= 0) return null;
+            if (w <= 0 || h <= 0) return (null, null);
 
             // TODO: 픽셀 포맷(Mono8/Mono16/RGB) 확인 후 버퍼 크기·변환 조정.
             var buffer = new byte[w * h];
             uint err = ImaqdxInterop.IMAQdxGetImageData(session, buffer, (uint)buffer.Length,
                 ImaqdxBufferNumberMode.Last, 0, out _);
-            if (err != ImaqdxInterop.Success) return null;
+            if (err != ImaqdxInterop.Success) return (null, null);
 
+            string? path = null;
             try
             {
                 string folder = Path.Combine(ImageSavePath, cfg.CameraId, ts.ToString("yyyy-MM-dd"));
                 Directory.CreateDirectory(folder);
                 string file = Path.Combine(folder, $"{ts:HHmmss_fff}.bmp");
                 SaveMono8Bmp(file, buffer, w, h);
-                return file;
+                path = file;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[IMAQdx Vision] Save failed: {ex.Message}");
-                return null;
+                Debug.WriteLine($"[IMAQdx Vision] Save failed: {ex.Message}");   // 저장 실패해도 분석은 계속
             }
+            return (path, buffer);
         }
 
         public Task<VisionImage> WaitForHardwareTriggerAsync(string cameraId, CancellationToken ct)

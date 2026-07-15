@@ -13,7 +13,19 @@ namespace IJPSystem.Platform.Domain.Models.Vision
     public class CameraDeviceInfo
     {
         public string CameraId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// ※ 하드웨어 식별자 — IMAQdx(NI-MAX) 카메라 이름으로 사용된다(ImaqdxVisionDriver.TryOpen).
+        /// 화면 표시 목적으로 바꾸지 말 것. 표시명은 <see cref="DisplayName"/> 사용.
+        /// </summary>
         public string Name { get; set; } = string.Empty;
+
+        /// <summary>화면 표시명(예: "Glass View"). 비어 있으면 <see cref="Name"/> 을 사용.</summary>
+        public string DisplayName { get; set; } = string.Empty;
+
+        /// <summary>Visual Monitor 소스 목록 노출 여부. 전용 화면만 쓰는 카메라는 false.</summary>
+        public bool ShowInMonitor { get; set; } = true;
+
         public string IpAddress { get; set; } = string.Empty;
         public string SerialNumber { get; set; } = string.Empty;
         public int PixelWidth { get; set; } = 1920;

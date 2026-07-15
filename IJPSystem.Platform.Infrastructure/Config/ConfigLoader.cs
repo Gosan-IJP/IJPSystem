@@ -2,6 +2,7 @@
 using IJPSystem.Platform.Domain.Models.IO;
 using IJPSystem.Platform.Domain.Models.Motion;
 using IJPSystem.Platform.Domain.Models.Vision;
+using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -53,6 +54,14 @@ namespace IJPSystem.Platform.Infrastructure.Config
             if (!File.Exists(filePath)) return new VisionCameraRoot();
             string json = File.ReadAllText(filePath);
             return JsonSerializer.Deserialize<VisionCameraRoot>(json, _options) ?? new VisionCameraRoot();
+        }
+
+        /// <summary>드랍와쳐 OpenCV 액적분석 파라미터 로드. 파일 없으면 기본값(가상 검증용).</summary>
+        public DropWatcherProcessorConfig LoadDropWatcherConfig(string filePath)
+        {
+            if (!File.Exists(filePath)) return new DropWatcherProcessorConfig();
+            string json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<DropWatcherProcessorConfig>(json, _options) ?? new DropWatcherProcessorConfig();
         }
 
         public MotionAxisRoot LoadMotionConfig(string filePath)

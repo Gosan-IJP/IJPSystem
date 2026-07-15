@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\IJPSystem.Platform.Common\IJPSystem.Platform.Common.csproj" />
     <ProjectReference Include="..\IJPSystem.Platform.Domain\IJPSystem.Platform.Domain.csproj" />
   </ItemGroup>

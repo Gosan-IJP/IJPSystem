@@ -417,9 +417,16 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand PrintCommand          { get; }
         public ICommand AbortCommand          { get; }
 
+        /// <summary>
+        /// 화면 상단 Visual Monitor(라이브 뷰 + 크로스라인 + 뷰 툴). 공용 VisualMonitorViewModel 을 재사용한다.
+        /// 기본 소스는 드랍와쳐. 라이브 시작/정지는 VisualMonitorView 의 Loaded/Unloaded 가 제어한다.
+        /// </summary>
+        public VisualMonitorViewModel Monitor { get; }
+
         public PatternPrintViewModel(MainViewModel mainVM)
         {
             _mainVM = mainVM;
+            Monitor = new VisualMonitorViewModel(mainVM, "Drop");   // 드랍와쳐 기본
 
             SetPrintOriginCommand = new RelayCommand(_ => CaptureCurrentOrigin());
             PrintCommand          = new RelayCommand(async _ => await RunPatternPrintAsync(),

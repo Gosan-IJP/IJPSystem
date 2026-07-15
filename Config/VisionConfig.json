@@ -1,8 +1,11 @@
 {
   "VisionCameraList": [
     {
+      "_comment": "Name = IMAQdx(NI-MAX) 하드웨어 카메라 이름 — 실장 카메라 식별자이므로 표시 목적으로 바꾸지 말 것. 화면 표시는 DisplayName 사용.",
       "CameraId": "CAM_01",
       "Name": "NJI Camera",
+      "DisplayName": "NJI View",
+      "ShowInMonitor": false,
       "IpAddress": "192.168.1.101",
       "SerialNumber": "SN-NJI-001",
       "PixelWidth": 1920,
@@ -15,6 +18,8 @@
     {
       "CameraId": "CAM_02",
       "Name": "Glass Camera",
+      "DisplayName": "Glass View",
+      "ShowInMonitor": true,
       "IpAddress": "192.168.1.102",
       "SerialNumber": "SN-GLASS-001",
       "PixelWidth": 2448,
@@ -27,6 +32,8 @@
     {
       "CameraId": "CAM_DW",
       "Name": "Drop Watcher Camera",
+      "DisplayName": "Drop Watcher",
+      "ShowInMonitor": true,
       "IpAddress": "192.168.1.103",
       "SerialNumber": "SN-DW-001",
       "PixelWidth": 1280,
