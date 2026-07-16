@@ -941,9 +941,8 @@
                     <Border Grid.Column="4" Style="{StaticResource CardBorder}" Padding="12">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource MutedLabel}" Margin="0,0,0,2">
-                                <Run Text="Print Velocity "/><Run Text="30~100" Foreground="#EF4444" FontSize="9"/>
-                            </TextBlock>
+                            <TextBlock Style="{StaticResource MutedLabel}" Margin="0,0,0,2"
+                                       Text="Print Velocity"/>
                             <Border Style="{StaticResource PosBox}" Padding="8,6" Margin="0,0,0,10">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -960,7 +959,20 @@
                                                VerticalAlignment="Center" Margin="2,0,0,0"/>
                                 </Grid>
                             </Border>
-                            <Button Style="{StaticResource ActionBtn}" Height="40" Margin="0,0,0,8" Content="Load Image"/>
+                            <Button Style="{StaticResource ActionBtn}" Height="40" Margin="0,0,0,8" Content="Load Image"
+                                    Command="{Binding LoadImageCommand}"
+                                    ToolTip="이미지 파일을 열어 상단 Visual Monitor 에 표시"/>
+
+                            <!-- 불러온 이미지명/경로 — 로드 전에는 숨김 -->
+                            <StackPanel Margin="0,0,0,8"
+                                        Visibility="{Binding HasLoadedImage, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Text="{Binding LoadedImageName}" Foreground="#E2E8F0"
+                                           FontSize="12" FontWeight="Bold" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding LoadedImagePath}"/>
+                                <TextBlock Text="{Binding LoadedImagePath}" Foreground="#94A3B8"
+                                           FontSize="10" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding LoadedImagePath}"/>
+                            </StackPanel>
                             <Button Height="54" FontSize="22" Command="{Binding PrintCommand}">
                                 <Button.Style>
                                     <Style TargetType="Button" BasedOn="{StaticResource ActionBtn}">

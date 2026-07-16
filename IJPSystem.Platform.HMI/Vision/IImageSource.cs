@@ -55,6 +55,30 @@ namespace IJPSystem.Platform.HMI.Vision
     }
 
     /// <summary>
+    /// 파일에서 읽은 정지 이미지 뷰 소스 — "Load Image" 로 불러온 인쇄 이미지 표시용.
+    /// 카메라와 같은 소스 목록에 넣어 두면 타이머/줌/크로스라인 로직을 그대로 쓸 수 있다.
+    /// (매 틱 같은 프레임을 돌려주므로 화면은 정지 상태)
+    /// </summary>
+    public sealed class StaticImageSource : IImageSource
+    {
+        private BitmapSource? _frame;
+        public string Name { get; }
+        public bool IsOpen { get; private set; }
+        public string? FilePath { get; private set; }
+
+        public StaticImageSource(string name) => Name = name;
+
+        /// <summary>표시할 이미지 교체. 다시 Load 하면 같은 소스의 내용만 바뀐다.</summary>
+        public void SetImage(BitmapSource frame, string filePath)
+        { _frame = frame; FilePath = filePath; }
+
+        public void Open() => IsOpen = true;
+        public void Close() => IsOpen = false;
+        public Task<BitmapSource?> GrabFrameAsync() => Task.FromResult(_frame);
+        public void Dispose() => Close();
+    }
+
+    /// <summary>
     /// 공용 IVisionDriver 를 감싼 뷰 소스(카메라 스택 통일).
     /// 캡쳐 결과 파일을 BitmapSource 로 로드해 제공한다.
     /// </summary>

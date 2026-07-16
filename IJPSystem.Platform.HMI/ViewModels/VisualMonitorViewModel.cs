@@ -123,6 +123,60 @@ namespace IJPSystem.Platform.HMI.ViewModels
             return Sources[0];
         }
 
+        // ── 불러온 이미지 ────────────────────────────────────────────────────
+        // 소스 목록의 고정 슬롯 하나를 재사용한다(다시 Load 해도 항목이 늘지 않음).
+        private const string LoadedImageSourceName = "Loaded Image";
+        private StaticImageSource? _loadedImage;
+
+        /// <summary>
+        /// 이미지 파일을 읽어 "Loaded Image" 소스로 등록하고 즉시 선택한다.
+        /// 카메라와 같은 소스 목록에 넣으므로 줌/팬/크로스라인이 그대로 동작하고,
+        /// 콤보박스에서 카메라를 다시 고르면 라이브로 복귀한다.
+        /// </summary>
+        /// <returns>성공 여부. 실패 사유는 로그로 남긴다.</returns>
+        public bool LoadImageFromFile(string path)
+        {
+            try
+            {
+                var bmp = LoadFrozen(path);
+
+                if (_loadedImage == null)
+                {
+                    _loadedImage = new StaticImageSource(LoadedImageSourceName);
+                    _sources[LoadedImageSourceName] = _loadedImage;
+                    Sources.Add(LoadedImageSourceName);
+                }
+                _loadedImage.SetImage(bmp, path);
+                _loadedImage.Open();
+
+                // 이미 선택돼 있으면 SelectedSource 대입이 무시되므로(값 동일) 프레임을 직접 반영한다.
+                SelectedSource = LoadedImageSourceName;
+                Frame = bmp;
+                FitRequested?.Invoke(this, EventArgs.Empty);
+
+                _mainVM.AddLog($"[VISION] 이미지 로드: {System.IO.Path.GetFileName(path)}", LogLevel.Info);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _mainVM.AddLog($"[VISION] 이미지 로드 실패 — {ex.Message}", LogLevel.Error);
+                return false;
+            }
+        }
+
+        // 파일 잠금을 피하려고 OnLoad 로 전부 읽어들인 뒤 Freeze(다른 스레드 접근 허용)
+        private static BitmapSource LoadFrozen(string path)
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption   = BitmapCacheOption.OnLoad;
+            bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bmp.UriSource     = new Uri(path);
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
+        }
+
         /// <summary>라이브 갱신 시작. 화면이 보일 때만 호출(불필요한 백그라운드 캡쳐 방지).</summary>
         public void Start()
         {

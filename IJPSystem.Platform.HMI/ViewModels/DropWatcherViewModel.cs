@@ -96,7 +96,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public bool IsLiveView
         {
             get => _isLiveView;
-            private set { if (SetProperty(ref _isLiveView, value)) OnPropertyChanged(nameof(LiveViewLabel)); }
+            private set
+            {
+                if (!SetProperty(ref _isLiveView, value)) return;
+                OnPropertyChanged(nameof(LiveViewLabel));
+                // Live 중에는 연속 캡쳐가 CurrentImagePath 를 계속 덮어써서 연 이미지가 바로 사라진다.
+                ((RelayCommand)OpenImageCommand).RaiseCanExecuteChanged();
+            }
         }
         public string LiveViewLabel => IsLiveView ? "■ Stop" : "▶ Live";
 
@@ -164,6 +170,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand SetDelay1Command           { get; }
         public ICommand SetDelay2Command           { get; }
         public ICommand AbortCommand               { get; }
+        public ICommand OpenImageCommand           { get; }
         public ICommand MeasureVelocityCommand     { get; }
         public ICommand TimeIntervalMeasureCommand { get; }
         public ICommand ToggleLiveViewCommand      { get; }
@@ -178,6 +185,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             SetDelay1Command           = new RelayCommand(_ => ExecuteSetDelay(1));
             SetDelay2Command           = new RelayCommand(_ => ExecuteSetDelay(2));
             AbortCommand               = new RelayCommand(_ => ExecuteAbort());
+            OpenImageCommand           = new RelayCommand(_ => ExecuteOpenImage(), _ => !IsLiveView);
             MeasureVelocityCommand     = new RelayCommand(async _ => await ExecuteMeasureAsync("Measure Velocity"),      _ => !IsBusy);
             TimeIntervalMeasureCommand = new RelayCommand(async _ => await ExecuteMeasureAsync("Time Interval Measure"), _ => !IsBusy);
             ToggleLiveViewCommand      = new RelayCommand(_ => ToggleLiveView());
@@ -359,6 +367,29 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 IsLiveView = false;
             }
             finally { _liveGrabbing = false; }
+        }
+
+        // ── 이미지 파일 열기 ──────────────────────────────────────────────────
+        // 저장된 캡쳐/샘플 이미지를 불러와 화면에 표시한다(측정은 하지 않음).
+        private void ExecuteOpenImage()
+        {
+            string defaultDir = Path.Combine(@"C:\Logs\Vision", CamId);
+            if (!Directory.Exists(defaultDir)) defaultDir = @"C:\Logs\Vision";
+            if (!Directory.Exists(defaultDir)) defaultDir = Path.GetDirectoryName(SampleImagePath) ?? "";
+            if (!Directory.Exists(defaultDir))
+                defaultDir = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title            = "이미지 파일 선택",
+                Filter           = "이미지 파일|*.bmp;*.png;*.jpg;*.jpeg;*.tif;*.tiff|모든 파일|*.*",
+                InitialDirectory = defaultDir,
+                Multiselect      = false,
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            CurrentImagePath = dlg.FileName;
+            _mainVM.AddLog($"[VISION] DropWatcher: 이미지 로드: {Path.GetFileName(dlg.FileName)}", LogLevel.Info);
         }
 
         private void LogPlaceholder(string action) =>

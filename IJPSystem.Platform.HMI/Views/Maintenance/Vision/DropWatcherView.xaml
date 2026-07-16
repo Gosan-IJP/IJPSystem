@@ -107,6 +107,7 @@
 
                 <!-- 툴바 (돋보기 / 포인터 / 손 / 선) — 표시용 -->
                 <Border Grid.Row="1" Background="#0F172A" Padding="8,5" BorderBrush="#1F2937" BorderThickness="0,0,0,1">
+                    <Grid>
                     <StackPanel Orientation="Horizontal">
                         <Button Width="30" Height="26" Margin="0,0,4,0" Content="🔍" FontSize="13"
                                 Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B" ToolTip="Zoom"/>
@@ -133,6 +134,37 @@
                             <TextBlock Text="{Binding LiveViewLabel}" FontSize="11" FontWeight="Bold" Foreground="White"/>
                         </Button>
                     </StackPanel>
+
+                    <!-- 이미지 열기 버튼 (우측 정렬) — Glass/NJI 화면과 동일한 모양.
+                         Live 중에는 연속 캡쳐가 화면을 덮어써서 의미가 없으므로 비활성(커맨드 CanExecute). -->
+                    <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                            Command="{Binding OpenImageCommand}"
+                            Background="Transparent" BorderThickness="0"
+                            Cursor="Hand" ToolTip="저장된 이미지 파일 열기">
+                        <Border CornerRadius="6" Padding="10,5">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#334155"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsMouseOver,
+                                            RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                                            <Setter Property="Background" Value="#475569"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsEnabled,
+                                            RelativeSource={RelativeSource AncestorType=Button}}" Value="False">
+                                            <Setter Property="Background" Value="#1E293B"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="📂" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="이미지 열기" Foreground="#94A3B8"
+                                           FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </Button>
+                    </Grid>
                 </Border>
 
                 <!-- 이미지 영역 -->

@@ -25,7 +25,8 @@ namespace IJPSystem.Platform.HMI.Views
 
         // 시퀀스 진행 상태 추적 — 잉크 분사 / 스캔라인 가시성 제어
         private int _currentStepNo;
-        private double _maxScanT;                  // PrintedAreaScale 단조 증가용 (한 번 인쇄된 영역 유지)
+        private double _passFill;                  // 현재 스와스 밴드의 채움률(0..1) — 패스 내 단조 증가
+        private int    _currentPassIndex;          // 진행 중인 패스(0-based). 바뀌면 _passFill 리셋
         private const int PrintScanStepNo = 8;     // AutoPrintSequence step 8 = 인쇄 진행 (14단계 — VacuumConfirm 제외)
         // 각 step 진입 시각 (animStart 기준 초) — 스크립트 모드 phase 애니메이션 기점
         private readonly Dictionary<int, double> _stepTimes = new();
@@ -48,6 +49,8 @@ namespace IJPSystem.Platform.HMI.Views
         private const double HeadScanStartX =    0;
         private const double HeadScanEndX   =  540;
         private const double PrintAreaMaxW  =  534;
+        // PrintedArea/PrintedDoneArea Rectangle 의 Height 와 반드시 같아야 한다(스와스 밴드 높이 계산 기준).
+        private const double PrintedAreaH   =  174;
 
         private const double GlassParkedL   = -600;
         private const double GlassCenter    =    0;
@@ -336,9 +339,42 @@ namespace IJPSystem.Platform.HMI.Views
 
             // ── 인쇄 영역 채움 + 스캔선(고정 헤드 바로 아래) ──
             // 상수 정합상 스캔선 화면X = 132 + t·PrintAreaMaxW + glassX = 고정 헤드 토출점(t 무관).
-            if (afterAllPasses) _maxScanT = 1.0;                          // 전 패스 종료 → 100% 잠금
-            else if (isPrintStep) _maxScanT = Math.Max(_maxScanT, t);    // 인쇄 중 단조 증가
-            PrintedAreaScale.ScaleX = _maxScanT;
+            //
+            // 스와스마다 글라스 폭(화면 세로)의 1/swath 씩 아래에서 위로 쌓인다.
+            //   완료 밴드(PrintedDoneArea): 전폭 × (완료 패스수/swath) — 바닥 고정, 위로 성장
+            //   현재 밴드(PrintedArea)    : 1/swath 높이 × 스캔 진행률 — 해당 밴드 위치로 이동
+            int passIndex = inPassRegion ? (_currentStepNo - PrintScanStepNo) / 4 : 0;   // 0-based
+            if (passIndex != _currentPassIndex)
+            {
+                _currentPassIndex = passIndex;
+                _passFill = 0;                       // 새 패스 시작 → 현재 밴드 채움 초기화
+            }
+
+            // 짝수 패스(0-based 홀수)는 역방향 주행 — t 가 1→0 이므로 채움은 (1−t), 우측에서 자란다.
+            bool passForward = passIndex % 2 == 0;
+            if (isPrintStep)
+            {
+                double fill = passForward ? t : 1.0 - t;
+                _passFill = Math.Max(_passFill, fill);       // 패스 내 단조 증가
+            }
+            else if (inPassRegion) _passFill = 1.0;          // PrintDone/SwathStep 구간 — 해당 밴드는 다 찼다
+
+            double bandH   = PrintedAreaH / swath;
+            int donePasses = afterAllPasses ? swath : passIndex;
+
+            PrintedDoneScale.ScaleY = (double)donePasses / swath;
+
+            if (afterAllPasses)
+            {
+                PrintedAreaScale.ScaleX = 0;                 // 완료 밴드가 전부 덮으므로 현재 밴드는 숨김
+            }
+            else
+            {
+                PrintedArea.RenderTransformOrigin = new Point(passForward ? 0 : 1, 1);
+                PrintedAreaScale.ScaleY = 1.0 / swath;
+                PrintedAreaScale.ScaleX = _passFill;
+                PrintedAreaOffset.Y     = -passIndex * bandH;
+            }
 
             if (isPrintStep)
             {
@@ -429,6 +465,8 @@ namespace IJPSystem.Platform.HMI.Views
             HeadXTransform.Y        = HeadZUp;        // 헤드 수직 — 상승 파킹
             HeadLabelTransform.Y    = HeadZUp;
             PrintedAreaScale.ScaleX = 0;
+            PrintedAreaOffset.Y     = 0;
+            PrintedDoneScale.ScaleY = 0;      // 쌓인 스와스 밴드도 비운다
             ScanLineTransform.X     = 0;
             ScanLine.Opacity        = 0;
             SyncNozzleX(HeadFixedX);
@@ -443,7 +481,8 @@ namespace IJPSystem.Platform.HMI.Views
                 _isAnimating    = true;
                 _isScanning     = false;
                 _currentStepNo  = 0;
-                _maxScanT       = 0;
+                _passFill       = 0;
+                _currentPassIndex = 0;
                 _stepTimes.Clear();
                 UnhookRendering();
 

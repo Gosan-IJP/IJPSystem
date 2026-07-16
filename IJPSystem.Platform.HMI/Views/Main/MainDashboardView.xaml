@@ -203,14 +203,40 @@
                                            Text="GLASS SUBSTRATE (VC)" Foreground="#38BDF8"
                                            FontSize="9" FontFamily="Consolas" FontWeight="Bold"/>
 
-                                <!-- 인쇄된 영역 (좌→우 ScaleX 확장) -->
+                                <!-- 인쇄 완료된 스와스 밴드 (아래→위 ScaleY 확장, 항상 전폭)
+                                     RenderTransformOrigin 0,1 = 좌하단 → 바닥을 고정한 채 위로 자란다.
+                                     3스와스면 패스마다 1/3 → 2/3 → 3/3 으로 쌓인다. -->
+                                <Rectangle x:Name="PrintedDoneArea"
+                                           Canvas.Left="132" Canvas.Top="260"
+                                           Width="536" Height="174"
+                                           Opacity="0.65" RadiusX="2" RadiusY="2"
+                                           RenderTransformOrigin="0,1">
+                                    <Rectangle.RenderTransform>
+                                        <ScaleTransform x:Name="PrintedDoneScale" ScaleX="1" ScaleY="0"/>
+                                    </Rectangle.RenderTransform>
+                                    <Rectangle.Fill>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#1D4ED8" Offset="0"/>
+                                            <GradientStop Color="#6D28D9" Offset="0.5"/>
+                                            <GradientStop Color="#4338CA" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Rectangle.Fill>
+                                </Rectangle>
+
+                                <!-- 현재 인쇄 중인 스와스 밴드 (스캔 방향으로 ScaleX 확장)
+                                     ScaleY=1/스와스수 로 밴드 높이를 만들고, Translate 로 해당 밴드 위치까지 올린다.
+                                     정방향 패스는 좌→우, 역방향(짝수) 패스는 우→좌 로 채우기 위해
+                                     코드에서 RenderTransformOrigin 의 X 를 0/1 로 바꾼다. -->
                                 <Rectangle x:Name="PrintedArea"
                                            Canvas.Left="132" Canvas.Top="260"
                                            Width="536" Height="174"
                                            Opacity="0.65" RadiusX="2" RadiusY="2"
-                                           RenderTransformOrigin="0,0.5">
+                                           RenderTransformOrigin="0,1">
                                     <Rectangle.RenderTransform>
-                                        <ScaleTransform x:Name="PrintedAreaScale" ScaleX="0" ScaleY="1"/>
+                                        <TransformGroup>
+                                            <ScaleTransform     x:Name="PrintedAreaScale" ScaleX="0" ScaleY="1"/>
+                                            <TranslateTransform x:Name="PrintedAreaOffset" Y="0"/>
+                                        </TransformGroup>
                                     </Rectangle.RenderTransform>
                                     <Rectangle.Fill>
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">

@@ -230,7 +230,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
         public ICommand SetVoltageCommand { get; private set; } = null!;
 
-        // Print Velocity 범위 (30 ~ 100 mm/s, 빨간 범위) — 화면 라벨과 반드시 같이 맞출 것
+        // Print Velocity 입력 클램프 범위 (mm/s). 화면에 범위 안내는 표시하지 않는다.
         private const double PrintVelocityMin = 30.0;
         private const double PrintVelocityMax = 100.0;
 
@@ -431,10 +431,29 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set => SetProperty(ref _printDataPath, value);
         }
 
+        // ── Load Image (Visual Monitor 에 띄울 이미지) ────────────────
+        private string _loadedImagePath = "";
+        /// <summary>불러온 이미지의 전체 경로. 비어 있으면 아직 불러오지 않은 상태.</summary>
+        public string LoadedImagePath
+        {
+            get => _loadedImagePath;
+            private set
+            {
+                if (!SetProperty(ref _loadedImagePath, value)) return;
+                OnPropertyChanged(nameof(LoadedImageName));
+                OnPropertyChanged(nameof(HasLoadedImage));
+            }
+        }
+        /// <summary>불러온 이미지의 파일명(버튼 아래 표시용).</summary>
+        public string LoadedImageName =>
+            string.IsNullOrEmpty(_loadedImagePath) ? "" : System.IO.Path.GetFileName(_loadedImagePath);
+        public bool HasLoadedImage => !string.IsNullOrEmpty(_loadedImagePath);
+
         // ── Commands ─────────────────────────────────────────────────
         public ICommand SetPrintOriginCommand { get; }
         public ICommand PrintCommand          { get; }
         public ICommand AbortCommand          { get; }
+        public ICommand LoadImageCommand      { get; private set; } = null!;
 
         /// <summary>
         /// 화면 상단 Visual Monitor(라이브 뷰 + 크로스라인 + 뷰 툴). 공용 VisualMonitorViewModel 을 재사용한다.
@@ -463,6 +482,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                                 _ => !IsPointMoving && !IsPrinting);
 
             SpitCommand = new RelayCommand(_ => ToggleSpit());
+
+            LoadImageCommand = new RelayCommand(_ => ExecuteLoadImage());
 
             // Purge 압력
             SetPurgeCommand    = new RelayCommand(_ => ApplyPurgeSetpoint());
@@ -739,6 +760,32 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ax.IsAbsMode      = (_motionModeIndex == 0); // 0=Absolute, 1=Relative
             ax.TargetPosition = MotionTarget;
             await ax.MoveAsync();
+        }
+
+        /// <summary>
+        /// Load Image — 이미지 파일을 골라 화면 상단 Visual Monitor 에 표시한다.
+        /// 로드에 실패하면 경로 표시를 갱신하지 않아 화면과 라벨이 어긋나지 않게 한다.
+        /// </summary>
+        private void ExecuteLoadImage()
+        {
+            // 직전에 고른 이미지 폴더 → 없으면 그림 폴더
+            string defaultDir = "";
+            if (!string.IsNullOrEmpty(_loadedImagePath))
+                defaultDir = System.IO.Path.GetDirectoryName(_loadedImagePath) ?? "";
+            if (!System.IO.Directory.Exists(defaultDir))
+                defaultDir = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title            = "인쇄 이미지 선택",
+                Filter           = "이미지 파일|*.bmp;*.png;*.jpg;*.jpeg;*.tif;*.tiff|모든 파일|*.*",
+                InitialDirectory = defaultDir,
+                Multiselect      = false,
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            if (Monitor.LoadImageFromFile(dlg.FileName))
+                LoadedImagePath = dlg.FileName;
         }
 
         /// <summary>현재 X/Y/Z 축 위치를 인쇄 원점으로 캡처한다.</summary>
