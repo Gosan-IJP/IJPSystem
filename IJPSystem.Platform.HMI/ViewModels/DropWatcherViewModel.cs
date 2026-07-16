@@ -163,7 +163,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // ── 커맨드 ────────────────────────────────────────────────────────────
         public ICommand SetDelay1Command           { get; }
         public ICommand SetDelay2Command           { get; }
-        public ICommand NozzleSelectCommand        { get; }
         public ICommand AbortCommand               { get; }
         public ICommand MeasureVelocityCommand     { get; }
         public ICommand TimeIntervalMeasureCommand { get; }
@@ -178,7 +177,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             SetDelay1Command           = new RelayCommand(_ => ExecuteSetDelay(1));
             SetDelay2Command           = new RelayCommand(_ => ExecuteSetDelay(2));
-            NozzleSelectCommand        = new RelayCommand(_ => LogPlaceholder("Nozzle Select"));
             AbortCommand               = new RelayCommand(_ => ExecuteAbort());
             MeasureVelocityCommand     = new RelayCommand(async _ => await ExecuteMeasureAsync("Measure Velocity"),      _ => !IsBusy);
             TimeIntervalMeasureCommand = new RelayCommand(async _ => await ExecuteMeasureAsync("Time Interval Measure"), _ => !IsBusy);

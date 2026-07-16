@@ -106,10 +106,26 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 현재 선택된 Motion 대상 축
         public AxisViewModel? SelectedMotionAxis => ResolveByTag(_motionAxisTags[Math.Clamp(_motionAxisIndex, 0, 3)]);
 
-        public ICommand MotionHomeCommand     { get; private set; } = null!;
         public ICommand MotionMoveCommand     { get; private set; } = null!;
         public ICommand MotionStepUpCommand   { get; private set; } = null!;
         public ICommand MotionStepDownCommand { get; private set; } = null!;
+
+        // 티칭 포인트 바로가기 — 활성 레시피의 READY / PURGE 좌표로 이동
+        public ICommand MoveReadyCommand { get; private set; } = null!;
+        public ICommand MovePurgeCommand { get; private set; } = null!;
+
+        // 포인트 이동 중 중복 클릭 차단
+        private bool _isPointMoving;
+        public bool IsPointMoving
+        {
+            get => _isPointMoving;
+            private set
+            {
+                if (!SetProperty(ref _isPointMoving, value)) return;
+                (MoveReadyCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (MovePurgeCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
 
         // ── Spit (노즐 토출 애니메이션) ───────────────────────────────
         // 버튼 클릭 시마다 ON/OFF 토글 → Fluidics Head 노즐 스트림 동작.
@@ -214,9 +230,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
         public ICommand SetVoltageCommand { get; private set; } = null!;
 
-        // Print Velocity 범위 (50 ~ 200 mm/s, 빨간 범위)
-        private const double PrintVelocityMin = 50.0;
-        private const double PrintVelocityMax = 200.0;
+        // Print Velocity 범위 (30 ~ 100 mm/s, 빨간 범위) — 화면 라벨과 반드시 같이 맞출 것
+        private const double PrintVelocityMin = 30.0;
+        private const double PrintVelocityMax = 100.0;
+
+        // 인쇄 속도를 결정하는 스캔축(스테이지 이송). AutoPrintSequence.ScanAxisNo 와 동일해야 한다.
+        private const string ScanAxisTag = "Y";
 
         // ── 헤드팩 선택 ───────────────────────────────────────────────
         public ObservableCollection<string> HeadPacks { get; } = new()
@@ -395,7 +414,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public double ProgressPercent =>
             _totalSteps > 0 ? (double)_currentStep / _totalSteps * 100.0 : 0;
 
-        // ── Print Velocity (활성 레시피의 X축 Print.Vel) ────────────────
+        // ── Print Velocity (활성 레시피의 스캔축(Y) Print.Vel) ──────────
         private double _printVelocity;
         public double PrintVelocity
         {
@@ -434,10 +453,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             AbortCommand          = new RelayCommand(_ => _printCts?.Cancel(), _ => IsPrinting);
 
             // Motion 패널 (활성화는 버튼 IsEnabled="SelectedMotionAxis.CanMove" 바인딩으로 처리)
-            MotionHomeCommand     = new RelayCommand(async _ => await MotionHomeAsync());
             MotionMoveCommand     = new RelayCommand(async _ => await MotionMoveAsync());
             MotionStepUpCommand   = new RelayCommand(_ => MotionTarget = Math.Round(MotionTarget + MotionStep, 3));
             MotionStepDownCommand = new RelayCommand(_ => MotionTarget = Math.Round(MotionTarget - MotionStep, 3));
+
+            MoveReadyCommand = new RelayCommand(async _ => await MoveToPointAsync(PointNames.Ready),
+                                                _ => !IsPointMoving && !IsPrinting);
+            MovePurgeCommand = new RelayCommand(async _ => await MoveToPointAsync(PointNames.Purge),
+                                                _ => !IsPointMoving && !IsPrinting);
 
             SpitCommand = new RelayCommand(_ => ToggleSpit());
 
@@ -653,16 +676,55 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
-        /// <summary>선택 축 원점복귀(Home).</summary>
-        private async System.Threading.Tasks.Task MotionHomeAsync()
+        /// <summary>
+        /// 활성 레시피에 티칭된 포인트(READY/PURGE) 좌표로 이동한다.
+        /// 좌표는 RecipeVM 의 활성 스냅샷에서 오므로, 레시피를 APPLY 하지 않았으면 이동할 축이 없다
+        /// (MotionServiceAdapter 가 그 상황을 경고 로그로 남긴다).
+        /// </summary>
+        private async System.Threading.Tasks.Task MoveToPointAsync(string pointName)
         {
-            var ax = SelectedMotionAxis;
-            if (ax == null)
+            if (_mainVM.HasActiveAlarm)
             {
-                _mainVM.AddLog("[PATTERN] Home — 대상 축을 찾을 수 없습니다.", LogLevel.Warning);
+                _mainVM.AddLog($"[PATTERN] {pointName} 이동 — 중단 (미해제 알람 존재)", LogLevel.Warning);
                 return;
             }
-            await ax.HomeAsync();
+            if (string.IsNullOrEmpty(_mainVM.RecipeVM?.ActiveRecipeName))
+            {
+                _mainVM.AddLog($"[PATTERN] {pointName} 이동 — 중단 (적용된 레시피 없음)", LogLevel.Warning);
+                return;
+            }
+
+            // 미원점 상태의 절대좌표 이동은 위험 — 인쇄 시작과 동일한 기준으로 막는다.
+            var allAxes = _mainVM.GetController()?.GetMachine()?.Motion?.GetAllStatus();
+            if (allAxes == null || allAxes.Count == 0)
+            {
+                _mainVM.AddLog($"[PATTERN] {pointName} 이동 — 중단 (축 정보 없음 — 모션 드라이버 확인)", LogLevel.Error);
+                return;
+            }
+            var notHomed = allAxes.Where(a => !a.IsHomeDone).Select(a => a.AxisNo).ToList();
+            if (notHomed.Count > 0)
+            {
+                _mainVM.AddLog(
+                    $"[PATTERN] {pointName} 이동 — 중단 (INITIALIZE 미수행, 미원점 축: {string.Join(", ", notHomed)})",
+                    LogLevel.Warning);
+                return;
+            }
+
+            IsPointMoving = true;
+            try
+            {
+                var motion = new MotionServiceAdapter(_mainVM);
+                await motion.MoveToPointAsync(pointName, System.Threading.CancellationToken.None);
+                _mainVM.AddLog($"[PATTERN] {pointName} 이동 완료", LogLevel.Info);
+            }
+            catch (Exception ex)
+            {
+                _mainVM.AddLog($"[PATTERN] {pointName} 이동 실패 — {ex.Message}", LogLevel.Error);
+            }
+            finally
+            {
+                IsPointMoving = false;
+            }
         }
 
         /// <summary>선택 축을 Absolute/Relative 모드로 MotionTarget 위치까지 이동.</summary>
@@ -700,13 +762,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
             return ax?.CurrentPos ?? 0.0;
         }
 
-        private void RefreshPrintVelocity()
+        /// <summary>
+        /// 활성(APPLY된) 레시피의 스캔축 Printing 프로파일 속도를 화면에 반영한다.
+        /// 인쇄 속도를 결정하는 건 스캔축(Y, 스테이지 이송)이다 — X는 스와스 스텝오버 축이라 무관.
+        /// (AutoPrintSequence.ScanAxisNo 와 반드시 같은 축이어야 함)
+        ///
+        /// 뷰모델이 캐시되어 생성자에서 한 번만 읽으면 레시피를 바꿔 APPLY 해도 옛 값이 남으므로,
+        /// 화면 진입(Loaded) 때마다 다시 호출한다.
+        /// </summary>
+        public void RefreshPrintVelocity()
         {
-            // 활성 레시피의 X축 Print.Velocity 를 사용 (없으면 100 mm/s 기본값)
-            var xAxis = _mainVM.SharedAxisList.FirstOrDefault(a =>
-                (a.Info?.Name ?? "").StartsWith("X", StringComparison.OrdinalIgnoreCase));
-            var cfg = xAxis == null ? null : _mainVM.RecipeVM?.GetActiveMotionConfig(xAxis.Info.AxisNo);
-            PrintVelocity = cfg?.Printing?.Velocity ?? 200.0;
+            var scanAxis = _mainVM.SharedAxisList.FirstOrDefault(a =>
+                (a.Info?.Name ?? "").StartsWith(ScanAxisTag, StringComparison.OrdinalIgnoreCase));
+            var cfg = scanAxis == null ? null : _mainVM.RecipeVM?.GetActiveMotionConfig(scanAxis.Info.AxisNo);
+
+            // 활성 스냅샷에 스캔축 Printing 프로파일이 없으면(레시피 미적용 등) 범위 상한으로 표시
+            PrintVelocity = cfg?.Printing?.Velocity ?? PrintVelocityMax;
         }
 
         /// <summary>

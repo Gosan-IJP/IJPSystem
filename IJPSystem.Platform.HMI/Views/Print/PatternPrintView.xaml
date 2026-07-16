@@ -800,13 +800,16 @@
                         <ColumnDefinition Width="*"/>      <!-- Print 실행 -->
                     </Grid.ColumnDefinitions>
 
-                    <!-- ① Motion (Home / Absolute / Axis / Move) -->
-                    <Border Grid.Column="0" Style="{StaticResource CardBorder}" Padding="12">
+                    <!-- ① Motion (Absolute / Axis / Move) + 티칭 포인트 바로가기 -->
+                    <!-- 남는 세로 공간은 Motion 카드가 흡수한다 → ②③ 카드와 바닥이 맞음.
+                         (StackPanel 로 감싸면 자식이 내용 높이만 가져서 왼쪽 컬럼만 짧아진다) -->
+                    <Grid Grid.Column="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>     <!-- Motion 카드 -->
+                        <RowDefinition Height="Auto"/>  <!-- Ready / Purge -->
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0" Style="{StaticResource CardBorder}" Padding="12">
                         <StackPanel>
-                            <Button Style="{StaticResource ActionBtn}" Height="40" Margin="0,0,0,6"
-                                    Background="#1D4ED8" BorderBrush="#3B82F6" Content="🏠  Home"
-                                    Command="{Binding MotionHomeCommand}"
-                                    IsEnabled="{Binding SelectedMotionAxis.CanMove, FallbackValue=False}"/>
                             <ComboBox Height="30" Background="#0D1520" Foreground="Black" BorderBrush="#334155"
                                       VerticalContentAlignment="Center" FontWeight="Bold" Margin="0,0,0,5"
                                       SelectedIndex="{Binding MotionModeIndex, Mode=TwoWay}">
@@ -855,6 +858,21 @@
                                     IsEnabled="{Binding SelectedMotionAxis.CanMove, FallbackValue=False}"/>
                         </StackPanel>
                     </Border>
+
+                    <!-- 티칭 포인트 바로가기 — 활성 레시피의 READY / PURGE 좌표로 전축 이동 -->
+                    <Border Grid.Row="1" Style="{StaticResource CardBorder}" Padding="8" Margin="0,10,0,0">
+                        <StackPanel>
+                            <Button Style="{StaticResource ActionBtn}" Height="34" Margin="0,0,0,6"
+                                    Background="#1E293B" BorderBrush="#475569" Content="Ready Position"
+                                    ToolTip="활성 레시피의 READY 티칭 포인트로 이동"
+                                    Command="{Binding MoveReadyCommand}"/>
+                            <Button Style="{StaticResource ActionBtn}" Height="34"
+                                    Background="#1E293B" BorderBrush="#475569" Content="Purge Position"
+                                    ToolTip="활성 레시피의 PURGE 티칭 포인트로 이동"
+                                    Command="{Binding MovePurgeCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    </Grid>
 
                     <!-- ② Voltage / Nozzle / Print 설정 -->
                     <Border Grid.Column="2" Style="{StaticResource CardBorder}" Padding="12">
@@ -924,7 +942,7 @@
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel>
                             <TextBlock Style="{StaticResource MutedLabel}" Margin="0,0,0,2">
-                                <Run Text="Print Velocity "/><Run Text="50~200" Foreground="#EF4444" FontSize="9"/>
+                                <Run Text="Print Velocity "/><Run Text="30~100" Foreground="#EF4444" FontSize="9"/>
                             </TextBlock>
                             <Border Style="{StaticResource PosBox}" Padding="8,6" Margin="0,0,0,10">
                                 <Grid>

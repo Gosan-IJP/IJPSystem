@@ -11,6 +11,10 @@ namespace IJPSystem.Platform.HMI.Views
         public PatternPrintView()
         {
             InitializeComponent();
+
+            // 뷰모델은 캐시되어 생성자가 한 번만 도므로, 화면에 들어올 때마다 활성 레시피의
+            // Printing 속도를 다시 읽는다(레시피 APPLY 후 옛 값이 남는 것을 막음).
+            Loaded += (s, e) => (DataContext as PatternPrintViewModel)?.RefreshPrintVelocity();
         }
 
         /// <summary>버튼 Tag(X/Y/Z/T)로 대상 축을 찾는다. 일치 축이 없으면 null(무동작).</summary>

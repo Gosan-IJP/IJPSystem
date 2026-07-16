@@ -381,7 +381,7 @@
                 <Border Background="#111827" CornerRadius="12" Padding="16"
                         BorderBrush="#334155" BorderThickness="1">
                     <StackPanel>
-                        <Button Height="46" Margin="0,0,0,8" Command="{Binding NozzleSelectCommand}"
+                        <Button Height="46" Margin="0,0,0,8" Click="NozzleSelect_Click"
                                 Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B">
                             <TextBlock Text="Nozzle Select" Foreground="White" FontSize="13" FontWeight="Bold"/>
                         </Button>
