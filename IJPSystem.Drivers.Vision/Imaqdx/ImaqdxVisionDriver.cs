@@ -134,7 +134,7 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             _statusMap.Values.OrderBy(s => s.CameraId).ToList();
 
         // ── 3. 촬영 ─────────────────────────────────────────────────
-        public async Task<VisionImage> CaptureAsync(string cameraId)
+        public async Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true)
         {
             if (!_sessions.TryGetValue(cameraId, out uint session) ||
                 !_configMap.TryGetValue(cameraId, out var cfg))
@@ -145,7 +145,7 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             try
             {
                 var now = DateTime.Now;
-                var (path, buffer) = await Task.Run(() => Grab(session, cfg, now));
+                var (path, buffer) = await Task.Run(() => Grab(session, cfg, now, saveToDisk));
 
                 status.LastCaptureTime = now;
                 status.TotalCaptureCount++;
@@ -169,7 +169,8 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
         /// IMAQdx 최신 버퍼를 읽어 (분석용) 원본 버퍼를 확보하고, 부가로 BMP 파일로도 저장한다.
         /// 파일 저장은 로깅/디버깅용이라 실패해도 버퍼는 그대로 반환한다. (Mono8 가정 — 실 포맷에 맞게 조정)
         /// </summary>
-        private (string? path, byte[]? buffer) Grab(uint session, CameraDeviceInfo cfg, DateTime ts)
+        private (string? path, byte[]? buffer) Grab(uint session, CameraDeviceInfo cfg, DateTime ts,
+                                                    bool saveToDisk)
         {
             int w = cfg.PixelWidth, h = cfg.PixelHeight;
             if (w <= 0 || h <= 0) return (null, null);
@@ -179,6 +180,9 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             uint err = ImaqdxInterop.IMAQdxGetImageData(session, buffer, (uint)buffer.Length,
                 ImaqdxBufferNumberMode.Last, 0, out _);
             if (err != ImaqdxInterop.Success) return (null, null);
+
+            // 라이브 미리보기(saveToDisk=false)는 파일을 남기지 않는다 — 프레임마다 BMP 가 쌓이는 것을 막는다.
+            if (!saveToDisk) return (null, buffer);
 
             string? path = null;
             try

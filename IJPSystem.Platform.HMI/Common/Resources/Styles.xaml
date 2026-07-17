@@ -270,6 +270,11 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="BtnBorder" Property="Background" Value="#0F172A"/>
                         </Trigger>
+                        <!-- 비활성(예: 선택 모델이 이미 가동 모델) — 흐리게 + 기본 커서 -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="BtnBorder" Property="Opacity" Value="0.4"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

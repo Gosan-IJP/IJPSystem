@@ -328,30 +328,18 @@
                         </Grid>
                     </StackPanel>
                 </Border>
+                <!-- 연속 운전 — 모드 토글 스위치(액션 아님). 상단 상태 띠로 이동. -->
                 <Border Grid.Column="1" Background="#1E293B" CornerRadius="12" Padding="14,8" BorderBrush="#334155" BorderThickness="1">
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2*"/>
-                            <ColumnDefinition Width="1*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <!-- CYCLE TACT TIME (2/3) -->
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0">
-                            <TextBlock Text="CYCLE TACT TIME" Foreground="#64748B" FontSize="11" FontWeight="Bold"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                <TextBlock Text="{Binding TactTime, StringFormat={}{0:F2}}" Foreground="#3B82F6" FontSize="34" FontWeight="Black" VerticalAlignment="Center"/>
-                                <TextBlock Text="SEC" Foreground="#475569" FontSize="13" FontWeight="Bold" VerticalAlignment="Bottom" Margin="6,0,0,8"/>
-                            </StackPanel>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{DynamicResource Lbl_ContinuousMode}"
+                                       Foreground="#E2E8F0" FontSize="14" FontWeight="Bold"/>
+                            <TextBlock Text="{DynamicResource Lbl_ContinuousModeHint}"
+                                       Foreground="#64748B" FontSize="10" Margin="0,2,0,0"/>
                         </StackPanel>
-
-                        <!-- TOTAL PRODUCTION (1/3) -->
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
-                            <TextBlock Text="TOTAL" Foreground="#64748B" FontSize="11" FontWeight="Bold"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                <TextBlock Text="{Binding TotalCount, StringFormat={}{0:N0}}" Foreground="White" FontSize="28" FontWeight="Black" VerticalAlignment="Center"/>
-                                <TextBlock Text="PCS" Foreground="#475569" FontSize="11" FontWeight="Bold" VerticalAlignment="Bottom" Margin="4,0,0,6"/>
-                            </StackPanel>
-                        </StackPanel>
+                        <ToggleButton HorizontalAlignment="Right" VerticalAlignment="Center"
+                                      IsChecked="{Binding IsContinuousMode}"
+                                      Style="{StaticResource SwitchToggleStyle}"/>
                     </Grid>
                 </Border>
 
@@ -436,21 +424,7 @@
                     </ItemsControl>
                 </Border>
 
-                <!-- 연속 운전 — 모드 토글 스위치(액션 아님) -->
-                <Border Background="#1E293B" CornerRadius="10" Padding="16,11" Margin="0,0,0,12"
-                        BorderBrush="#334155" BorderThickness="1">
-                    <Grid>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="{DynamicResource Lbl_ContinuousMode}"
-                                       Foreground="#E2E8F0" FontSize="14" FontWeight="Bold"/>
-                            <TextBlock Text="{DynamicResource Lbl_ContinuousModeHint}"
-                                       Foreground="#64748B" FontSize="10" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <ToggleButton HorizontalAlignment="Right" VerticalAlignment="Center"
-                                      IsChecked="{Binding IsContinuousMode}"
-                                      Style="{StaticResource SwitchToggleStyle}"/>
-                    </Grid>
-                </Border>
+                <!-- 연속 운전 토글은 상단 상태 띠로 이동 -->
 
                 <Grid>
                     <Grid.ColumnDefinitions>

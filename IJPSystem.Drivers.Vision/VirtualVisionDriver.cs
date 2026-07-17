@@ -27,6 +27,12 @@ namespace IJPSystem.Drivers.Vision
         public bool   IsConnected   { get; private set; } = false;
         public string ImageSavePath { get; set; } = @"C:\Logs\Vision";
 
+        /// <summary>
+        /// 가상 드랍와쳐 합성 프레임의 노즐 수. 실측 Raw 샘플(Config/Samples/DropWatcher_Raw.png)이
+        /// 15개라 기본값을 맞춰 둔다 — 가상/실측 결과를 바로 비교할 수 있어야 한다.
+        /// </summary>
+        public int VirtualNozzleCount { get; set; } = 15;
+
         // ────────────────────────────────────────────────
         // 1. 연결 / 초기화
         // ────────────────────────────────────────────────
@@ -90,7 +96,7 @@ namespace IJPSystem.Drivers.Vision
         // 3. 촬영
         // ────────────────────────────────────────────────
 
-        public async Task<VisionImage> CaptureAsync(string cameraId)
+        public async Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true)
         {
             if (!_statusMap.TryGetValue(cameraId, out var status))
                 return VisionImage.Invalid(cameraId);
@@ -111,30 +117,37 @@ namespace IJPSystem.Drivers.Vision
             // 드랍와쳐 카메라는 OpenCV 액적분석을 실제로 검증할 수 있도록 합성 액적(Mono8)을 생성한다.
             // 그 외 카메라는 기존 24bit 가짜 이미지(파일)만 사용(검사도 가상 InspectAsync 랜덤 경로).
             bool isDropWatcher = cameraId.IndexOf("DW", StringComparison.OrdinalIgnoreCase) >= 0;
-            byte[]? pixels = null;
-            string? filePath;
+            byte[] pixels;
+            string? filePath = null;
+            int imgW, imgH, bpp;
             if (isDropWatcher)
             {
-                int w = cfg.PixelWidth  > 0 ? cfg.PixelWidth  : 1280;
-                int h = cfg.PixelHeight > 0 ? cfg.PixelHeight : 512;
-                pixels = GenerateDropletMono8(w, h, seq);
-                filePath = SaveMono8Image(cameraId, now, pixels, w, h);   // 화면 표시용 + PixelData 로 in-memory 분석
+                imgW = cfg.PixelWidth  > 0 ? cfg.PixelWidth  : 1280;
+                imgH = cfg.PixelHeight > 0 ? cfg.PixelHeight : 512;
+                bpp  = 8;
+                pixels = GenerateDropletMono8(imgW, imgH, seq);
+                // saveToDisk=false(라이브 미리보기)면 파일을 남기지 않는다 — PixelData 로 화면 표시/분석 모두 가능.
+                if (saveToDisk) filePath = SaveMono8Image(cameraId, now, pixels, imgW, imgH);
             }
             else
             {
-                filePath = SaveFakeImage(cameraId, now);
+                imgW = cfg.PixelWidth  > 0 ? cfg.PixelWidth  : 640;
+                imgH = cfg.PixelHeight > 0 ? cfg.PixelHeight : 480;
+                bpp  = 24;
+                pixels = GenerateFakeBgr24(imgW, imgH);
+                if (saveToDisk) filePath = SaveFakeImage(cameraId, now, pixels, imgW, imgH);
             }
 
             var image = new VisionImage
             {
                 CameraId     = cameraId,
                 CaptureTime  = now,
-                Width        = isDropWatcher ? (cfg.PixelWidth  > 0 ? cfg.PixelWidth  : 1280) : cfg.PixelWidth,
-                Height       = isDropWatcher ? (cfg.PixelHeight > 0 ? cfg.PixelHeight : 512)  : cfg.PixelHeight,
+                Width        = imgW,
+                Height       = imgH,
                 IsValid      = true,
                 FilePath     = filePath,
                 PixelData    = pixels,
-                BitsPerPixel = 8,
+                BitsPerPixel = bpp,
             };
 
             status.IsCapturing      = false;
@@ -264,7 +277,7 @@ namespace IJPSystem.Drivers.Vision
         // 7. 가상 이미지 파일 생성 (24-bit BMP)
         // ────────────────────────────────────────────────
 
-        private string? SaveFakeImage(string cameraId, DateTime timestamp)
+        private string? SaveFakeImage(string cameraId, DateTime timestamp, byte[] bgr24, int w, int h)
         {
             try
             {
@@ -275,7 +288,7 @@ namespace IJPSystem.Drivers.Vision
                 string fileName = $"{timestamp:HHmmss_fff}.bmp";
                 string filePath = Path.Combine(folder, fileName);
 
-                GenerateBmp(filePath, 640, 480);
+                SaveBgr24Bmp(filePath, bgr24, w, h);
                 return filePath;
             }
             catch (Exception ex)
@@ -296,15 +309,27 @@ namespace IJPSystem.Drivers.Vision
         /// </summary>
         private byte[] GenerateDropletMono8(int width, int height, int seq)
         {
-            const byte bg   = 205;   // 밝은 배경(백라이트)
+            const byte bg   = 205;   // 밝은 배경(백라이트) — 중앙 기준
             const byte drop = 35;    // 어두운 액적(실루엣)
             var buf = new byte[width * height];
 
-            // 배경 + 약한 노이즈 (이 부분만 프레임마다 변함)
-            for (int i = 0; i < buf.Length; i++)
-                buf[i] = (byte)Math.Clamp(bg + _rng.Next(-8, 8), 0, 255);
+            // 배경: 중앙이 밝고 가장자리로 갈수록 어두운 조명 그라디언트 + 약한 노이즈.
+            // 실측 Raw 와 같은 구조로 만들어야 BlackHat 배경억제 경로가 가상모드에서도 실제처럼 검증된다.
+            // (노이즈만 프레임마다 변해 '라이브' 느낌을 준다 — 액적 위치는 고정)
+            double cxF = width / 2.0, cyF = height / 2.0;
+            for (int y = 0; y < height; y++)
+            {
+                double ny = (y - cyF) / cyF;
+                int row = y * width;
+                for (int x = 0; x < width; x++)
+                {
+                    double nx  = (x - cxF) / cxF;
+                    double vig = 1.0 - 0.42 * nx * nx - 0.22 * ny * ny;   // 가장자리 감광
+                    buf[row + x] = (byte)Math.Clamp(bg * vig + _rng.Next(-8, 8), 0, 255);
+                }
+            }
 
-            int n     = Math.Max(4, width / 110);        // 노즐 수
+            int n     = VirtualNozzleCount;              // 노즐 수 — 실측 샘플과 맞춘다
             int pitch = width / (n + 1);                 // 노즐 피치
             int r     = Math.Max(5, height / 40);        // 액적 반경
             int baseY = (int)(height * 0.62);            // 기준 낙하거리(노즐면=상단 가정)
@@ -379,7 +404,38 @@ namespace IJPSystem.Drivers.Vision
             }
         }
 
-        private void GenerateBmp(string filePath, int width, int height)
+        /// <summary>
+        /// 일반 카메라용 가짜 프레임(BGR24, 패딩 없는 w*h*3 버퍼)을 만든다.
+        /// 파일 저장과 분리해 둔다 — 라이브 미리보기는 이 버퍼만 쓰고 디스크에 쓰지 않는다.
+        /// </summary>
+        private byte[] GenerateFakeBgr24(int width, int height)
+        {
+            var buf = new byte[width * height * 3];
+            for (int y = 0; y < height; y++)
+            {
+                int row = y * width * 3;
+                for (int x = 0; x < width; x++)
+                {
+                    // 좌→우 수평 그라디언트 + 랜덤 노이즈 (카메라 이미지 시뮬레이션)
+                    int   base_  = 40 + x * 170 / width;
+                    int   noise  = _rng.Next(-18, 18);
+                    byte  gray   = (byte)Math.Clamp(base_ + noise, 0, 255);
+
+                    // 중앙부에 밝은 노즐 패턴 점 격자 (NJI 특성 반영)
+                    bool isNozzle = (x % 40 < 4) && (y % 40 < 4)
+                                    && x > 80 && x < 560 && y > 80 && y < 400;
+                    if (isNozzle) gray = (byte)Math.Clamp(gray + 120, 0, 255);
+
+                    buf[row + x * 3 + 0] = gray;                               // B
+                    buf[row + x * 3 + 1] = gray;                               // G
+                    buf[row + x * 3 + 2] = (byte)Math.Clamp(gray + 15, 0, 255); // R
+                }
+            }
+            return buf;
+        }
+
+        /// <summary>BGR24 버퍼(패딩 없음)를 24-bit BMP 로 저장한다(행 4바이트 정렬은 여기서 처리).</summary>
+        private static void SaveBgr24Bmp(string filePath, byte[] bgr24, int width, int height)
         {
             int rowStride    = ((width * 3 + 3) / 4) * 4;  // 4바이트 정렬
             int pixelBytes   = rowStride * height;
@@ -409,22 +465,7 @@ namespace IJPSystem.Drivers.Vision
             var row = new byte[rowStride];
             for (int y = 0; y < height; y++)
             {
-                for (int x = 0; x < width; x++)
-                {
-                    // 좌→우 수평 그라디언트 + 랜덤 노이즈 (카메라 이미지 시뮬레이션)
-                    int   base_  = 40 + x * 170 / width;
-                    int   noise  = _rng.Next(-18, 18);
-                    byte  gray   = (byte)Math.Clamp(base_ + noise, 0, 255);
-
-                    // 중앙부에 밝은 노즐 패턴 점 격자 (NJI 특성 반영)
-                    bool isNozzle = (x % 40 < 4) && (y % 40 < 4)
-                                    && x > 80 && x < 560 && y > 80 && y < 400;
-                    if (isNozzle) gray = (byte)Math.Clamp(gray + 120, 0, 255);
-
-                    row[x * 3 + 0] = gray;                               // B
-                    row[x * 3 + 1] = gray;                               // G
-                    row[x * 3 + 2] = (byte)Math.Clamp(gray + 15, 0, 255); // R
-                }
+                Array.Copy(bgr24, y * width * 3, row, 0, width * 3);
                 bw.Write(row);
             }
         }

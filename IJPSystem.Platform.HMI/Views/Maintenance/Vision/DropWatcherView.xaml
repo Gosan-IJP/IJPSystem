@@ -9,7 +9,6 @@
              Background="#0B0F1A">
 
     <UserControl.Resources>
-        <cvts:PathToBitmapImageConverter x:Key="PathToBitmapImageConverter"/>
 
         <!-- 파라미터 입력 박스 (라벨 + 단위) 공통 스타일 -->
         <Style x:Key="DwFieldLabel" TargetType="TextBlock">
@@ -184,7 +183,7 @@
                         </Grid>
 
                         <!-- 캡처 이미지 -->
-                        <Image Source="{Binding CurrentImagePath, Converter={StaticResource PathToBitmapImageConverter}}"
+                        <Image Source="{Binding CurrentFrame}"
                                Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
                                Visibility="{Binding HasImage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
@@ -198,17 +197,17 @@
                     </Grid>
                 </Border>
 
-                <!-- 하단 상태바 -->
-                <!-- 하단 상태바: 좌(분석 결과) / 우(오버레이 범례). 두 영역을 별도 컬럼으로 분리해
-                     텍스트가 길어져도 서로 겹치지 않게 한다(좌측은 넘치면 말줄임). -->
-                <Border Grid.Row="3" Background="#1E293B" CornerRadius="0,0,12,12" Padding="16,9">
+                <!-- 하단 상태바: 위(분석 결과) / 아래(오버레이 범례).
+                     결과 문자열이 길어(노즐/직경/부피/속도/편차) 범례와 한 줄에 두면 잘리므로
+                     행을 나눠 결과가 항상 전체 폭을 쓰게 한다. -->
+                <Border Grid.Row="3" Background="#1E293B" CornerRadius="0,0,12,12" Padding="16,7">
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                        <TextBlock Grid.Row="0" VerticalAlignment="Center"
                                    FontSize="11" FontFamily="Consolas"
                                    TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
                                    ToolTip="{Binding LastResultText}">
@@ -218,10 +217,10 @@
                             <Run Text="{Binding LastResultText, Mode=OneWay}" Foreground="#FCD34D" FontWeight="Bold"/>
                         </TextBlock>
 
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                            <TextBlock Text="Green = Velocity" Foreground="#22C55E" FontSize="11" FontWeight="Bold"/>
-                            <TextBlock Text="  Cyan = Measure Area" Foreground="#22D3EE" FontSize="11" FontWeight="Bold"/>
-                            <TextBlock Text="  Magenta = Column" Foreground="#E879F9" FontSize="11" FontWeight="Bold"/>
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,3,0,0">
+                            <TextBlock Text="Green = Velocity" Foreground="#22C55E" FontSize="10" FontWeight="Bold"/>
+                            <TextBlock Text="  Cyan = Measure Area" Foreground="#22D3EE" FontSize="10" FontWeight="Bold"/>
+                            <TextBlock Text="  Magenta = Column" Foreground="#E879F9" FontSize="10" FontWeight="Bold"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -435,7 +434,7 @@
             </StackPanel>
         </ScrollViewer>
 
-        <!-- ══ 우측: 측정 그래프 3개 (Velocity / Drop Position / Side Spit Rate) ══ -->
+        <!-- ══ 우측: 측정 그래프 3개 (노즐별 Velocity / Drop Position / Volume) ══ -->
         <Grid Grid.Column="4">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
@@ -445,13 +444,14 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Velocity (범례 표시) -->
+            <!-- Velocity — 시리즈가 하나뿐이라 범례는 숨긴다(Y축 이름이 이미 무슨 값인지 말해줌).
+                 예전 Drop 1~5 다중 시리즈 시절의 잔재였다. -->
             <Border Grid.Row="0" Background="#111827" CornerRadius="12" Padding="8"
                     BorderBrush="#334155" BorderThickness="1">
                 <lvc:CartesianChart Series="{Binding VelocitySeries}"
                                     XAxes="{Binding VelocityXAxes}"
                                     YAxes="{Binding VelocityYAxes}"
-                                    LegendPosition="Top" LegendTextSize="10"
+                                    LegendPosition="Hidden"
                                     Background="Transparent"/>
             </Border>
 
@@ -465,7 +465,7 @@
                                     Background="Transparent"/>
             </Border>
 
-            <!-- Side Spit Rate -->
+            <!-- Volume (pL) -->
             <Border Grid.Row="4" Background="#111827" CornerRadius="12" Padding="8"
                     BorderBrush="#334155" BorderThickness="1">
                 <lvc:CartesianChart Series="{Binding SpitRateSeries}"

@@ -77,7 +77,9 @@
     <system:String x:Key="Btn_CancelEdit">CANCEL EDIT</system:String>
     <system:String x:Key="Btn_DiffModels">DIFF MODELS</system:String>
     <system:String x:Key="Btn_SaveModel">SAVE MODEL</system:String>
-    <system:String x:Key="Btn_ApplyToMachine">APPLY TO MACHINE</system:String>
+    <system:String x:Key="Btn_ApplyToMachine">SET AS ACTIVE MODEL</system:String>
+    <system:String x:Key="Btn_SaveModel_Tip">Save the edited values into this model. (Does not change the active model)</system:String>
+    <system:String x:Key="Btn_ApplyToMachine_Tip">Set this model as the machine's active model. It applies the saved values, so [Save Model] first if you edited.</system:String>
 
     <!-- Buttons — Alarm -->
     <system:String x:Key="Btn_Search">SEARCH</system:String>

@@ -1,4 +1,5 @@
 using IJPSystem.Platform.Domain.Interfaces;
+using IJPSystem.Platform.Domain.Models.Vision;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -97,10 +98,39 @@ namespace IJPSystem.Platform.HMI.Vision
 
         public async Task<BitmapSource?> GrabFrameAsync()
         {
-            var img = await _vision.CaptureAsync(_cameraId);
-            if (!img.IsValid || string.IsNullOrEmpty(img.FilePath) || !File.Exists(img.FilePath))
-                return null;
+            // saveToDisk:false — 미리보기는 초당 5장 캡처하므로 파일로 남기면 디스크가 순식간에 찬다.
+            // 픽셀 버퍼로 직접 화면에 그린다(디스크 왕복도 없음).
+            var img = await _vision.CaptureAsync(_cameraId, saveToDisk: false);
+            if (!img.IsValid) return null;
+
+            var fromPixels = FromPixels(img);
+            if (fromPixels != null) return fromPixels;
+
+            // 버퍼가 없는 드라이버/경로면 파일로 폴백
+            if (string.IsNullOrEmpty(img.FilePath) || !File.Exists(img.FilePath)) return null;
             return Load(img.FilePath);
+        }
+
+        /// <summary>VisionImage 의 픽셀 버퍼를 BitmapSource 로 변환. 버퍼/크기가 없으면 null.</summary>
+        public static BitmapSource? FromPixels(VisionImage img)
+        {
+            if (img.PixelData == null || img.Width <= 0 || img.Height <= 0) return null;
+
+            var fmt = img.BitsPerPixel switch
+            {
+                8  => System.Windows.Media.PixelFormats.Gray8,
+                24 => System.Windows.Media.PixelFormats.Bgr24,
+                32 => System.Windows.Media.PixelFormats.Bgra32,
+                _  => default(System.Windows.Media.PixelFormat),
+            };
+            if (fmt == default) return null;
+
+            int stride = img.Width * (img.BitsPerPixel / 8);
+            if (img.PixelData.Length < stride * img.Height) return null;   // 버퍼 부족 — 포맷 불일치
+
+            var bmp = BitmapSource.Create(img.Width, img.Height, 96, 96, fmt, null, img.PixelData, stride);
+            bmp.Freeze();
+            return bmp;
         }
 
         private static BitmapSource Load(string path)

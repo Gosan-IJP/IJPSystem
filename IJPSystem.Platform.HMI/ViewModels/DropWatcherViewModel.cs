@@ -15,6 +15,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace IJPSystem.Platform.HMI.ViewModels
@@ -68,21 +69,57 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ? "-"
             : CamStatus.LastCaptureTime.Value.ToString("HH:mm:ss.fff");
 
+        // 측정이 분석할 "원본" 이미지 경로 — 화면에 떠 있는 그림의 출처.
+        // CurrentImagePath 와 분리한 이유: 측정 후에는 CurrentImagePath 가 오버레이가 그려진 결과 이미지로
+        // 바뀌므로, 그대로 두면 재측정 때 오버레이 위에 또 분석하게 된다.
+        // 라이브 중에는 null → 측정 시 그 자리에서 1장 캡쳐.
+        private string? _measureSourcePath;
+
+        // 디스크에 있는 마지막 이미지 경로(측정 결과/열기/샘플). 라이브 프레임은 파일이 없으므로 갱신하지 않는다.
+        // 설정 시 화면 프레임(CurrentFrame)도 함께 파일에서 로드한다.
         private string? _currentImagePath;
         public string? CurrentImagePath
         {
             get => _currentImagePath;
             private set
             {
-                if (SetProperty(ref _currentImagePath, value))
-                {
-                    OnPropertyChanged(nameof(HasImage));
-                    OnPropertyChanged(nameof(HasNoImage));
-                }
+                if (!SetProperty(ref _currentImagePath, value)) return;
+                CurrentFrame = string.IsNullOrEmpty(value) ? null : LoadFrozen(value);
             }
         }
-        public bool HasImage   => !string.IsNullOrEmpty(CurrentImagePath);
-        public bool HasNoImage => string.IsNullOrEmpty(CurrentImagePath);
+
+        // 화면에 그려지는 프레임. 라이브는 픽셀 버퍼에서 직접(파일 없음), 그 외는 파일에서 로드.
+        private BitmapSource? _currentFrame;
+        public BitmapSource? CurrentFrame
+        {
+            get => _currentFrame;
+            private set
+            {
+                if (!SetProperty(ref _currentFrame, value)) return;
+                OnPropertyChanged(nameof(HasImage));
+                OnPropertyChanged(nameof(HasNoImage));
+            }
+        }
+
+        public bool HasImage   => CurrentFrame != null;
+        public bool HasNoImage => CurrentFrame == null;
+
+        // 파일 잠금을 피하려고 전부 읽어들인 뒤 Freeze
+        private static BitmapSource? LoadFrozen(string path)
+        {
+            try
+            {
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.CacheOption   = BitmapCacheOption.OnLoad;
+                bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                bmp.UriSource     = new Uri(path);
+                bmp.EndInit();
+                bmp.Freeze();
+                return bmp;
+            }
+            catch { return null; }
+        }
 
         private bool _isBusy;
         public bool IsBusy
@@ -139,9 +176,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private double _measureAreaXUm = 60.0;
         public double MeasureAreaXUm { get => _measureAreaXUm; set => SetProperty(ref _measureAreaXUm, value); }
 
-        // ── 측정 그래프 (Velocity / Drop Position / Side Spit Rate vs Time) ────
-        // Sample DW.vi 우측의 3개 그래프. 각 그래프는 Drop 1~5 시리즈로 구성된다.
-        // 실제 측정 알고리즘 연결 전까지는 대표 샘플 곡선으로 화면 형태를 보여준다.
+        // ── 측정 그래프 (노즐별 Velocity / Drop Position / Volume) ─────────────
+        // 측정 전에는 비어 있고, 측정하면 BuildDropletCharts 가 오버레이와 같은 데이터로 채운다.
         public ISeries[] VelocitySeries { get; private set; } = Array.Empty<ISeries>();
         public ISeries[] PositionSeries { get; private set; } = Array.Empty<ISeries>();
         public ISeries[] SpitRateSeries { get; private set; } = Array.Empty<ISeries>();
@@ -153,15 +189,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public Axis[] SpitRateXAxes { get; private set; } = Array.Empty<Axis>();
         public Axis[] SpitRateYAxes { get; private set; } = Array.Empty<Axis>();
 
-        // Drop 1~5 시리즈 이름/색상(범례 색과 일치)
-        private static readonly (string name, SKColor color)[] DropDefs =
-        {
-            ("Drop 1", SKColors.DodgerBlue),
-            ("Drop 2", SKColors.Red),
-            ("Drop 3", SKColors.LimeGreen),
-            ("Drop 4", new SKColor(0x84, 0xCC, 0x16)),
-            ("Drop 5", SKColors.Cyan),
-        };
+        // 한 프레임에 노즐들이 가로로 늘어선 구조 → X축은 항상 노즐 번호(시간축 아님).
+        private const string XAxisName = "Nozzle #";
 
         private static readonly SKColor AxisText = new SKColor(0x94, 0xA3, 0xB8);
         private static readonly SKColor AxisGrid = new SKColor(0x33, 0x41, 0x55);
@@ -199,9 +228,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             CamStatus = _vision.GetStatus(CamId);
 
-            // 샘플 Raw 이미지가 있으면 화면 진입 시 바로 표시
+            // 샘플 Raw 이미지가 있으면 화면 진입 시 바로 표시 — 측정 대상도 이것(보이는 것 = 측정 대상)
             if (File.Exists(SampleImagePath))
-                CurrentImagePath = SampleImagePath;
+            {
+                _measureSourcePath = SampleImagePath;
+                CurrentImagePath   = SampleImagePath;
+            }
 
             BuildCharts();
         }
@@ -228,7 +260,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 따라서 컬럼 = 노즐이고, 속도 = 낙하거리/스트로브 지연 → 단일 프레임 분석이 맞다.
         // (위상 스윕으로 여러 장을 훑는 방식은 이 장비 구조와 맞지 않아 사용하지 않는다)
         //
-        // 대상: Raw 샘플 이미지가 있으면 그것, 없으면 라이브 캡쳐 1장. 두 경로 모두 같은 분석을 탄다.
+        // 대상: 지금 화면에 떠 있는 이미지(_measureSourcePath). 라이브 중이면 그 자리에서 1장 캡쳐.
+        // → 보이는 것과 측정 대상이 항상 같다. 샘플을 분석하고 싶으면 샘플 파일을 열면 된다.
         private async Task ExecuteMeasureAsync(string action)
         {
             IsBusy = true;
@@ -237,14 +270,16 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 VisionImage frame;
                 string src;
-                if (File.Exists(SampleImagePath))
+                if (!string.IsNullOrEmpty(_measureSourcePath) && File.Exists(_measureSourcePath))
                 {
-                    frame = new VisionImage { CameraId = CamId, FilePath = SampleImagePath, IsValid = true };
-                    src   = "Raw 샘플";
+                    frame = new VisionImage { CameraId = CamId, FilePath = _measureSourcePath, IsValid = true };
+                    src   = string.Equals(_measureSourcePath, SampleImagePath, StringComparison.OrdinalIgnoreCase)
+                            ? "Raw 샘플" : Path.GetFileName(_measureSourcePath);
                 }
                 else
                 {
-                    frame = await _vision.CaptureAsync(CamId);
+                    // 라이브 화면(파일 없음) → 측정용 1장은 기록으로 남긴다.
+                    frame = await _vision.CaptureAsync(CamId, saveToDisk: true);
                     src   = "라이브 캡쳐";
                 }
 
@@ -301,7 +336,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
             int n = drops.Count;
             double um = _procCfg.MicronsPerPixel;
             string[] labels = Enumerable.Range(0, n).Select(i => i.ToString()).ToArray();
-            const string xName = "Nozzle #";
 
             var posUm = new double[n];
             var volPl = new double[n];
@@ -315,9 +349,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             PositionSeries = new ISeries[] { MakeLine("Drop", SKColors.DodgerBlue, posUm) };
             SpitRateSeries = new ISeries[] { MakeLine("Drop", SKColors.Orange, volPl) };
 
-            VelocityXAxes = MakeXAxes(labels, xName);
-            PositionXAxes = MakeXAxes(labels, xName);
-            SpitRateXAxes = MakeXAxes(labels, xName);
+            VelocityXAxes = MakeXAxes(labels, XAxisName);
+            PositionXAxes = MakeXAxes(labels, XAxisName);
+            SpitRateXAxes = MakeXAxes(labels, XAxisName);
             VelocityYAxes = MakeYAxes("Velocity (m/s)");
             PositionYAxes = MakeYAxes("Drop Position (um)");
             SpitRateYAxes = MakeYAxes("Volume (pL)");
@@ -356,8 +390,18 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _liveGrabbing = true;
             try
             {
-                var image = await _vision.CaptureAsync(CamId);
-                if (image.IsValid) CurrentImagePath = image.FilePath;
+                // saveToDisk:false — 라이브는 초당 5장이라 파일로 남기면 디스크가 순식간에 찬다.
+                // 픽셀 버퍼를 그대로 화면에 그린다(파일이 없으므로 CurrentImagePath 는 건드리지 않음).
+                var image = await _vision.CaptureAsync(CamId, saveToDisk: false);
+                if (image.IsValid)
+                {
+                    var frame = Vision.VisionDriverImageSource.FromPixels(image);
+                    if (frame != null)
+                    {
+                        CurrentFrame       = frame;
+                        _measureSourcePath = null;   // 라이브 화면 → 측정은 그 시점에 새로 1장 캡쳐
+                    }
+                }
                 CamStatus = _vision.GetStatus(CamId);
             }
             catch (Exception ex)
@@ -388,7 +432,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             };
             if (dlg.ShowDialog() != true) return;
 
-            CurrentImagePath = dlg.FileName;
+            _measureSourcePath = dlg.FileName;   // 연 이미지가 곧 측정 대상
+            CurrentImagePath   = dlg.FileName;
             _mainVM.AddLog($"[VISION] DropWatcher: 이미지 로드: {Path.GetFileName(dlg.FileName)}", LogLevel.Info);
         }
 
@@ -404,49 +449,23 @@ namespace IJPSystem.Platform.HMI.ViewModels
             });
         }
 
-        // ── 그래프 데이터 구성 ──────────────────────────────────────────────
-        // 실제 DW Vision 측정 알고리즘 연결 전까지 대표 샘플 곡선으로 형태를 표시한다.
-        // 연결 시 이 메서드를 측정 결과(Drop 1~5 시계열)로 채우면 된다.
-        private void BuildCharts(int seed = 0)
+        // ── 그래프 초기 상태 ────────────────────────────────────────────────
+        // 측정 전에는 빈 그래프(축만)로 둔다. 예전에는 데모용 가짜 곡선을 그렸는데,
+        // 실측 결과처럼 보여 오해를 부르고 축(Time/Drop 1~5)도 실제 측정 축(Nozzle #)과 달랐다.
+        // 측정하면 BuildDropletCharts 가 시리즈/축을 채운다.
+        private void BuildCharts()
         {
-            const int n = 18;                                    // Time 0~17 (um)
-            string[] timeLabels = Enumerable.Range(0, n).Select(t => t.ToString()).ToArray();
-            double phase = (seed % 7) * 0.3;
+            VelocitySeries = Array.Empty<ISeries>();
+            PositionSeries = Array.Empty<ISeries>();
+            SpitRateSeries = Array.Empty<ISeries>();
 
-            var velocity = new ISeries[DropDefs.Length];
-            var position = new ISeries[DropDefs.Length];
-            var spitRate = new ISeries[DropDefs.Length];
-
-            for (int s = 0; s < DropDefs.Length; s++)
-            {
-                double off = s * 0.06;
-                var vv = new double[n];
-                var pp = new double[n];
-                var sr = new double[n];
-                for (int t = 0; t < n; t++)
-                {
-                    // Velocity(m/s): 약 4.5~7.5, 시리즈별 약간의 편차
-                    vv[t] = 6.0 + 1.1 * Math.Sin(t * 0.7 + phase) - 0.5 * Math.Sin(t * 0.33) + off;
-                    // Drop Position(um): 약 150~650, 거의 선형 증가(시리즈 중첩)
-                    pp[t] = 150 + t * 29 + off * 12;
-                    // Side Spit Rate(%): 0 부근, t=11 근처 스파이크
-                    sr[t] = 0.18 * Math.Sin(t * 0.9 + s + phase) + (t == 11 ? 0.35 : 0) - (t == 12 ? 0.35 : 0);
-                }
-                velocity[s] = MakeLine(DropDefs[s].name, DropDefs[s].color, vv);
-                position[s] = MakeLine(DropDefs[s].name, DropDefs[s].color, pp);
-                spitRate[s] = MakeLine(DropDefs[s].name, DropDefs[s].color, sr);
-            }
-
-            VelocitySeries = velocity;
-            PositionSeries = position;
-            SpitRateSeries = spitRate;
-
-            VelocityXAxes = MakeXAxes(timeLabels);
-            PositionXAxes = MakeXAxes(timeLabels);
-            SpitRateXAxes = MakeXAxes(timeLabels);
+            // 축 이름은 측정 후와 동일하게 유지 → 측정 전후로 라벨이 바뀌지 않는다.
+            VelocityXAxes = MakeXAxes(Array.Empty<string>(), XAxisName);
+            PositionXAxes = MakeXAxes(Array.Empty<string>(), XAxisName);
+            SpitRateXAxes = MakeXAxes(Array.Empty<string>(), XAxisName);
             VelocityYAxes = MakeYAxes("Velocity (m/s)");
             PositionYAxes = MakeYAxes("Drop Position (um)");
-            SpitRateYAxes = MakeYAxes("Side Spit Rate (%)");
+            SpitRateYAxes = MakeYAxes("Volume (pL)");
 
             OnPropertyChanged(nameof(VelocitySeries));
             OnPropertyChanged(nameof(PositionSeries));
@@ -472,7 +491,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 LineSmoothness = 0.2,
             };
 
-        private static Axis[] MakeXAxes(string[] labels, string name = "Time (um)") => new[]
+        private static Axis[] MakeXAxes(string[] labels, string name) => new[]
         {
             new Axis
             {

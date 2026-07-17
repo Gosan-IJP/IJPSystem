@@ -8,7 +8,6 @@
              Background="#0B0F1A">
 
     <UserControl.Resources>
-        <cvts:PathToBitmapImageConverter x:Key="PathToBitmapImageConverter"/>
     </UserControl.Resources>
 
     <Grid Margin="16">
@@ -157,7 +156,7 @@
                         </Grid>
 
                         <!-- ② 캡처 이미지 (이미지 있을 때) -->
-                        <Image Source="{Binding CurrentImagePath, Converter={StaticResource PathToBitmapImageConverter}}"
+                        <Image Source="{Binding CurrentFrame}"
                                Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
                                Visibility="{Binding HasImage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 

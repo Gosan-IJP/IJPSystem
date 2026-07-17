@@ -333,7 +333,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             CreateRecipeCommand   = new RelayCommand(_ => ExecuteCreateRecipe());
             DeleteRecipeCommand   = new RelayCommand(_ => ExecuteDeleteRecipe(), _ => !string.IsNullOrEmpty(SelectedRecipeName) && SelectedRecipeName != ActiveRecipeName);
             SaveRecipeCommand     = new RelayCommand(_ => ExecuteSaveRecipe());
-            ApplyRecipeCommand    = new RelayCommand(_ => ExecuteApplyRecipe());
+            // 선택 모델이 이미 가동(활성) 모델이면 지정할 필요가 없으므로 비활성화.
+            ApplyRecipeCommand    = new RelayCommand(_ => ExecuteApplyRecipe(),
+                                        _ => !string.IsNullOrEmpty(SelectedRecipeName) && SelectedRecipeName != ActiveRecipeName);
             RenameRecipeCommand   = new RelayCommand(_ => ExecuteRenameRecipe());
             CopyRecipeCommand     = new RelayCommand(_ => ExecuteCopyRecipe());
             CancelEditCommand     = new RelayCommand(_ => ExecuteCancelEdit());
@@ -1050,6 +1052,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
                 ((RelayCommand)DeleteRecipeCommand).RaiseCanExecuteChanged();
+                ((RelayCommand)ApplyRecipeCommand).RaiseCanExecuteChanged();
                 ((RelayCommand)MoveRecipeUpCommand).RaiseCanExecuteChanged();
                 ((RelayCommand)MoveRecipeDownCommand).RaiseCanExecuteChanged();
             });

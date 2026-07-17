@@ -77,7 +77,9 @@
     <system:String x:Key="Btn_CancelEdit">편집 취소</system:String>
     <system:String x:Key="Btn_DiffModels">모델 비교</system:String>
     <system:String x:Key="Btn_SaveModel">모델 저장</system:String>
-    <system:String x:Key="Btn_ApplyToMachine">장비 적용</system:String>
+    <system:String x:Key="Btn_ApplyToMachine">가동 모델로 지정</system:String>
+    <system:String x:Key="Btn_SaveModel_Tip">편집한 값을 이 모델에 저장합니다. (가동 모델을 바꾸지는 않습니다)</system:String>
+    <system:String x:Key="Btn_ApplyToMachine_Tip">이 모델을 설비 가동 모델로 지정합니다. 저장된 값 기준으로 적용되니, 편집했다면 먼저 [모델 저장]하세요.</system:String>
 
     <!-- 버튼 — 알람 -->
     <system:String x:Key="Btn_Search">검색</system:String>

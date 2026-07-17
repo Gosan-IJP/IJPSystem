@@ -18,7 +18,12 @@ namespace IJPSystem.Platform.Domain.Interfaces
         List<CameraStatus> GetAllStatus();
 
         // ── 3. 촬영 ──
-        Task<VisionImage> CaptureAsync(string cameraId);
+        /// <param name="saveToDisk">
+        /// false 면 이미지를 파일로 남기지 않고 픽셀 버퍼(VisionImage.PixelData)만 채운다.
+        /// 라이브 미리보기처럼 초당 수 장씩 반복 캡처하는 경로는 반드시 false — true 로 두면
+        /// 프레임마다 BMP 가 쌓여 디스크가 순식간에 찬다(5fps × 656KB ≈ 12GB/시간).
+        /// </param>
+        Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true);
         Task<VisionImage> WaitForHardwareTriggerAsync(string cameraId, CancellationToken ct);
 
         // ── 4. 검사 ──

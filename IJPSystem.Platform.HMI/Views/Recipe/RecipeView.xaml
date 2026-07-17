@@ -4,10 +4,13 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:sys="clr-namespace:System;assembly=mscorlib"
+             xmlns:cvt="clr-namespace:IJPSystem.Platform.HMI.Common.Converters"
              mc:Ignorable="d" d:DesignHeight="750" d:DesignWidth="1200"
              Background="#0F172A">
     <UserControl.Resources>
         <!-- ── 이 파일에서만 쓰는 스타일 ── -->
+        <cvt:PrintAxisValueConverter x:Key="PrintAxisValueConverter"/>
+        <cvt:IsScanAxisConverter     x:Key="IsScanAxisConverter"/>
         <Style x:Key="RecipeColumnHeaderStyle" TargetType="DataGridColumnHeader"
                BasedOn="{StaticResource CommonColumnHeaderStyle}">
             <Setter Property="FontSize" Value="15"/>
@@ -18,6 +21,19 @@
             <Setter Property="FontSize"                   Value="15"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="VerticalContentAlignment"   Value="Center"/>
+        </Style>
+
+        <!-- PRINT 열 전용 셀 스타일 — 스캔축(Y)이 아니면 편집 잠금 + 흐리게(해당 없음).
+             인쇄 프로파일은 Y축만 사용하므로 X/Z/T 행의 PRINT 칸은 편집할 수 없다. -->
+        <Style x:Key="PrintCellStyle" TargetType="DataGridCell"
+               BasedOn="{StaticResource RecipeCompareCellStyle}">
+            <Style.Triggers>
+                <DataTrigger Value="False"
+                             Binding="{Binding Info.AxisNo, Converter={StaticResource IsScanAxisConverter}}">
+                    <Setter Property="IsEnabled"  Value="False"/>
+                    <Setter Property="Foreground" Value="#475569"/>
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
         <Style x:Key="NumericEditingStyle" TargetType="TextBox">
             <Setter Property="TextAlignment" Value="Right"/>
@@ -164,6 +180,20 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                         <TextBlock Text="⚙️" Foreground="#3B82F6" Margin="0,0,8,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{Binding AxisList.Count, StringFormat='Axes: {0}'}" Foreground="White" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+
+                        <Border Width="1" Background="#334155" Margin="16,4"/>
+
+                        <!-- 가동 모델로 지정 (편집한 선택 모델을 설비 가동 모델로 지정) -->
+                        <Button Command="{Binding ApplyRecipeCommand}"
+                                Style="{StaticResource MainDashboardButtonStyle}"
+                                ToolTip="{DynamicResource Btn_ApplyToMachine_Tip}"
+                                Height="34" Padding="14,0" Background="#1D4ED8" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🚀" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{DynamicResource Btn_ApplyToMachine}" FontWeight="Bold"
+                                           FontSize="13" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -255,21 +285,71 @@
                                                 EditingElementStyle="{StaticResource NumericEditingStyle}"
                                                 Binding="{Binding Info.MotionConfig.Jog.Deceleration,       UpdateSourceTrigger=LostFocus}"
                                                 CellStyle="{StaticResource RecipeCompareCellStyle}" Width="110"/>
-                            <DataGridTextColumn Header="PRINT VEL"
-                                                ElementStyle="{StaticResource NumericDisplayStyle}"
-                                                EditingElementStyle="{StaticResource NumericEditingStyle}"
-                                                Binding="{Binding Info.MotionConfig.Printing.Velocity,      UpdateSourceTrigger=LostFocus}"
-                                                CellStyle="{StaticResource RecipeCompareCellStyle}" Width="110"/>
-                            <DataGridTextColumn Header="PRINT ACC"
-                                                ElementStyle="{StaticResource NumericDisplayStyle}"
-                                                EditingElementStyle="{StaticResource NumericEditingStyle}"
-                                                Binding="{Binding Info.MotionConfig.Printing.Acceleration,  UpdateSourceTrigger=LostFocus}"
-                                                CellStyle="{StaticResource RecipeCompareCellStyle}" Width="110"/>
-                            <DataGridTextColumn Header="PRINT DEC"
-                                                ElementStyle="{StaticResource NumericDisplayStyle}"
-                                                EditingElementStyle="{StaticResource NumericEditingStyle}"
-                                                Binding="{Binding Info.MotionConfig.Printing.Deceleration,  UpdateSourceTrigger=LostFocus}"
-                                                CellStyle="{StaticResource RecipeCompareCellStyle}" Width="110"/>
+                            <!-- PRINT VEL/ACC/DEC — 인쇄 프로파일은 스캔축(Y)만 사용.
+                                 X/Z/T 행은 "–"로 표시하고 편집 잠금(PrintCellStyle). Y만 값 표시·편집. -->
+                            <DataGridTemplateColumn Header="PRINT VEL (Y)" Width="110"
+                                                    CellStyle="{StaticResource PrintCellStyle}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Style="{StaticResource NumericDisplayStyle}">
+                                            <TextBlock.Text>
+                                                <MultiBinding Converter="{StaticResource PrintAxisValueConverter}">
+                                                    <Binding Path="Info.AxisNo"/>
+                                                    <Binding Path="Info.MotionConfig.Printing.Velocity"/>
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <TextBox Style="{StaticResource NumericEditingStyle}"
+                                                 Text="{Binding Info.MotionConfig.Printing.Velocity, UpdateSourceTrigger=LostFocus}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="PRINT ACC (Y)" Width="110"
+                                                    CellStyle="{StaticResource PrintCellStyle}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Style="{StaticResource NumericDisplayStyle}">
+                                            <TextBlock.Text>
+                                                <MultiBinding Converter="{StaticResource PrintAxisValueConverter}">
+                                                    <Binding Path="Info.AxisNo"/>
+                                                    <Binding Path="Info.MotionConfig.Printing.Acceleration"/>
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <TextBox Style="{StaticResource NumericEditingStyle}"
+                                                 Text="{Binding Info.MotionConfig.Printing.Acceleration, UpdateSourceTrigger=LostFocus}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="PRINT DEC (Y)" Width="110"
+                                                    CellStyle="{StaticResource PrintCellStyle}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Style="{StaticResource NumericDisplayStyle}">
+                                            <TextBlock.Text>
+                                                <MultiBinding Converter="{StaticResource PrintAxisValueConverter}">
+                                                    <Binding Path="Info.AxisNo"/>
+                                                    <Binding Path="Info.MotionConfig.Printing.Deceleration"/>
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <TextBox Style="{StaticResource NumericEditingStyle}"
+                                                 Text="{Binding Info.MotionConfig.Printing.Deceleration, UpdateSourceTrigger=LostFocus}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Border>
@@ -526,6 +606,7 @@
                         <!-- SAVE 버튼 -->
                         <Button Command="{Binding SaveRecipeCommand}"
                                 Style="{StaticResource RecipeSaveButtonStyle}"
+                                ToolTip="{DynamicResource Btn_SaveModel_Tip}"
                                 Width="180" Height="45" Margin="0,0,10,0">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="💾" FontSize="14" Margin="0,0,6,0"
@@ -534,17 +615,7 @@
                                             VerticalAlignment="Center"/>
                                 </StackPanel>
                         </Button>
-                        <!-- APPLY 버튼 -->
-                        <Button Command="{Binding ApplyRecipeCommand}"
-                                Style="{StaticResource MainDashboardButtonStyle}"
-                                Width="220" Height="45" Background="#1D4ED8">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="🚀" FontSize="14" Margin="0,0,6,0"
-                                            VerticalAlignment="Center"/>
-                                <TextBlock Text="{DynamicResource Btn_ApplyToMachine}" FontWeight="Bold"
-                                            VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
+                        <!-- APPLY 버튼은 상단 바(Axes 옆)로 이동 -->
                     </StackPanel>
                 </Grid>
             </Border>

@@ -180,7 +180,8 @@
       "Bash(./bin/Release/net8.0-windows/win-x86/p.exe)",
       "Bash(rm -rf /c/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/dwreal 2>/dev/null; echo \"정리 완료\"; echo \"=== 변경 파일 ===\"; git status --short | grep -iE \"DropWatcher|Vision|Config\" )",
       "Bash(rm -rf /c/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/xamltest 2>/dev/null; echo \"정리 완료\"; echo \"=== 변경 파일 ===\"; git status --short | grep -iE \"PatternPrint|VisualMonitor\")",
-      "Bash(rm -rf /c/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/srctest 2>/dev/null; echo \"정리 완료\"; echo \"\"; echo \"=== 변경 파일 ===\"; git status --short | grep -iE \"Vision|PatternPrint|Config/\")"
+      "Bash(rm -rf /c/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/fc660880-50bf-4c7d-87fd-3a0b4067e104/scratchpad/srctest 2>/dev/null; echo \"정리 완료\"; echo \"\"; echo \"=== 변경 파일 ===\"; git status --short | grep -iE \"Vision|PatternPrint|Config/\")",
+      "Bash(rm -rf \"C:/LOGS/Vision/CAM_DW\" && echo \"삭제 완료\" && ls \"C:/LOGS/Vision\")"
     ],
     "additionalDirectories": [
       "d:\\tmp",
@@ -195,7 +196,8 @@
       "C:\\Users\\bluey\\AppData\\Local\\Temp\\claude\\d--IJP-IJPSystem\\fc660880-50bf-4c7d-87fd-3a0b4067e104\\scratchpad\\dwt3",
       "C:\\Users\\bluey\\AppData\\Local\\Temp\\claude\\d--IJP-IJPSystem\\fc660880-50bf-4c7d-87fd-3a0b4067e104\\scratchpad\\dwreal",
       "C:\\Users\\bluey\\AppData\\Local\\Temp\\claude\\d--IJP-IJPSystem\\fc660880-50bf-4c7d-87fd-3a0b4067e104\\scratchpad\\xamltest",
-      "C:\\Users\\bluey\\AppData\\Local\\Temp\\claude\\d--IJP-IJPSystem\\fc660880-50bf-4c7d-87fd-3a0b4067e104\\scratchpad\\srctest"
+      "C:\\Users\\bluey\\AppData\\Local\\Temp\\claude\\d--IJP-IJPSystem\\fc660880-50bf-4c7d-87fd-3a0b4067e104\\scratchpad\\srctest",
+      "C:\\LOGS\\Vision\\CAM_DW"
     ]
   }
 }

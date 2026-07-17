@@ -9,6 +9,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace IJPSystem.Platform.HMI.ViewModels
@@ -74,21 +75,50 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public string FpsText => $"{1000.0 / LiveIntervalMs:F1} fps";
 
         // ── 현재 표시 이미지 경로 ──────────────────────────────────────────────
+        // 디스크에 있는 마지막 이미지 경로(캡쳐/열기). 라이브 프레임은 파일이 없으므로 갱신하지 않는다.
         private string? _currentImagePath;
         public string? CurrentImagePath
         {
             get => _currentImagePath;
             private set
             {
-                if (SetProperty(ref _currentImagePath, value))
-                {
-                    OnPropertyChanged(nameof(HasImage));
-                    OnPropertyChanged(nameof(HasNoImage));
-                }
+                if (!SetProperty(ref _currentImagePath, value)) return;
+                CurrentFrame = string.IsNullOrEmpty(value) ? null : LoadFrozen(value);
             }
         }
-        public bool HasImage   => !string.IsNullOrEmpty(CurrentImagePath);
-        public bool HasNoImage => string.IsNullOrEmpty(CurrentImagePath);
+
+        // 화면에 그려지는 프레임. 라이브는 픽셀 버퍼에서 직접(파일 없음), 그 외는 파일에서 로드.
+        private BitmapSource? _currentFrame;
+        public BitmapSource? CurrentFrame
+        {
+            get => _currentFrame;
+            private set
+            {
+                if (!SetProperty(ref _currentFrame, value)) return;
+                OnPropertyChanged(nameof(HasImage));
+                OnPropertyChanged(nameof(HasNoImage));
+            }
+        }
+
+        public bool HasImage   => CurrentFrame != null;
+        public bool HasNoImage => CurrentFrame == null;
+
+        // 파일 잠금을 피하려고 전부 읽어들인 뒤 Freeze
+        private static BitmapSource? LoadFrozen(string path)
+        {
+            try
+            {
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.CacheOption   = BitmapCacheOption.OnLoad;
+                bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                bmp.UriSource     = new Uri(path);
+                bmp.EndInit();
+                bmp.Freeze();
+                return bmp;
+            }
+            catch { return null; }
+        }
 
         // ── 총 캡쳐 카운트 ────────────────────────────────────────────────────
         private int _captureCount;
@@ -178,11 +208,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
             IsBusy = true;
             try
             {
-                var image = await _vision.CaptureAsync(CamId);
+                // saveToDisk:false — 라이브는 연속 캡쳐라 파일로 남기면 디스크가 순식간에 찬다.
+                // 픽셀 버퍼를 그대로 화면에 그린다(파일이 없으므로 CurrentImagePath 는 건드리지 않음).
+                var image = await _vision.CaptureAsync(CamId, saveToDisk: false);
                 if (image.IsValid)
                 {
-                    CurrentImagePath = null;           // 강제 갱신 트리거
-                    CurrentImagePath = image.FilePath;
+                    var frame = Vision.VisionDriverImageSource.FromPixels(image);
+                    if (frame != null) CurrentFrame = frame;
                     CaptureCount++;
                 }
             }
