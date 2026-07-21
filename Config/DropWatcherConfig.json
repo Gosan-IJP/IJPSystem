@@ -13,6 +13,7 @@
   "RoiY": 0,
   "RoiWidth": 0,
   "RoiHeight": 0,
-  "MeasureAreaXUm": 60.0,
+  "MeasureAreaXUm": 60,
+  "NozzleYPixel": 0,
   "SweepFrames": 15
 }
