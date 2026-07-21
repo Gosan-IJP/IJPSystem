@@ -498,7 +498,7 @@
                                 </StackPanel>
 
                                 <!-- Head 길이 (mm) -->
-                                <StackPanel Orientation="Horizontal">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                                     <TextBlock Text="{DynamicResource Lbl_HeadLength}" Foreground="#94A3B8" FontSize="13"
                                                Width="160" VerticalAlignment="Center"/>
                                     <Border BorderBrush="#475569" BorderThickness="1" CornerRadius="6"
@@ -511,6 +511,18 @@
                                     </Border>
                                     <TextBlock Text=" mm" Foreground="#64748B" FontSize="13"
                                                VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                </StackPanel>
+
+                                <!-- 프린팅 방향 (0=단방향, 1=양방향) -->
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{DynamicResource Lbl_PrintDirection}" Foreground="#94A3B8" FontSize="13"
+                                               Width="160" VerticalAlignment="Center"/>
+                                    <ComboBox Width="120" Height="32"
+                                              Style="{StaticResource ModernComboBoxStyle}"
+                                              SelectedIndex="{Binding PrintDirectionIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content="{DynamicResource Opt_Unidirectional}"/>
+                                        <ComboBoxItem Content="{DynamicResource Opt_Bidirectional}"/>
+                                    </ComboBox>
                                 </StackPanel>
                             </StackPanel>
                         </Border>

@@ -1,0 +1,20 @@
+{
+  "SpitPulseTerminal": "/Dev1/PFI8",
+  "TimebaseTerminal": "/Dev1/100MHzTimebase",
+  "TimebaseRateHz": 100000000.0,
+
+  "DividerCounter": "Dev1/ctr1",
+  "LedCounter": "Dev1/ctr0",
+  "CamCounter": "Dev1/ctr3",
+
+  "DivideRatio": 100,
+  "InitialSkipPulses": 0,
+
+  "LedDelayUs": 0.0,
+  "LedWidthUs": 1.0,
+
+  "CamDelayUs": 0.0,
+  "CamWidthUs": 10.0,
+
+  "TriggerOnRisingEdge": true
+}

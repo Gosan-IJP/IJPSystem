@@ -301,7 +301,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     getPointAxisMm: motionAdapter.GetAxisPositionMm,
                     hasActiveAlarm: () => HasActiveAlarm,
                     getSwathCount: () => RecipeVM.ActiveSwath,
-                    getHeadLength: () => RecipeVM.ActiveHeadLength
+                    getHeadLength: () => RecipeVM.ActiveHeadLength,
+                    getPrintDirection: () => RecipeVM.ActivePrintDirection
                 );
 
             RecipeVM.PropertyChanged += (s, e) =>

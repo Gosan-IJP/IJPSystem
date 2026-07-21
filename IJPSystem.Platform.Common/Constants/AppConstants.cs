@@ -27,6 +27,14 @@ namespace IJPSystem.Platform.Common.Constants
         public const int TimerIntervalFastMs  = 50;   // 빠른 갱신 (모션 시뮬레이션, 애니메이션)
         public const int TimerIntervalSlowMs  = 500;  // 느린 갱신 (시스템 시간, I/O 상태)
 
+        // ── 프린트 헤드 ───────────────────────────────────────────────────────
+        // 노즐 번호 규약: 화면·레시피·파서 모두 1번부터 센다(0번 없음).
+        // 패턴 배열은 0부터이므로 변환은 SpitPatternBuilder.FirstNozzleIndex 가 담당한다.
+        // ※ HeadNozzleCount 는 아직 실측 미확인 placeholder. 실장 헤드 사양으로 반드시 교체할 것 —
+        //   이 값이 실제보다 작으면 뒤쪽 노즐 선택이 무시되고, 크면 없는 노즐에 패턴이 잡힌다.
+        public const int FirstNozzleNumber = 1;
+        public const int HeadNozzleCount   = 128;
+
         // ── 모션 ──────────────────────────────────────────────────────────────
         public const int MotionPollIntervalMs    = 100;  // 축 상태 폴링 주기
         public const int MotionInPositionTimeout = 200;  // InPosition 대기 최대 횟수 (× 100ms = 20s)

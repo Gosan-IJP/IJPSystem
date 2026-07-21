@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <!-- 본체가 x86(Comizoa SDK 32비트)이라 테스트도 x86 으로 태운다. -->
+    <TargetPlatform>x86</TargetPlatform>
+
+    <!--
+      이 PC 에는 x86 .NET 8 런타임이 없고 x86 10.x 만 설치돼 있다.
+      LatestMajor 로 상위 런타임에 넘겨야 testhost.x86.exe 가 뜬다.
+      (없으면 "You must install or update .NET to run this application" 으로 실행 자체가 중단)
+    -->
+    <EnvironmentVariables>
+      <DOTNET_ROLL_FORWARD>LatestMajor</DOTNET_ROLL_FORWARD>
+    </EnvironmentVariables>
+  </RunConfiguration>
+</RunSettings>

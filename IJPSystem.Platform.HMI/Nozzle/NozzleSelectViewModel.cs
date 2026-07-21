@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using IJPSystem.Platform.Common.Constants;
 using IJPSystem.Platform.Domain.Common;
 
 namespace IJPSystem.Platform.HMI.Nozzle
@@ -13,9 +14,11 @@ namespace IJPSystem.Platform.HMI.Nozzle
     /// </summary>
     public sealed class NozzleSelectViewModel : INotifyPropertyChanged
     {
-        // 헤드별 노즐 범위. 실제 헤드 사양 확정 시 교체(이미지 기준 1~999).
-        private const int MinNozzle = 1;
-        private const int MaxNozzle = 999;
+        // 헤드별 노즐 범위 — 헤드 사양 하나만 보고 판단하도록 AppConstants 를 쓴다.
+        // (이전엔 여기만 1~999 였고 스핏 패턴은 1~128 이라, 129~999 를 선택하면 "적용 완료" 라고
+        //  표시된 뒤 토출 단계에서 조용히 빠지는 어긋남이 있었다.)
+        private const int MinNozzle = AppConstants.FirstNozzleNumber;
+        private const int MaxNozzle = AppConstants.HeadNozzleCount;
 
         public NozzleSelectViewModel()
         {

@@ -1,0 +1,255 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
+{
+    /// <summary>
+    /// 드랍와쳐 하드웨어 트리거 체인 설정. (LabVIEW "Pules Reducer.vi" 프론트패널 대응)
+    ///
+    /// 신호 흐름:
+    ///   헤드 토출 펄스(PFI8) → [분주기] N분주 → ┬→ [LED]  지연/폭 → 스트로브 발광
+    ///                                          └→ [Cam]  지연/폭 → 카메라 노출
+    /// </summary>
+    public sealed class TriggerChainSettings
+    {
+        // ── 소스 ──────────────────────────────────────────────────────────────
+        /// <summary>헤드 토출 펄스 입력 터미널.</summary>
+        public string SpitPulseTerminal { get; set; } = "/Dev1/PFI8";
+
+        /// <summary>LED/Cam 펄스 폭 산출용 고속 타임베이스.</summary>
+        public string TimebaseTerminal { get; set; } = "/Dev1/100MHzTimebase";
+
+        /// <summary>타임베이스 주파수[Hz]. 틱↔시간 환산에 쓴다.</summary>
+        public double TimebaseRateHz { get; set; } = 100e6;
+
+        // ── 카운터 배정 ───────────────────────────────────────────────────────
+        // ※ 원본 VI 는 ctr0/ctr1/ctr3 을 쓰며 LED = ctr0 만 확인됨.
+        //   Divider/Cam 의 정확한 배정은 블록다이어그램으로 확인 필요.
+        public string DividerCounter { get; set; } = "Dev1/ctr1";
+        public string LedCounter     { get; set; } = "Dev1/ctr0";
+        public string CamCounter     { get; set; } = "Dev1/ctr3";
+
+        // ── 분주 ──────────────────────────────────────────────────────────────
+        /// <summary>
+        /// 분주비 N — 토출 N발당 1회 촬영.
+        /// 노즐은 수 kHz 로 토출하지만 카메라/LED 가 못 따라가므로 반드시 필요하다.
+        /// </summary>
+        public int DivideRatio { get; set; } = 100;
+
+        /// <summary>
+        /// 초기 무시 펄스 수. 토출 초기의 불안정한 방울을 건너뛰고 안정된 뒤부터 촬영한다.
+        /// (분주기 initial delay — 단위는 <b>입력 토출 펄스</b>, 타임베이스 틱이 아니다)
+        /// </summary>
+        public int InitialSkipPulses { get; set; } = 0;
+
+        // ── LED 스트로브 ──────────────────────────────────────────────────────
+        /// <summary>트리거 후 LED 발광까지 지연[µs]. <b>조(coarse)</b> 단계.</summary>
+        public double LedDelayUs { get; set; } = 0;
+
+        /// <summary>LED 발광 폭[µs]. 짧을수록 방울이 선명하게 얼어붙는다.</summary>
+        public double LedWidthUs { get; set; } = 1.0;
+
+        // ── 카메라 트리거 ─────────────────────────────────────────────────────
+        /// <summary>트리거 후 카메라 노출 시작까지 지연[µs].</summary>
+        public double CamDelayUs { get; set; } = 0;
+
+        /// <summary>카메라 트리거 펄스 폭[µs].</summary>
+        public double CamWidthUs { get; set; } = 10.0;
+
+        /// <summary>토출 펄스의 상승/하강 엣지 선택. true=상승.</summary>
+        public bool TriggerOnRisingEdge { get; set; } = true;
+
+        // ── 환산 헬퍼 (NI 구현과 무관한 순수 계산 — 여기서 검증 가능) ─────────
+
+        /// <summary>µs → 타임베이스 틱.</summary>
+        public int UsToTicks(double us) => (int)Math.Round(us * 1e-6 * TimebaseRateHz);
+
+        /// <summary>타임베이스 틱 → µs.</summary>
+        public double TicksToUs(int ticks) => ticks / TimebaseRateHz * 1e6;
+
+        /// <summary>분주 후 실제 촬영 주파수[Hz] = 토출주파수 / 분주비.</summary>
+        public double EffectiveFrameRate(double spitFreqHz)
+            => DivideRatio > 0 ? spitFreqHz / DivideRatio : 0;
+
+        /// <summary>
+        /// 분주 카운터의 내부 출력 터미널명. 예: "Dev1/ctr1" → "/Dev1/Ctr1InternalOutput".
+        /// LED/Cam 이 이 터미널을 Start Trigger 소스로 받는다.
+        /// </summary>
+        public string DividerOutputTerminal()
+        {
+            string c = DividerCounter ?? "";
+            int slash = c.LastIndexOf('/');
+            string dev = slash > 0 ? c.Substring(0, slash) : "Dev1";
+            string ctr = slash > 0 ? c.Substring(slash + 1) : c;          // "ctr1"
+            string idx = new string(Array.FindAll(ctr.ToCharArray(), char.IsDigit));
+            if (idx.Length == 0) idx = "0";
+            return $"/{dev}/Ctr{idx}InternalOutput";
+        }
+
+        /// <summary>
+        /// 트리거 주기 대비 펄스 폭이 안전한지 검사한다.
+        /// DAQmx 문서: "The device ignores a trigger if it is in the process of generating pulses."
+        /// → 펄스 생성 중 도착한 트리거는 <b>큐잉이 아니라 폐기</b>된다. 지연+폭이 트리거 주기보다
+        ///   길면 프레임이 조용히 누락되는데, 화면상으로는 그냥 "느린 촬영"으로 보여 원인 추적이 어렵다.
+        /// </summary>
+        /// <param name="spitFreqHz">토출 주파수[Hz].</param>
+        /// <returns>누락 위험이 있으면 사유, 없으면 null.</returns>
+        public string? ValidateTriggerMargin(double spitFreqHz)
+        {
+            double fps = EffectiveFrameRate(spitFreqHz);
+            if (fps <= 0) return null;
+
+            double periodUs = 1e6 / fps;
+            double ledBusyUs = LedDelayUs + LedWidthUs;
+            double camBusyUs = CamDelayUs + CamWidthUs;
+            double busyUs = Math.Max(ledBusyUs, camBusyUs);
+
+            if (busyUs >= periodUs)
+                return $"트리거 주기 {periodUs:F1}µs 보다 펄스 점유 {busyUs:F1}µs 가 길어 트리거가 폐기됩니다. " +
+                       $"분주비를 키우거나 지연/폭을 줄이세요.";
+
+            // 여유가 10% 미만이면 지터에 따라 간헐 누락이 난다 — 재현이 어려운 유형이라 미리 경고한다.
+            if (busyUs > periodUs * 0.9)
+                return $"트리거 주기 {periodUs:F1}µs 대비 펄스 점유 {busyUs:F1}µs — 여유 10% 미만이라 " +
+                       $"간헐적 프레임 누락이 발생할 수 있습니다.";
+            return null;
+        }
+
+        /// <summary>설정 정합성 검사. 문제가 있으면 사유를, 없으면 null 을 반환한다.</summary>
+        public string? Validate()
+        {
+            if (DivideRatio < 2)   return "분주비는 2 이상이어야 합니다(1이면 분주 의미 없음).";
+            if (TimebaseRateHz <= 0) return "타임베이스 주파수가 0 이하입니다.";
+            if (LedWidthUs <= 0)   return "LED 발광 폭은 0보다 커야 합니다.";
+            if (CamWidthUs <= 0)   return "카메라 트리거 폭은 0보다 커야 합니다.";
+            if (InitialSkipPulses < 0) return "초기 무시 펄스 수는 음수일 수 없습니다.";
+
+            // 폭이 타임베이스 분해능보다 작으면 0틱이 되어 펄스가 나가지 않는다.
+            if (UsToTicks(LedWidthUs) < 1)
+                return $"LED 폭 {LedWidthUs}µs 가 타임베이스 분해능({TicksToUs(1):F3}µs)보다 작습니다.";
+            if (UsToTicks(CamWidthUs) < 1)
+                return $"카메라 폭 {CamWidthUs}µs 가 타임베이스 분해능({TicksToUs(1):F3}µs)보다 작습니다.";
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 드랍와쳐 하드웨어 트리거 체인 — 토출 펄스를 분주해 LED 스트로브와 카메라를 동기시킨다.
+    ///
+    /// <b>이것이 있어야 "매 토출마다 정확히 1회 촬영"이 하드웨어로 보장된다.</b>
+    /// 소프트 트리거(자유 촬영)로는 스트로브가 얼린 방울이 아니라 임의 위상의 화면을 찍게 된다.
+    ///
+    /// <b>지연 2단계를 혼동하지 말 것</b> — 서로 다른 층이다:
+    ///   조(coarse) : <see cref="TriggerChainSettings.LedDelayUs"/>  — 트리거 체인, 하드웨어 확정
+    ///   미세(fine) : <see cref="IStrobeController.SetDelayMicroseconds"/> — Modbus, 궤적 스윕용
+    /// 2점 측정(<see cref="DropVelocitySequence"/>)이 훑는 것은 <b>미세</b> 쪽이다.
+    ///
+    /// <b>NI-DAQmx 구현 시 반드시 지킬 것</b> (원본 VI 에서 확인된 사항):
+    ///   ① Start 순서 — LED/Cam 을 먼저 arm 한 뒤 분주기를 시작해야 첫 트리거를 놓치지 않는다.
+    ///   ② LED/Cam 은 <c>StartTrigger.Retriggerable = true</c>. 이걸 빠뜨리면 첫 펄스만 나가고
+    ///      이후 트리거가 전부 무시된다 — "첫 프레임만 찍히고 멈춤" 증상의 원인이라 추적이 까다롭다.
+    ///   ③ Stop 은 역순 — 분주기(트리거 공급)부터 차단한다.
+    /// </summary>
+    public interface ITriggerChain : IDisposable
+    {
+        bool IsRunning { get; }
+
+        /// <summary>분주 후 실제 촬영 주파수[Hz]. 미기동이면 0.</summary>
+        double EffectiveFrameRateHz { get; }
+
+        /// <summary>
+        /// 기동 시 감지된 프레임 누락 위험 경고. 없으면 null.
+        /// 기동을 막을 정도는 아니지만 측정값 해석에 영향이 있어 화면/로그에 남겨야 한다.
+        /// </summary>
+        string? MarginWarning { get; }
+
+        /// <summary>체인 기동. <paramref name="spitFrequencyHz"/> 는 실촬영 주파수 산출용.</summary>
+        void Start(double spitFrequencyHz);
+
+        void Stop();
+    }
+
+    /// <summary>
+    /// 실장 DAQ 없이 트리거 동기 획득 경로를 검증하기 위한 가상 트리거 체인.
+    /// 분주 후 주파수에 맞춰 <paramref name="onTrigger"/> 를 주기적으로 호출한다
+    /// — HMI 가 이걸 가상 카메라의 하드웨어 트리거 시뮬레이션에 연결한다.
+    ///
+    /// ※ 실장 연결 시 <see cref="ITriggerChain"/> 을 구현한 NI-DAQmx 어댑터로 교체할 것.
+    ///   CO Pulse Ticks(분주) + Retriggerable 카운터(LED/Cam) 구성이며,
+    ///   위 인터페이스 주석의 ①②③ 을 그대로 따르면 된다.
+    ///   (NationalInstruments.DAQmx 어셈블리 — NI-DAQmx 드라이버 설치 시 동봉 — 가 있어야 작성 가능)
+    /// </summary>
+    public sealed class VirtualTriggerChain : ITriggerChain
+    {
+        private readonly TriggerChainSettings _cfg;
+        private readonly Func<Task> _onTrigger;
+        private CancellationTokenSource? _cts;
+        private Task? _loop;
+
+        public VirtualTriggerChain(TriggerChainSettings cfg, Func<Task> onTrigger)
+        {
+            _cfg       = cfg       ?? throw new ArgumentNullException(nameof(cfg));
+            _onTrigger = onTrigger ?? throw new ArgumentNullException(nameof(onTrigger));
+        }
+
+        public bool    IsRunning            { get; private set; }
+        public double  EffectiveFrameRateHz { get; private set; }
+        public string? MarginWarning        { get; private set; }
+
+        public void Start(double spitFrequencyHz)
+        {
+            if (IsRunning) return;
+
+            string? bad = _cfg.Validate();
+            if (bad != null) throw new InvalidOperationException($"트리거 체인 설정 오류: {bad}");
+
+            EffectiveFrameRateHz = _cfg.EffectiveFrameRate(spitFrequencyHz);
+            if (EffectiveFrameRateHz <= 0)
+                throw new InvalidOperationException("실촬영 주파수가 0 입니다. 토출 주파수/분주비를 확인하세요.");
+
+            MarginWarning = _cfg.ValidateTriggerMargin(spitFrequencyHz);
+
+            _cts = new CancellationTokenSource();
+            IsRunning = true;
+            _loop = RunAsync(_cts.Token);
+        }
+
+        private async Task RunAsync(CancellationToken ct)
+        {
+            // 초기 무시 펄스 — 토출이 안정될 때까지 트리거를 내보내지 않는다.
+            if (_cfg.InitialSkipPulses > 0 && EffectiveFrameRateHz > 0)
+            {
+                double skipMs = _cfg.InitialSkipPulses / Math.Max(1e-9, EffectiveFrameRateHz * _cfg.DivideRatio) * 1000.0;
+                try { await Task.Delay(TimeSpan.FromMilliseconds(skipMs), ct); } catch (OperationCanceledException) { return; }
+            }
+
+            int periodMs = Math.Max(1, (int)Math.Round(1000.0 / EffectiveFrameRateHz));
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    await _onTrigger().ConfigureAwait(false);
+                    await Task.Delay(periodMs, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { return; }
+                catch { /* 트리거 소비자 예외가 체인을 죽이지 않게 한다 */ }
+            }
+        }
+
+        public void Stop()
+        {
+            if (!IsRunning) return;
+            IsRunning = false;
+            _cts?.Cancel();
+            try { _loop?.Wait(500); } catch { }
+            _cts?.Dispose();
+            _cts  = null;
+            _loop = null;
+            EffectiveFrameRateHz = 0;
+            MarginWarning = null;
+        }
+
+        public void Dispose() => Stop();
+    }
+}

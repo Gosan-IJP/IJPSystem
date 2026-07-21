@@ -31,6 +31,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 활성 레시피의 프린팅수(Swath) / 헤드길이 — 오토프린트 시퀀스 생성용
         private readonly Func<int>? _getSwathCount;
         private readonly Func<double>? _getHeadLength;
+        private readonly Func<int>? _getPrintDirection;   // 0=단방향, 1=양방향
 
         // 프린팅 스캔(스테이지 이송) 축. 실장 구조: 헤드(X축)는 고정, 스테이지(Y축)가 이동하며 인쇄한다.
         // 메인 대시보드 애니메이션은 이 축의 모터 위치·티칭 좌표로 스테이지 이동/인쇄 진행을 구동한다.
@@ -164,6 +165,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             get => _swathCount;
             set => SetProperty(ref _swathCount, value);
+        }
+
+        // 프린팅 방향(애니메이션이 참조) — 시퀀스 생성 시 1회 확정. true=양방향(왕복 프린트), false=단방향(프린트 후 복귀).
+        private bool _isBidirectional = true;
+        public bool IsBidirectional
+        {
+            get => _isBidirectional;
+            set => SetProperty(ref _isBidirectional, value);
         }
 
         public double TactTime
@@ -311,7 +320,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             Func<string, string, double?>? getPointAxisMm = null,
             Func<bool>? hasActiveAlarm = null,
             Func<int>? getSwathCount = null,
-            Func<double>? getHeadLength = null)
+            Func<double>? getHeadLength = null,
+            Func<int>? getPrintDirection = null)
         {
             _logAction       = logAction;
             _onAlarmChanged  = onAlarmChanged;
@@ -320,6 +330,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _hasActiveAlarm  = hasActiveAlarm;
             _getSwathCount   = getSwathCount;
             _getHeadLength   = getHeadLength;
+            _getPrintDirection = getPrintDirection;
             _machine = machine;
             _motion = motion;
 
@@ -414,10 +425,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
             Steps.Clear();
             int swath = _getSwathCount?.Invoke() ?? 1;
             double headLen = _getHeadLength?.Invoke() ?? 0;
-            // 애니메이션(OnFrameTick)이 참조하는 SwathCount 를 시퀀스 생성 시 1회 확정.
+            bool bidi = (_getPrintDirection?.Invoke() ?? 1) == 1;   // 1=양방향, 0=단방향
+            // 애니메이션(OnFrameTick)이 참조하는 SwathCount/IsBidirectional 을 시퀀스 생성 시 1회 확정.
             // (센서 100ms 폴링으로 매번 읽지 않음 — 값은 사이클 시작 때만 바뀌므로 폴링 불필요)
             SwathCount = swath;
-            foreach (var def in AutoPrintSequence.Build(_machine, _motion, swath, headLen))
+            IsBidirectional = bidi;
+            foreach (var def in AutoPrintSequence.Build(_machine, _motion, swath, headLen, bidi))
             {
                 Steps.Add(new SequenceStep
                 {

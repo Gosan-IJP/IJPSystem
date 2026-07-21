@@ -68,6 +68,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public int ActiveSwath { get => _activeSwath; private set => SetProperty(ref _activeSwath, value); }
         public double ActiveHeadLength { get; private set; } = 0;
 
+        // 활성 레시피의 프린팅 방향(0=단방향, 1=양방향). 하단 상태바 표기 + 오토프린트 시퀀스 생성에 사용.
+        private int _activePrintDirection = 1;   // 기본 양방향(현행 동작)
+        public int ActivePrintDirection { get => _activePrintDirection; private set => SetProperty(ref _activePrintDirection, value); }
+        // 표기용 — 하단 상태바 바인딩(언어전환 시 갱신되도록 CurrentLanguage 변경도 알림).
+        public string ActivePrintDirectionText =>
+            Common.Loc.T(_activePrintDirection == 1 ? "Opt_Bidirectional" : "Opt_Unidirectional");
+
         public IReadOnlyDictionary<string, double>? GetActivePoint(string pointName) =>
             _activePointsSnapshot.TryGetValue(pointName, out var dict) ? dict : null;
 
@@ -81,6 +88,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _activeMotionConfigSnapshot.Clear();
             ActiveSwath = 1;
             ActiveHeadLength = 0;
+            ActivePrintDirection = 1;
+            OnPropertyChanged(nameof(ActivePrintDirectionText));
             if (string.IsNullOrEmpty(_activeRecipeName)) return;
 
             try
@@ -93,6 +102,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     "SELECT Swath FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 1;
                 ActiveHeadLength = db.QueryFirstOrDefault<double?>(
                     "SELECT HeadLength FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 0;
+                ActivePrintDirection = db.QueryFirstOrDefault<int?>(
+                    "SELECT PrintDirection FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 1;
+                OnPropertyChanged(nameof(ActivePrintDirectionText));
 
                 // 1) 포인트
                 const string sqlPoints = @"
@@ -274,6 +286,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
+        // 프린팅 방향 — 기타정보 화면 콤보박스(0=단방향, 1=양방향)에 SelectedIndex 로 바인딩
+        private int _printDirectionIndex = 1;   // 0=단방향(Unidirectional), 1=양방향(Bidirectional) — 기본 양방향
+        public int PrintDirectionIndex
+        {
+            get => _printDirectionIndex;
+            set
+            {
+                int clamped = Math.Max(0, Math.Min(1, value));
+                if (SetProperty(ref _printDirectionIndex, clamped) && !_isLoading)
+                    IsDirty = true;
+            }
+        }
+
         // 도어 사용 유무 — 기타정보 화면 콤보박스에 바인딩
         // Why: 현장 설치 환경에 따라 안전키 미연결 시 운전 시작 차단을 해제할 수 있어야 함
         public bool IsDoorCheckEnabled
@@ -435,6 +460,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 catch { /* 이미 존재하면 무시 */ }
                 try { db.Execute("ALTER TABLE Recipes ADD COLUMN HeadLength REAL DEFAULT 0"); }
                 catch { /* 이미 존재하면 무시 */ }
+
+                // PrintDirection(프린팅 방향: 0=단방향, 1=양방향) 컬럼 마이그레이션.
+                // 기본 1(양방향) — 이 컬럼이 없던 기존 레시피의 현행 동작(양방향)을 그대로 유지.
+                try { db.Execute("ALTER TABLE Recipes ADD COLUMN PrintDirection INTEGER DEFAULT 1"); }
+                catch { /* 이미 존재하면 무시 */ }
             }
         }
 
@@ -513,6 +543,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     HeadLength = db.QueryFirstOrDefault<double?>(
                         "SELECT HeadLength FROM Recipes WHERE Name=@recipeName",
                         new { recipeName }) ?? 0;
+                    PrintDirectionIndex = db.QueryFirstOrDefault<int?>(
+                        "SELECT PrintDirection FROM Recipes WHERE Name=@recipeName",
+                        new { recipeName }) ?? 1;
                 }
 
                 LoadTeachingPoints(recipeName);
@@ -815,9 +848,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                          }, trans);
                         }
 
-                        // PurgeTime / Swath / HeadLength 저장
-                        db.Execute("UPDATE Recipes SET PurgeTime=@purgeTime, Swath=@swath, HeadLength=@headLength WHERE Name=@name",
-                            new { purgeTime = PurgeTime, swath = SwathCount, headLength = HeadLength, name = SelectedRecipeName }, trans);
+                        // PurgeTime / Swath / HeadLength / PrintDirection 저장
+                        db.Execute("UPDATE Recipes SET PurgeTime=@purgeTime, Swath=@swath, HeadLength=@headLength, PrintDirection=@printDir WHERE Name=@name",
+                            new { purgeTime = PurgeTime, swath = SwathCount, headLength = HeadLength, printDir = PrintDirectionIndex, name = SelectedRecipeName }, trans);
 
                         // 티칭 포인트 저장
                         if (TeachingPoints.Count > 0)
@@ -1136,11 +1169,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         WHERE RecipeId = (SELECT Id FROM Recipes WHERE Name = @oldName)",
                             new { newId, oldName = SelectedRecipeName }, trans);
 
-                        // C. PurgeTime / Swath / HeadLength 복사
+                        // C. PurgeTime / Swath / HeadLength / PrintDirection 복사
                         db.Execute(@"UPDATE Recipes SET
-                                         PurgeTime  = (SELECT PurgeTime  FROM Recipes WHERE Name=@oldName),
-                                         Swath      = (SELECT Swath      FROM Recipes WHERE Name=@oldName),
-                                         HeadLength = (SELECT HeadLength FROM Recipes WHERE Name=@oldName)
+                                         PurgeTime      = (SELECT PurgeTime      FROM Recipes WHERE Name=@oldName),
+                                         Swath          = (SELECT Swath          FROM Recipes WHERE Name=@oldName),
+                                         HeadLength     = (SELECT HeadLength     FROM Recipes WHERE Name=@oldName),
+                                         PrintDirection = (SELECT PrintDirection FROM Recipes WHERE Name=@oldName)
                                      WHERE Id=@newId",
                             new { oldName = SelectedRecipeName, newId }, trans);
 

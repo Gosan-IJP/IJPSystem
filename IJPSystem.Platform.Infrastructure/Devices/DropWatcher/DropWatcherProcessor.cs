@@ -59,6 +59,58 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
         /// <summary>위상 스윕 캡쳐 프레임 수(몽타주 컬럼 수).</summary>
         public int SweepFrames { get; set; } = 15;
+
+        // ── 이미지 품질 판정 ──────────────────────────────────────────────────
+        // 나쁜 이미지도 "그럴듯한 숫자"를 만들어내는 게 가장 위험하다. 특히 초점 이탈은
+        // 액적 경계를 번지게 해 직경을 부풀리는데, 부피는 직경의 3제곱이라 직경 10% 오차가
+        // 부피 33% 오차가 된다 — 화면상으론 그냥 "부피가 좀 크네"로 보인다.
+
+        /// <summary>
+        /// 초점 기준 선명도(Laplacian 분산). 캘리브레이션 시 "초점 기준 저장"으로 기록한다.
+        /// <b>절대 임계값을 쓰지 않는 이유</b>: 선명도 값은 렌즈·배율·조명에 따라 자릿수가 달라져
+        /// 고정 숫자를 박으면 현장에서 반드시 틀린다. 기준 대비 비율로만 판정한다.
+        /// 0 이면 초점 검사 비활성.
+        /// </summary>
+        public double ReferenceSharpness { get; set; } = 0;
+
+        /// <summary>기준 선명도 대비 허용 하한 비율. 이보다 떨어지면 초점 이탈로 본다.</summary>
+        public double MinSharpnessRatio { get; set; } = 0.6;
+
+        /// <summary>포화(0 또는 255) 픽셀 허용 비율. 넘으면 노출 과다/과소.</summary>
+        public double MaxSaturatedRatio { get; set; } = 0.02;
+
+        /// <summary>액적과 배경의 최소 명암차(8bit 레벨). 0 이면 대비 검사 비활성.</summary>
+        public double MinContrast { get; set; } = 20;
+    }
+
+    /// <summary>프레임 품질 측정 결과. 측정을 막지는 않고 결과에 꼬리표를 붙이는 용도.</summary>
+    public sealed class FrameQualityResult
+    {
+        /// <summary>Laplacian 분산 — 클수록 선명. 절대값이 아니라 기준 대비로 해석할 것.</summary>
+        public double Sharpness { get; set; }
+
+        /// <summary>기준 대비 선명도 비율. 기준 미설정이면 NaN.</summary>
+        public double SharpnessRatio { get; set; } = double.NaN;
+
+        /// <summary>255 포화 픽셀 비율.</summary>
+        public double SaturatedHighRatio { get; set; }
+
+        /// <summary>0 포화 픽셀 비율.</summary>
+        public double SaturatedLowRatio { get; set; }
+
+        /// <summary>전체 평균 밝기.</summary>
+        public double MeanLevel { get; set; }
+
+        /// <summary>액적 영역과 배경의 평균 명암차.</summary>
+        public double Contrast { get; set; }
+
+        /// <summary>발견된 문제(없으면 빈 목록).</summary>
+        public IReadOnlyList<string> Issues { get; set; } = Array.Empty<string>();
+
+        public bool IsAcceptable => Issues.Count == 0;
+
+        /// <summary>화면 표시용 한 줄 요약. 문제 없으면 null.</summary>
+        public string? Summary => Issues.Count == 0 ? null : string.Join(", ", Issues);
     }
 
     /// <summary>검출된 액적 1개의 기하 정보(단일 프레임 내 다중 액적 분석용).</summary>
@@ -285,6 +337,118 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
             }
             catch { return null; }
             finally { canvas.Dispose(); }
+        }
+
+        /// <summary>
+        /// 프레임 품질을 측정한다 — 분석 전에 "이 이미지를 믿어도 되는가"를 확인하기 위함.
+        /// 측정을 막지 않고 지표와 문제 목록만 돌려준다(설정이 조금 어긋났다고 측정 자체를
+        /// 못 하게 되면 현장에서 더 곤란하다). 호출부가 결과에 꼬리표를 붙인다.
+        /// </summary>
+        public FrameQualityResult AnalyzeQuality(VisionImage frame)
+        {
+            var r = new FrameQualityResult();
+            var issues = new List<string>();
+
+            using var gray = ToGrayMat(frame);
+            if (gray == null || gray.Empty())
+            {
+                r.Issues = new[] { "이미지를 읽을 수 없습니다" };
+                return r;
+            }
+
+            Rect roi = ClampRoi(new Rect(_cfg.RoiX, _cfg.RoiY, _cfg.RoiWidth, _cfg.RoiHeight), gray.Width, gray.Height);
+            using var work = (roi.Width > 0 && roi.Height > 0) ? new Mat(gray, roi) : gray.Clone();
+
+            // ── 선명도: Laplacian 분산(초점 지표) ──
+            using (var lap = new Mat())
+            {
+                Cv2.Laplacian(work, lap, MatType.CV_64F);
+                Cv2.MeanStdDev(lap, out _, out Scalar sd);
+                r.Sharpness = sd.Val0 * sd.Val0;
+            }
+
+            if (_cfg.ReferenceSharpness > 0)
+            {
+                r.SharpnessRatio = r.Sharpness / _cfg.ReferenceSharpness;
+                if (r.SharpnessRatio < _cfg.MinSharpnessRatio)
+                    issues.Add($"초점 저하(기준의 {r.SharpnessRatio * 100:F0}%)");
+            }
+
+            // ── 포화/평균 밝기 ──
+            long total = work.Rows * (long)work.Cols;
+            if (total > 0)
+            {
+                using var hi = new Mat();
+                using var lo = new Mat();
+                Cv2.Threshold(work, hi, 254, 255, ThresholdTypes.Binary);      // 255 근처
+                Cv2.Threshold(work, lo, 1, 255, ThresholdTypes.BinaryInv);     // 0 근처
+                r.SaturatedHighRatio = Cv2.CountNonZero(hi) / (double)total;
+                r.SaturatedLowRatio  = Cv2.CountNonZero(lo) / (double)total;
+
+                if (r.SaturatedHighRatio > _cfg.MaxSaturatedRatio)
+                    issues.Add($"노출 과다(포화 {r.SaturatedHighRatio * 100:F1}%)");
+                if (r.SaturatedLowRatio > _cfg.MaxSaturatedRatio)
+                    issues.Add($"노출 부족(흑포화 {r.SaturatedLowRatio * 100:F1}%)");
+            }
+
+            Cv2.MeanStdDev(work, out Scalar mean, out _);
+            r.MeanLevel = mean.Val0;
+
+            // ── 대비: 액적 마스크 내부 vs 외부 평균차 ──
+            using (var bin = Segment(work))
+            {
+                int fg = Cv2.CountNonZero(bin);
+                if (fg > 0 && fg < total)
+                {
+                    using var inv = new Mat();
+                    Cv2.BitwiseNot(bin, inv);
+                    Scalar mIn  = Cv2.Mean(work, bin);
+                    Scalar mOut = Cv2.Mean(work, inv);
+                    r.Contrast = Math.Abs(mOut.Val0 - mIn.Val0);
+
+                    if (_cfg.MinContrast > 0 && r.Contrast < _cfg.MinContrast)
+                        issues.Add($"대비 부족({r.Contrast:F0} < {_cfg.MinContrast:F0})");
+                }
+                else if (fg == 0)
+                {
+                    issues.Add("액적 영역이 검출되지 않음");
+                }
+            }
+
+            r.Issues = issues;
+            return r;
+        }
+
+        /// <summary>
+        /// 현재 프레임의 선명도를 초점 기준값으로 삼는다(캘리브레이션용).
+        /// 작업자가 초점이 맞았다고 확인한 시점에 호출할 것.
+        /// </summary>
+        public double CaptureSharpnessReference(VisionImage frame)
+        {
+            var q = AnalyzeQuality(frame);
+            if (q.Sharpness > 0) _cfg.ReferenceSharpness = q.Sharpness;
+            return q.Sharpness;
+        }
+
+        /// <summary>
+        /// 검출된 액적들의 평균 X 픽셀 피치와 실제 노즐 피치(µm)로 µm/px 스케일을 산출한다.
+        /// 정상 토출 프레임(노즐당 액적 1개, 노즐 순서대로 가로 정렬) 가정에 기반한 현장 교정법이다.
+        /// 유효 액적 &lt; 2 또는 knownPitchUm ≤ 0 또는 픽셀 피치 ≤ 0 이면 NaN.
+        /// </summary>
+        /// <param name="drops">DetectDroplets 결과(X 오름차순). 노즐당 1개여야 피치가 정확하다.</param>
+        /// <param name="knownPitchUm">헤드 사양상 인접 노즐 간 실제 거리[µm].</param>
+        public static double CalibrateMicronsPerPixel(IReadOnlyList<DropletInfo> drops, double knownPitchUm)
+        {
+            if (drops == null || drops.Count < 2 || knownPitchUm <= 0) return double.NaN;
+
+            var xs = drops.Select(d => d.CentroidXPixel).OrderBy(x => x).ToList();
+            double sum = 0; int n = 0;
+            for (int i = 1; i < xs.Count; i++) { sum += xs[i] - xs[i - 1]; n++; }
+            if (n == 0) return double.NaN;
+
+            double pixelPitch = sum / n;                 // 인접 액적 평균 X 간격(px)
+            if (pixelPitch <= 0) return double.NaN;
+            return knownPitchUm / pixelPitch;            // µm/px
         }
 
         /// <summary>

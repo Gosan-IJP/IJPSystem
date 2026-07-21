@@ -33,6 +33,16 @@ namespace IJPSystem.Drivers.Vision
         /// </summary>
         public int VirtualNozzleCount { get; set; } = 15;
 
+        /// <summary>
+        /// 가상 스트로브 지연[µs]. 액적 낙하거리를 이 값에 비례시켜, 지연을 바꾸며 두 번 찍는
+        /// 2점 측정(<c>DropVelocitySequence</c>)이 가상 모드에서도 실제처럼 ΔY 를 만들게 한다.
+        /// 0 이면 지연 무시(기존 고정 프레임) — Live View 는 이 경로를 쓴다.
+        /// </summary>
+        public double VirtualStrobeDelayUs { get; set; } = 0;
+
+        /// <summary>기준 지연[µs] — 이 지연에서 액적이 기존 위치(프레임 높이의 62%)에 온다.</summary>
+        public double VirtualNominalDelayUs { get; set; } = 910.0;
+
         // ────────────────────────────────────────────────
         // 1. 연결 / 초기화
         // ────────────────────────────────────────────────
@@ -179,7 +189,9 @@ namespace IJPSystem.Drivers.Vision
         {
             if (!_triggerWaiters.TryGetValue(cameraId, out var tcs)) return;
 
-            var image = await CaptureAsync(cameraId);
+            // saveToDisk:false — 트리거 체인이 초당 수~수십 회 호출한다. 기본값(true)으로 두면
+            // 프레임마다 BMP 가 쌓여 디스크가 찬다(예전 CAM_DW 폭주와 같은 경로).
+            var image = await CaptureAsync(cameraId, saveToDisk: false);
             tcs.TrySetResult(image);
             _triggerWaiters.Remove(cameraId);
         }
@@ -332,7 +344,12 @@ namespace IJPSystem.Drivers.Vision
             int n     = VirtualNozzleCount;              // 노즐 수 — 실측 샘플과 맞춘다
             int pitch = width / (n + 1);                 // 노즐 피치
             int r     = Math.Max(5, height / 40);        // 액적 반경
-            int baseY = (int)(height * 0.62);            // 기준 낙하거리(노즐면=상단 가정)
+            // 기준 낙하거리(노즐면=상단 가정). 스트로브 지연이 주어지면 낙하거리를 지연에 비례시켜
+            // 2점 측정이 두 지연에서 서로 다른 Y 를 보게 한다(등속 낙하 가정).
+            int baseY = (int)(height * 0.62);
+            if (VirtualStrobeDelayUs > 0 && VirtualNominalDelayUs > 0)
+                baseY = (int)Math.Clamp(height * 0.62 * (VirtualStrobeDelayUs / VirtualNominalDelayUs),
+                                        r + 1, height - r - 1);
 
             for (int i = 0; i < n; i++)
             {

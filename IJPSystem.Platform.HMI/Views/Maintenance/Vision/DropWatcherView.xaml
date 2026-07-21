@@ -408,6 +408,92 @@
                     </StackPanel>
                 </Border>
 
+                <!-- ── Calibration (µm/px, 노즐면 Y) ─────────────────────────────
+                     부피/직경/속도/낙하위치의 절대값이 µm/px 에 비례하므로 실장에서 반드시 교정한다.
+                     교정법: 실제 노즐 피치(µm)를 입력 → [µm/px 교정]이 검출 액적 평균 픽셀 피치로 산출.
+                     [교정값 저장]으로 DropWatcherConfig.json 에 남겨 다음 실행에도 유지. -->
+                <Border Background="#111827" CornerRadius="12" Padding="16" Margin="0,0,0,10"
+                        BorderBrush="#334155" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="CALIBRATION" Style="{StaticResource DwSectionTitle}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="10"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- 노즐 피치(입력) -->
+                            <StackPanel Grid.Row="0" Grid.Column="0">
+                                <TextBlock Text="Nozzle Pitch (실측 입력)" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0F172A" CornerRadius="6" Height="32" BorderBrush="#334155" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="um" Style="{StaticResource DwUnit}"/>
+                                        <TextBox Text="{Binding NozzlePitchUm, StringFormat={}{0:F1}, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource DwTextBox}"/>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- µm/px (교정 결과 / 직접 입력) -->
+                            <StackPanel Grid.Row="0" Grid.Column="2">
+                                <TextBlock Text="Scale (µm/px)" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0F172A" CornerRadius="6" Height="32" BorderBrush="#334155" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="µm/px" Style="{StaticResource DwUnit}"/>
+                                        <TextBox Text="{Binding MicronsPerPixel, StringFormat={}{0:F3}, UpdateSourceTrigger=LostFocus}" Style="{StaticResource DwTextBox}"/>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- 노즐면 Y(입력) -->
+                            <StackPanel Grid.Row="2" Grid.Column="0">
+                                <TextBlock Text="Nozzle Face Y" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0F172A" CornerRadius="6" Height="32" BorderBrush="#334155" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="px" Style="{StaticResource DwUnit}"/>
+                                        <TextBox Text="{Binding NozzleYPixel, StringFormat={}{0:F0}, UpdateSourceTrigger=LostFocus}" Style="{StaticResource DwTextBox}"/>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 교정 / 저장 버튼 -->
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Height="40" Command="{Binding CalibrateScaleCommand}"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E3A8A"
+                                    ToolTip="현재 화면 이미지의 검출 액적 평균 피치로 µm/px 를 자동 산출">
+                                <TextBlock Text="µm/px 교정" Foreground="White" FontSize="12" FontWeight="Bold"/>
+                            </Button>
+                            <Button Grid.Column="2" Height="40" Command="{Binding SaveCalibrationCommand}"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#334155"
+                                    ToolTip="현재 캘리브레이션을 DropWatcherConfig.json 에 저장">
+                                <TextBlock Text="교정값 저장" Foreground="White" FontSize="12" FontWeight="Bold"/>
+                            </Button>
+                        </Grid>
+
+                        <!-- 초점 기준 — 이후 측정의 초점 이탈 판정 기준이 된다. -->
+                        <Button Height="40" Margin="0,8,0,0" Command="{Binding CaptureFocusReferenceCommand}"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E3A8A"
+                                ToolTip="초점이 맞은 상태에서 눌러 현재 이미지의 선명도를 기준으로 저장합니다. 이후 측정은 이 기준 대비 비율로 초점 이탈을 판정합니다.">
+                            <TextBlock Foreground="White" FontSize="12" FontWeight="Bold">
+                                <Run Text="초점 기준 저장"/>
+                                <Run Text="{Binding ReferenceSharpness, StringFormat=' ({0:F0})', Mode=OneWay}"
+                                     Foreground="#93C5FD"/>
+                            </TextBlock>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
                 <!-- ── 동작 버튼 ────────────────────────────────────────────── -->
                 <Border Background="#111827" CornerRadius="12" Padding="16"
                         BorderBrush="#334155" BorderThickness="1">
@@ -416,8 +502,25 @@
                                 Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B">
                             <TextBlock Text="Nozzle Select" Foreground="White" FontSize="13" FontWeight="Bold"/>
                         </Button>
+                        <!-- Spit DW — 선택 노즐을 Frequency 로 연속 토출(토글). 측정의 전제 조건. -->
+                        <Button Height="46" Margin="0,0,0,8" Command="{Binding ToggleSpitCommand}"
+                                ToolTip="Nozzle Select 로 지정한 노즐을 Frequency 로 연속 토출합니다. Duration 이 설정돼 있으면 그 시간 뒤 자동 정지합니다.">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource MutedActionButtonStyle}">
+                                    <Setter Property="Background" Value="#7C2D12"/>
+                                    <Style.Triggers>
+                                        <!-- 토출 중에는 눈에 띄게 — 헤드가 잉크를 뿜고 있는 상태다. -->
+                                        <DataTrigger Binding="{Binding IsSpitting}" Value="True">
+                                            <Setter Property="Background" Value="#EA580C"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <TextBlock Text="{Binding SpitLabel}" Foreground="White" FontSize="13" FontWeight="Bold"/>
+                        </Button>
                         <Button Height="46" Margin="0,0,0,8" Command="{Binding AbortCommand}"
-                                Style="{StaticResource MutedActionButtonStyle}" Background="#3B4A63">
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#3B4A63"
+                                ToolTip="진행 중인 측정·라이브·토출을 모두 중단합니다. 소프트웨어 중단이며 비상정지가 아닙니다.">
                             <TextBlock Text="Abort" Foreground="White" FontSize="13" FontWeight="Bold"/>
                         </Button>
                         <Button Height="46" Margin="0,0,0,8" Command="{Binding MeasureVelocityCommand}"

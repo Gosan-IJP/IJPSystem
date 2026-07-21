@@ -60,8 +60,63 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             ref uint count,
             [MarshalAs(UnmanagedType.U1)] bool connectedOnly);
 
-        /// <summary>F64 속성 설정(노출/게인 등). 문자열 속성명은 GenICam 경로(카메라별 상이).</summary>
+        // ── 속성 설정 ─────────────────────────────────────────────────────────
+        // ★ IMAQdxSetAttribute 만 __cdecl 가변인자(헤더의 NI_FUNCC)이고 나머지는 __stdcall(NI_FUNC).
+        //   Cdecl 을 빠뜨리면 x86 에서 호출 때마다 스택이 깨진다(즉시 크래시가 아니라 이후 임의 시점에
+        //   터져서 원인 추적이 매우 어렵다). 가변인자라 타입별 오버로드를 EntryPoint 로 나눠 선언한다.
+        //   C 가변인자 승격 규칙상 float 는 double 로 올라가므로 F64 는 반드시 double 로 넘긴다.
+
+        /// <summary>F64 속성(노출/게인 등).</summary>
+        [DllImport(Dll, EntryPoint = "IMAQdxSetAttribute", CallingConvention = CallingConvention.Cdecl,
+                   CharSet = CharSet.Ansi)]
+        public static extern uint IMAQdxSetAttributeF64(uint id, string name, ImaqdxAttributeType type, double value);
+
+        /// <summary>문자열 속성. GenICam 열거값(TriggerMode="On" 등)도 String 타입으로 넘긴다.</summary>
+        [DllImport(Dll, EntryPoint = "IMAQdxSetAttribute", CallingConvention = CallingConvention.Cdecl,
+                   CharSet = CharSet.Ansi)]
+        public static extern uint IMAQdxSetAttributeString(uint id, string name, ImaqdxAttributeType type, string value);
+
+        /// <summary>U32 속성(타임아웃 등).</summary>
+        [DllImport(Dll, EntryPoint = "IMAQdxSetAttribute", CallingConvention = CallingConvention.Cdecl,
+                   CharSet = CharSet.Ansi)]
+        public static extern uint IMAQdxSetAttributeU32(uint id, string name, ImaqdxAttributeType type, uint value);
+
+        // ── 연속(트리거) 획득 ─────────────────────────────────────────────────
+        // 하드웨어 트리거 촬영은 ConfigureGrab 이 아니라 ConfigureAcquisition(continuous) + Start 조합이다.
+        // 링버퍼에 프레임이 들어오면 GetImageData(Next) 가 그 다음 새 프레임을 하나씩 꺼낸다.
+
+        [DllImport(Dll)]
+        public static extern uint IMAQdxConfigureAcquisition(uint session,
+            [MarshalAs(UnmanagedType.U4)] uint continuous, uint bufferCount);
+
+        [DllImport(Dll)]
+        public static extern uint IMAQdxStartAcquisition(uint session);
+
+        [DllImport(Dll)]
+        public static extern uint IMAQdxStopAcquisition(uint session);
+
+        [DllImport(Dll)]
+        public static extern uint IMAQdxUnconfigureAcquisition(uint session);
+
+        /// <summary>오류 코드 → 사람이 읽을 메시지.</summary>
         [DllImport(Dll, CharSet = CharSet.Ansi)]
-        public static extern uint IMAQdxSetAttribute(uint id, string name, ImaqdxAttributeType type, double value);
+        public static extern uint IMAQdxGetErrorString(uint error,
+            [Out] System.Text.StringBuilder message, uint messageLength);
+
+        /// <summary>오류 코드를 메시지로 변환. 실패하면 16진 코드만 반환.</summary>
+        public static string ErrorText(uint code)
+        {
+            try
+            {
+                var sb = new System.Text.StringBuilder(512);
+                if (IMAQdxGetErrorString(code, sb, (uint)sb.Capacity) == Success && sb.Length > 0)
+                    return $"0x{code:X8} {sb}";
+            }
+            catch { }
+            return $"0x{code:X8}";
+        }
+
+        /// <summary>획득 타임아웃 속성(ms). 트리거가 드문 구성에서는 명시적으로 키워야 한다.</summary>
+        public const string AttrTimeout = "AcquisitionAttributes::Timeout";
     }
 }

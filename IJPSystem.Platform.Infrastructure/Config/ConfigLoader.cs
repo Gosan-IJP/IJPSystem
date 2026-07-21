@@ -64,6 +64,49 @@ namespace IJPSystem.Platform.Infrastructure.Config
             return JsonSerializer.Deserialize<DropWatcherProcessorConfig>(json, _options) ?? new DropWatcherProcessorConfig();
         }
 
+        /// <summary>드랍와쳐 파라미터 저장(캘리브레이션: µm/px, 노즐면 Y 등). 폴더 없으면 생성.</summary>
+        public void SaveDropWatcherConfig(string filePath, DropWatcherProcessorConfig cfg)
+        {
+            var dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(filePath, JsonSerializer.Serialize(cfg, options));
+        }
+
+        /// <summary>iCore 스트로브(Modbus RTU) 설정 로드. 파일 없으면 기본값(가상 모드에선 미사용).</summary>
+        public StrobeConfig LoadStrobeConfig(string filePath)
+        {
+            if (!File.Exists(filePath)) return new StrobeConfig();
+            string json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<StrobeConfig>(json, _options) ?? new StrobeConfig();
+        }
+
+        /// <summary>스트로브 설정 저장. 폴더 없으면 생성.</summary>
+        public void SaveStrobeConfig(string filePath, StrobeConfig cfg)
+        {
+            var dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(filePath, JsonSerializer.Serialize(cfg, options));
+        }
+
+        /// <summary>드랍와쳐 하드웨어 트리거 체인 설정 로드. 파일 없으면 기본값.</summary>
+        public TriggerChainSettings LoadTriggerChainConfig(string filePath)
+        {
+            if (!File.Exists(filePath)) return new TriggerChainSettings();
+            string json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<TriggerChainSettings>(json, _options) ?? new TriggerChainSettings();
+        }
+
+        /// <summary>트리거 체인 설정 저장. 폴더 없으면 생성.</summary>
+        public void SaveTriggerChainConfig(string filePath, TriggerChainSettings cfg)
+        {
+            var dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(filePath, JsonSerializer.Serialize(cfg, options));
+        }
+
         public MotionAxisRoot LoadMotionConfig(string filePath)
         {
             // 1. 파일 존재 확인

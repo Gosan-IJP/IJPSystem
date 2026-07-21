@@ -15,9 +15,13 @@ namespace IJPSystem.Platform.Application.Sequences
     ///   1 : PrintStart→End 1회 프린트 후 Ready (기본/현행)
     ///   2 : Start→End 프린트 → X축 +headLength 스텝오버 → End→Start 프린트 → Ready
     ///   3 : Start→End → 스텝 → End→Start → 스텝 → Start→End → Ready
-    ///   N : 패스 N회(방향 교대: 홀수 Start→End / 짝수 End→Start), 패스 사이 X축 +headLength 스텝.
+    ///   N : 패스 N회, 패스 사이 X축 +headLength 스텝.
     ///   ※ 헤드(Z)는 첫 패스 전 1회 다운, 마지막 패스 후 1회 업(내린 채 스텝오버).
     ///   ※ 스캔은 Y축(스테이지), 스텝오버는 X축(크로스스캔). 스캔은 단일 축 이동으로 X 유지.
+    ///
+    /// 프린팅 방향(bidirectional):
+    ///   양방향(true) : 패스마다 방향 교대(홀수 Start→End / 짝수 End→Start). 복귀 없이 왕복하며 인쇄.
+    ///   단방향(false): 매 패스 Start→End 인쇄 후, End→Start 로 복귀(Move 프로파일=비인쇄). 항상 같은 방향으로만 인쇄.
     /// </remarks>
     public static class AutoPrintSequence
     {
@@ -25,7 +29,8 @@ namespace IJPSystem.Platform.Application.Sequences
         private const string StepAxisNo = "X";   // 스와스 스텝오버 축(크로스스캔)
 
         public static IReadOnlyList<SequenceStepDef> Build(
-            IMachine machine, IMotionService motion, int swathCount = 1, double headLength = 0)
+            IMachine machine, IMotionService motion, int swathCount = 1, double headLength = 0,
+            bool bidirectional = true)
         {
             if (swathCount < 1) swathCount = 1;
 
@@ -57,11 +62,13 @@ namespace IJPSystem.Platform.Application.Sequences
                 ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 10_000, ct)));
 
             // ── 스와스 패스 루프 ──
-            // 방향 교대: 홀수=Start→End(PrintEnd), 짝수=End→Start(PrintStart).
+            // 양방향: 방향 교대(홀수=Start→End, 짝수=End→Start), 복귀 없음.
+            // 단방향: 매 패스 Start→End 인쇄 후 End→Start 복귀(Move=비인쇄) → 항상 같은 방향으로 인쇄.
             // 스캔은 Y축 단일 이동(스텝오버로 옮긴 X 위치 유지). 패스 사이 X축 +headLength 스텝.
             for (int pass = 1; pass <= swathCount; pass++)
             {
-                bool forward = (pass % 2 == 1);
+                // 인쇄 주행 방향: 양방향은 패스마다 교대, 단방향은 항상 Start→End.
+                bool forward = bidirectional ? (pass % 2 == 1) : true;
                 string scanTarget = forward ? PointNames.PrintEnd : PointNames.PrintStart;
 
                 steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_Print",
@@ -69,6 +76,17 @@ namespace IJPSystem.Platform.Application.Sequences
 
                 steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_PrintDone",
                     ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 60_000, ct)));
+
+                // 단방향: 인쇄 후 시작점으로 복귀(비인쇄, Move 프로파일). 다음 패스도 같은 방향으로 인쇄하기 위함.
+                if (!bidirectional)
+                {
+                    string returnTarget = forward ? PointNames.PrintStart : PointNames.PrintEnd;
+                    steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_Return",
+                        ct => motion.MoveAxisToPointAsync(ScanAxisNo, returnTarget, ct, MotionProfileKind.Move)));
+
+                    steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_ReturnDone",
+                        ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 60_000, ct)));
+                }
 
                 // 마지막 패스가 아니면 X축을 헤드길이만큼 +방향 스텝오버(헤드는 내린 채).
                 if (pass < swathCount && headLength > 0)

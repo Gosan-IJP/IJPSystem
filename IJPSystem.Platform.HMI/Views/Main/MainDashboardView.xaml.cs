@@ -226,16 +226,22 @@ namespace IJPSystem.Platform.HMI.Views
             }
             _lastFrameAt = now;
 
-            // ── 진행 상태 판정 (프린팅수 swath 에 따라 스텝 구성이 달라짐) ──
-            // 스텝 구성: 1~7 준비/헤드다운, 8~ 패스 루프(패스당 Print/PrintDone, 마지막 아니면
-            //   +SwathStep/SwathStepDone), 이후 HeadUp/HeadUpDone/VacuumOff/MoveReady/MoveReadyDone.
-            //   패스 블록: within = (step-8) % 4 → 0:Print 1:PrintDone 2:SwathStep 3:SwathStepDone.
+            // ── 진행 상태 판정 (프린팅수 swath + 방향에 따라 스텝 구성이 달라짐) ──
+            // 스텝 구성: 1~7 준비/헤드다운, 8~ 패스 루프, 이후 HeadUp/HeadUpDone/VacuumOff/MoveReady/MoveReadyDone.
+            //   양방향 패스블록(4): 0:Print 1:PrintDone 2:SwathStep 3:SwathStepDone
+            //   단방향 패스블록(6): 0:Print 1:PrintDone 2:Return 3:ReturnDone 4:SwathStep 5:SwathStepDone
+            //   (마지막 패스는 스텝오버가 없어 2칸 짧음 — headUpStep 식이 이를 흡수)
+            //   ※ 멀티 스와스는 headLength>0 전제(스텝오버 존재). 이 전제는 시퀀스와 동일.
             int swath          = Math.Max(1, _vm?.SwathCount ?? 1);
-            int headUpStep     = 4 * swath + 6;        // S=1→10, S=2→14, S=3→18
+            bool bidi          = _vm?.IsBidirectional ?? true;
+            int stepsPerPass   = bidi ? 4 : 6;
+            int headUpStep     = stepsPerPass * swath + 6;   // 양방향 S=1→10,2→14,3→18 / 단방향 S=1→12,2→18,3→24
             int moveReadyStep  = headUpStep + 3;       // HeadUp, HeadUpDone, VacuumOff, [MoveReady]
             bool inPassRegion  = _currentStepNo >= PrintScanStepNo && _currentStepNo < headUpStep;
-            int within         = inPassRegion ? (_currentStepNo - PrintScanStepNo) % 4 : -1;
+            int within         = inPassRegion ? (_currentStepNo - PrintScanStepNo) % stepsPerPass : -1;
             bool isPrintStep   = inPassRegion && within == 0;   // 잉크 토출(스캔) 진행
+            // 단방향 복귀(within==2)는 isPrintStep=false 라 스캔선/잉크가 자동으로 꺼진다(별도 처리 불필요).
+            // 글라스는 복귀 구간에도 실모터 위치(t)를 따라가므로 End→Start 로 자연히 되돌아간다.
             bool afterAllPasses = _currentStepNo >= headUpStep;  // 모든 패스 종료(헤드업~복귀)
 
             // ── 인쇄 진행률 t (0..1) — 스캔축(Y) 모터 위치 기준. 패스 방향(정/역)은 t가 0↔1로 자연 반영 ──
@@ -343,21 +349,22 @@ namespace IJPSystem.Platform.HMI.Views
             // 스와스마다 글라스 폭(화면 세로)의 1/swath 씩 아래에서 위로 쌓인다.
             //   완료 밴드(PrintedDoneArea): 전폭 × (완료 패스수/swath) — 바닥 고정, 위로 성장
             //   현재 밴드(PrintedArea)    : 1/swath 높이 × 스캔 진행률 — 해당 밴드 위치로 이동
-            int passIndex = inPassRegion ? (_currentStepNo - PrintScanStepNo) / 4 : 0;   // 0-based
+            int passIndex = inPassRegion ? (_currentStepNo - PrintScanStepNo) / stepsPerPass : 0;   // 0-based
             if (passIndex != _currentPassIndex)
             {
                 _currentPassIndex = passIndex;
                 _passFill = 0;                       // 새 패스 시작 → 현재 밴드 채움 초기화
             }
 
-            // 짝수 패스(0-based 홀수)는 역방향 주행 — t 가 1→0 이므로 채움은 (1−t), 우측에서 자란다.
-            bool passForward = passIndex % 2 == 0;
+            // 인쇄 주행 방향: 양방향은 패스마다 교대(짝수 패스=역방향), 단방향은 항상 정방향(Start→End).
+            // 역방향은 t 가 1→0 이므로 채움은 (1−t), 우측에서 자란다.
+            bool passForward = bidi ? (passIndex % 2 == 0) : true;
             if (isPrintStep)
             {
                 double fill = passForward ? t : 1.0 - t;
                 _passFill = Math.Max(_passFill, fill);       // 패스 내 단조 증가
             }
-            else if (inPassRegion) _passFill = 1.0;          // PrintDone/SwathStep 구간 — 해당 밴드는 다 찼다
+            else if (inPassRegion) _passFill = 1.0;          // 인쇄 외 구간(PrintDone/Return/SwathStep) — 해당 밴드는 다 찼다
 
             double bandH   = PrintedAreaH / swath;
             int donePasses = afterAllPasses ? swath : passIndex;

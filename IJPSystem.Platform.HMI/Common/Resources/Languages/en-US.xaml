@@ -134,6 +134,9 @@
     <system:String x:Key="Lbl_PrintSettings">PRINT SETTINGS</system:String>
     <system:String x:Key="Lbl_Swath">SWATH (PRINT COUNT)</system:String>
     <system:String x:Key="Lbl_HeadLength">HEAD LENGTH</system:String>
+    <system:String x:Key="Lbl_PrintDirection">PRINT DIRECTION</system:String>
+    <system:String x:Key="Opt_Unidirectional">Unidirectional</system:String>
+    <system:String x:Key="Opt_Bidirectional">Bidirectional</system:String>
     <system:String x:Key="Btn_Logout">LOGOUT</system:String>
     <system:String x:Key="Btn_ClearLog">CLEAR</system:String>
     <system:String x:Key="Recipe_SaveApplyHint">* SAVE: Save record | APPLY: Apply parameters immediately</system:String>
@@ -250,6 +253,8 @@
     <system:String x:Key="Step_AutoPrint_MoveStartDone">Confirm InPosition at PRINT START</system:String>
     <system:String x:Key="Step_AutoPrint_Print">Printing — scan (Y) jetting</system:String>
     <system:String x:Key="Step_AutoPrint_PrintDone">Confirm InPosition after printing</system:String>
+    <system:String x:Key="Step_AutoPrint_Return">Return — move to start (no jetting)</system:String>
+    <system:String x:Key="Step_AutoPrint_ReturnDone">Confirm InPosition after return</system:String>
     <system:String x:Key="Step_AutoPrint_SwathStep">Swath step-over — X by head length</system:String>
     <system:String x:Key="Step_AutoPrint_SwathStepDone">Confirm InPosition after step-over</system:String>
     <system:String x:Key="Step_AutoPrint_VacuumOff">V/C chuck Vacuum OFF (prepare unload)</system:String>

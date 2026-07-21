@@ -1,0 +1,15 @@
+{
+  "ComPort": "COM4",
+  "BaudRate": 9600,
+  "Parity": 0,
+  "DataBits": 8,
+  "StopBits": 1,
+  "TimeoutMs": 1000,
+  "UnitId": 1,
+  "DelayRegister": 0,
+  "RegisterScale": 1.0,
+  "Use32BitDelay": false,
+  "HighWordFirst": true,
+  "EnableRegister": -1,
+  "SettleMs": 50
+}

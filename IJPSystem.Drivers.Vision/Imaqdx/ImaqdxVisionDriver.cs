@@ -22,7 +22,7 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
         private readonly Dictionary<string, uint>             _sessions   = new();  // CameraId → IMAQdx 세션
         private readonly Dictionary<string, CameraStatus>     _statusMap  = new();
         private readonly Dictionary<string, CameraDeviceInfo> _configMap  = new();
-        private readonly Dictionary<string, TaskCompletionSource<VisionImage>> _triggerWaiters = new();
+        // (구 소프트 트리거 대기열은 제거 — 이제 IMAQdx 링버퍼에서 직접 트리거 프레임을 꺼낸다)
 
         public bool   IsConnected   { get; private set; }
         public string ImageSavePath { get; set; } = @"C:\Logs\Vision";
@@ -114,15 +114,15 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
 
         public void Disconnect()
         {
+            // 트리거 획득 중인 세션은 먼저 정지·해제한다(획득 중 Close 는 실패할 수 있다).
+            foreach (var id in _triggeredSessions.ToList())
+                if (_sessions.TryGetValue(id, out uint ts)) StopTriggeredAcquisition(id, ts);
+
             foreach (var s in _sessions.Values)
             {
                 try { ImaqdxInterop.IMAQdxCloseCamera(s); } catch { /* 해제 오류 무시 */ }
             }
             _sessions.Clear();
-
-            foreach (var tcs in _triggerWaiters.Values) tcs.TrySetCanceled();
-            _triggerWaiters.Clear();
-
             IsConnected = false;
         }
 
@@ -200,17 +200,156 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             return (path, buffer);
         }
 
-        public Task<VisionImage> WaitForHardwareTriggerAsync(string cameraId, CancellationToken ct)
-        {
-            // TODO: IMAQdx Listener 모드 + 하드웨어 트리거(라인) 대기.
-            //       스켈레톤은 소프트 트리거(SimulateHardwareTrigger)로 완료되는 대기로 대체.
-            if (!_sessions.ContainsKey(cameraId))
-                return Task.FromResult(VisionImage.Invalid(cameraId));
+        /// <summary>카메라별 하드웨어 트리거 설정. 미지정이면 기본값(GenICam 표준 명칭 추정).</summary>
+        public ImaqdxTriggerConfig TriggerConfig { get; set; } = new();
 
-            var tcs = new TaskCompletionSource<VisionImage>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _triggerWaiters[cameraId] = tcs;
-            ct.Register(() => tcs.TrySetCanceled());
-            return tcs.Task;
+        // 트리거 모드로 획득이 시작된 세션. 중복 Configure/Start 를 막는다.
+        private readonly HashSet<string> _triggeredSessions = new();
+
+        /// <summary>
+        /// 하드웨어 트리거 1회를 기다려 그 프레임을 반환한다.
+        /// 최초 호출 시 카메라를 트리거 모드로 전환하고 연속 획득을 시작한 뒤,
+        /// 이후에는 링버퍼에서 <b>다음 새 프레임</b>(BufferNumberMode.Next)을 하나씩 꺼낸다.
+        ///
+        /// Next 를 쓰는 이유: Last 는 새 트리거가 없어도 직전 버퍼를 즉시 돌려주므로
+        /// 같은 프레임을 중복 반환한다 — 트리거당 1장이 필요한 드랍와쳐엔 맞지 않는다.
+        /// </summary>
+        public async Task<VisionImage> WaitForHardwareTriggerAsync(string cameraId, CancellationToken ct)
+        {
+            if (!_sessions.TryGetValue(cameraId, out uint session) ||
+                !_configMap.TryGetValue(cameraId, out var cfg))
+                return VisionImage.Invalid(cameraId);
+
+            if (!EnsureTriggeredAcquisition(cameraId, session))
+                return VisionImage.Invalid(cameraId);
+
+            int w = cfg.PixelWidth, h = cfg.PixelHeight;
+            if (w <= 0 || h <= 0) return VisionImage.Invalid(cameraId);
+
+            var status = _statusMap[cameraId];
+            var buffer = new byte[w * h];
+
+            // 타임아웃은 "트리거가 아직 안 왔다"는 정상 상태다(세션 유효 → 재시도 가능).
+            // 다만 카메라 단선 같은 진짜 오류도 같은 경로로 오므로, 연속 실패가 쌓이면 포기한다.
+            const int maxConsecutiveFailures = 3;
+            int failures = 0;
+
+            while (!ct.IsCancellationRequested)
+            {
+                uint err = await Task.Run(() => ImaqdxInterop.IMAQdxGetImageData(
+                    session, buffer, (uint)buffer.Length,
+                    ImaqdxBufferNumberMode.Next, 0, out _), ct).ConfigureAwait(false);
+
+                if (err == ImaqdxInterop.Success)
+                {
+                    var now = DateTime.Now;
+                    status.LastCaptureTime = now;
+                    status.TotalCaptureCount++;
+                    return new VisionImage
+                    {
+                        CameraId     = cameraId,
+                        CaptureTime  = now,
+                        Width        = w,
+                        Height       = h,
+                        IsValid      = true,
+                        FilePath     = null,          // 트리거 촬영은 파일로 남기지 않는다(초당 수~수십 장)
+                        PixelData    = buffer,
+                        BitsPerPixel = 8,
+                    };
+                }
+
+                if (++failures >= maxConsecutiveFailures)
+                {
+                    Debug.WriteLine($"[IMAQdx Vision] 트리거 대기 실패 {failures}회: {ImaqdxInterop.ErrorText(err)}");
+                    return VisionImage.Invalid(cameraId);
+                }
+            }
+
+            ct.ThrowIfCancellationRequested();
+            return VisionImage.Invalid(cameraId);
+        }
+
+        /// <summary>
+        /// 카메라를 하드웨어 트리거 모드로 전환하고 연속 획득을 시작한다(세션당 1회).
+        /// ※ TriggerSelector 를 <b>가장 먼저</b> 설정해야 한다 — GenICam 셀렉터라 뒤따르는
+        ///   Mode/Source/Activation 의 적용 대상을 결정한다.
+        /// </summary>
+        private bool EnsureTriggeredAcquisition(string cameraId, uint session)
+        {
+            if (_triggeredSessions.Contains(cameraId)) return true;
+
+            var t = TriggerConfig;
+            try
+            {
+                if (t.Enabled)
+                {
+                    // 경로가 틀리면 여기서 실패한다 — 어떤 경로였는지 로그에 남겨야 고칠 수 있다.
+                    if (!SetEnum(session, t.SelectorPath,   t.SelectorValue))   return false;
+                    if (!SetEnum(session, t.ModePath,       t.ModeValue))       return false;
+                    if (!SetEnum(session, t.SourcePath,     t.SourceValue))     return false;
+                    if (!SetEnum(session, t.ActivationPath, t.ActivationValue)) return false;
+                }
+
+                ImaqdxInterop.IMAQdxSetAttributeU32(session, ImaqdxInterop.AttrTimeout,
+                    ImaqdxAttributeType.U32, t.TimeoutMs);
+
+                // ConfigureGrab(초기 Open 시 설정됨)과 배타적이므로 해제 후 연속 획득으로 전환한다.
+                ImaqdxInterop.IMAQdxUnconfigureAcquisition(session);
+
+                uint err = ImaqdxInterop.IMAQdxConfigureAcquisition(session, continuous: 1, bufferCount: t.BufferCount);
+                if (err != ImaqdxInterop.Success)
+                {
+                    Debug.WriteLine($"[IMAQdx Vision] ConfigureAcquisition 실패: {ImaqdxInterop.ErrorText(err)}");
+                    return false;
+                }
+
+                err = ImaqdxInterop.IMAQdxStartAcquisition(session);
+                if (err != ImaqdxInterop.Success)
+                {
+                    Debug.WriteLine($"[IMAQdx Vision] StartAcquisition 실패: {ImaqdxInterop.ErrorText(err)}");
+                    return false;
+                }
+
+                _triggeredSessions.Add(cameraId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[IMAQdx Vision] 트리거 모드 전환 실패 ({cameraId}): {ex.Message}");
+                return false;   // DLL 미설치 등 — graceful
+            }
+        }
+
+        /// <summary>GenICam 열거 속성을 문자열로 설정. 실패 시 경로를 로그에 남긴다.</summary>
+        private static bool SetEnum(uint session, string path, string value)
+        {
+            uint err = ImaqdxInterop.IMAQdxSetAttributeString(session, path, ImaqdxAttributeType.String, value);
+            if (err == ImaqdxInterop.Success) return true;
+
+            // 카메라마다 CameraAttributes:: 하위 카테고리명이 달라 경로가 안 맞는 경우가 흔하다.
+            // NI MAX 의 Camera Attributes 트리에서 실제 경로를 확인해 설정 파일을 고칠 것.
+            Debug.WriteLine($"[IMAQdx Vision] 속성 설정 실패: \"{path}\" = \"{value}\" → " +
+                            $"{ImaqdxInterop.ErrorText(err)} (NI MAX 에서 실제 경로 확인 필요)");
+            return false;
+        }
+
+        /// <summary>트리거 모드 해제 — 획득 정지 후 자유 촬영 구성으로 되돌린다.</summary>
+        private void StopTriggeredAcquisition(string cameraId, uint session)
+        {
+            if (!_triggeredSessions.Remove(cameraId)) return;
+            try
+            {
+                ImaqdxInterop.IMAQdxStopAcquisition(session);
+                ImaqdxInterop.IMAQdxUnconfigureAcquisition(session);
+                if (TriggerConfig.Enabled)
+                    ImaqdxInterop.IMAQdxSetAttributeString(session, TriggerConfig.ModePath,
+                        ImaqdxAttributeType.String, "Off");
+                ImaqdxInterop.IMAQdxConfigureGrab(session);   // 자유 촬영 복귀
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[IMAQdx Vision] 트리거 모드 해제 실패 ({cameraId}): {ex.Message}");
+            }
         }
 
         // ── 4. 검사 ─────────────────────────────────────────────────
@@ -249,7 +388,7 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             if (_statusMap.TryGetValue(cameraId, out var s)) s.ExposureMs = ms;
             if (_sessions.TryGetValue(cameraId, out uint session))
             {
-                try { ImaqdxInterop.IMAQdxSetAttribute(session, AttrExposure, ImaqdxAttributeType.F64, ms * 1000.0); } // ms→us
+                try { ImaqdxInterop.IMAQdxSetAttributeF64(session, AttrExposure, ImaqdxAttributeType.F64, ms * 1000.0); } // ms→us
                 catch (Exception ex) { Debug.WriteLine($"[IMAQdx Vision] SetExposure failed: {ex.Message}"); }
             }
         }
@@ -259,7 +398,7 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             if (_statusMap.TryGetValue(cameraId, out var s)) s.Gain = gain;
             if (_sessions.TryGetValue(cameraId, out uint session))
             {
-                try { ImaqdxInterop.IMAQdxSetAttribute(session, AttrGain, ImaqdxAttributeType.F64, gain); }
+                try { ImaqdxInterop.IMAQdxSetAttributeF64(session, AttrGain, ImaqdxAttributeType.F64, gain); }
                 catch (Exception ex) { Debug.WriteLine($"[IMAQdx Vision] SetGain failed: {ex.Message}"); }
             }
         }

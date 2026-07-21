@@ -23,7 +23,10 @@
   <Folder Name="/3.Machines/">
     <Project Path="IJPSystem.Machines.Pulse/IJPSystem.Machines.Pulse.csproj" />
   </Folder>
-  <Folder Name="/4.Installer/">
+  <Folder Name="/4.Tests/">
+    <Project Path="IJPSystem.Tests/IJPSystem.Tests.csproj" />
+  </Folder>
+  <Folder Name="/5.Installer/">
     <File Path="Installer/IJPSystem.iss" />
     <File Path="Installer/build-installer.ps1" />
     <File Path="Installer/README.md" />

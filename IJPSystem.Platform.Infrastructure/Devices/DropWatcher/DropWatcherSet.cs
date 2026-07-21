@@ -14,31 +14,32 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
     public sealed class DropWatcherSet : IDisposable
     {
         private readonly ISpit _spit;
-        private readonly IPulseReducer _reducer;     // ① 트리거
-        private readonly IStrobeController _strobe;  // ② 조명
+        private readonly ITriggerChain _trigger;     // ① 트리거(분주 + LED/Cam 동기)
+        private readonly IStrobeController _strobe;  // ② 조명(미세 지연)
         private readonly IVisionDriver _camera;      // ③ 촬영(공용 카메라 드라이버)
         private readonly IDwMeasurer _measurer;      // ④ 측정
         private readonly string _cameraId;
 
-        public DropWatcherSet(ISpit spit, IPulseReducer reducer, IStrobeController strobe,
+        public DropWatcherSet(ISpit spit, ITriggerChain trigger, IStrobeController strobe,
             IVisionDriver camera, IDwMeasurer measurer, string cameraId = "CAM_DW")
         {
-            _spit = spit; _reducer = reducer; _strobe = strobe;
+            _spit = spit; _trigger = trigger; _strobe = strobe;
             _camera = camera; _measurer = measurer; _cameraId = cameraId;
         }
 
         /// <summary>세트 기동: 스트로브 초기화 + 토출 + 분주 트리거 시작.
         /// (카메라는 공용 IVisionDriver 로 앱 시작 시 이미 연결됨 — 여기선 다루지 않음)</summary>
-        public void Start(IReadOnlyList<int> nozzles, double spitFreqHz, int divider)
+        /// <remarks>
+        /// 순서: 조명 준비 → 토출 개시 → 트리거 체인 기동.
+        /// 토출이 먼저 돌아야 분주기가 셀 펄스가 존재한다.
+        /// </remarks>
+        public void Start(SpitSettings spit)
         {
             _strobe.Init();
             _strobe.Enable(true);
 
-            _reducer.Divider = divider;
-            _reducer.Open();
-
-            _spit.Start(nozzles, spitFreqHz);
-            _reducer.Start();
+            _spit.Start(spit);
+            _trigger.Start(spit.FrequencyHz);
         }
 
         /// <summary>지정 지연에서 1회 측정: 지연 적용 → 발광 안정 대기 → 촬영 → 측정.</summary>
@@ -61,17 +62,24 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         }
 
         /// <summary>세트 정지: 트리거·토출·조명 순차 정지. (카메라는 공용 자원이라 닫지 않음)</summary>
-        public void Stop()
+        /// <returns>토출 정지가 실제로 확인되면 true.</returns>
+        public async Task<bool> StopAsync()
         {
-            try { _reducer.Stop(); } catch { /* 정지 오류 무시 */ }
-            try { _spit.Stop(); } catch { }
+            // 트리거 공급부터 차단한다(역순 정지).
+            try { _trigger.Stop(); } catch { /* 정지 오류 무시 — 나머지 정지는 계속 진행 */ }
+
+            bool idle = false;
+            try { idle = await _spit.StopAsync(); } catch { }
+
             try { _strobe.Enable(false); } catch { }
+            return idle;
         }
 
         public void Dispose()
         {
-            Stop();
-            _reducer?.Dispose(); _strobe?.Dispose();
+            // 종료 경로 — 정지 확인 결과를 기다리되 무한정 붙잡지는 않는다.
+            try { StopAsync().Wait(3_000); } catch { }
+            _trigger?.Dispose(); _strobe?.Dispose(); _spit?.Dispose();
         }
     }
 }
