@@ -1,0 +1,149 @@
+<Window x:Class="IJPSystem.Platform.HMI.Print.PrintOriginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Set Print Origin" Height="430" Width="560"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="#0B1220" FontFamily="Segoe UI">
+    <Window.Resources>
+        <Style x:Key="Hdr" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#E2E8F0"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize"   Value="14"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="Margin"     Value="0,0,0,8"/>
+        </Style>
+        <Style x:Key="AxisLbl" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#94A3B8"/>
+            <Setter Property="FontSize"   Value="12"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="Margin"     Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="ValBox" TargetType="Border">
+            <Setter Property="Background"      Value="#0F172A"/>
+            <Setter Property="BorderBrush"     Value="#334155"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius"    Value="6"/>
+            <Setter Property="Height"          Value="34"/>
+            <Setter Property="Margin"          Value="4,0"/>
+        </Style>
+        <Style x:Key="ValTxt" TargetType="TextBlock">
+            <Setter Property="Foreground"           Value="#E2E8F0"/>
+            <Setter Property="FontFamily"           Value="Consolas"/>
+            <Setter Property="FontSize"             Value="15"/>
+            <Setter Property="FontWeight"           Value="Bold"/>
+            <Setter Property="VerticalAlignment"    Value="Center"/>
+            <Setter Property="HorizontalAlignment"  Value="Right"/>
+            <Setter Property="Margin"               Value="0,0,10,0"/>
+        </Style>
+        <Style x:Key="DisabledTxt" TargetType="TextBlock" BasedOn="{StaticResource ValTxt}">
+            <Setter Property="Foreground" Value="#475569"/>
+        </Style>
+        <Style x:Key="ActBtn" TargetType="Button">
+            <Setter Property="Height"     Value="44"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize"   Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"     Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="14"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="14"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Current Position -->
+        <Border Grid.Row="0" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="10" Padding="16">
+            <StackPanel>
+                <TextBlock Style="{StaticResource Hdr}" Text="Current Position"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Style="{StaticResource AxisLbl}" Text="Axis X"/>
+                        <Border Style="{StaticResource ValBox}">
+                            <TextBlock x:Name="CurX" Style="{StaticResource ValTxt}" Text="0.000 mm"/>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Style="{StaticResource AxisLbl}" Text="Axis Y"/>
+                        <Border Style="{StaticResource ValBox}">
+                            <TextBlock x:Name="CurY" Style="{StaticResource ValTxt}" Text="0.000 mm"/>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Style="{StaticResource AxisLbl}" Text="Axis Z"/>
+                        <Border Style="{StaticResource ValBox}">
+                            <TextBlock x:Name="CurZ" Style="{StaticResource DisabledTxt}" Text="0.000 mm"/>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Print Origin -->
+        <Border Grid.Row="2" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="10" Padding="16">
+            <StackPanel>
+                <TextBlock Style="{StaticResource Hdr}" Text="Print Origin"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Style="{StaticResource AxisLbl}" Text="Axis X"/>
+                        <Border Style="{StaticResource ValBox}">
+                            <TextBlock x:Name="OrgX" Style="{StaticResource ValTxt}" Text="0.000 mm"/>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Style="{StaticResource AxisLbl}" Text="Axis Y"/>
+                        <Border Style="{StaticResource ValBox}">
+                            <TextBlock x:Name="OrgY" Style="{StaticResource ValTxt}" Text="0.000 mm"/>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Style="{StaticResource AxisLbl}" Text="Axis Z"/>
+                        <Border Style="{StaticResource ValBox}">
+                            <TextBlock x:Name="OrgZ" Style="{StaticResource DisabledTxt}" Text="0.000 mm"/>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Buttons -->
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Style="{StaticResource ActBtn}" Background="#3B4A63"
+                    Content="Reset Origin to Default" Click="Reset_Click"/>
+            <Button Grid.Column="2" Style="{StaticResource ActBtn}" Background="#1D4ED8"
+                    Content="Set Print Origin" Click="Set_Click"/>
+        </Grid>
+
+        <!-- 안내 -->
+        <TextBlock Grid.Row="5" Foreground="#94A3B8" FontSize="12" TextAlignment="Center"
+                   TextWrapping="Wrap" VerticalAlignment="Bottom" Margin="0,12,0,0">
+            <Run Text="인쇄가 시작되는 인쇄 원점입니다."/><LineBreak/>
+            <Run Text="Set Print Origin 시, Glass View Camera 가 보고 있는 위치의 중앙이 인쇄 원점으로 설정됩니다."/>
+        </TextBlock>
+    </Grid>
+</Window>

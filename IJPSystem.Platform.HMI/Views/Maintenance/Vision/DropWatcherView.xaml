@@ -132,6 +132,22 @@
                             </Button.Style>
                             <TextBlock Text="{Binding LiveViewLabel}" FontSize="11" FontWeight="Bold" Foreground="White"/>
                         </Button>
+
+                        <!-- 스트로브 조명 수동 토글 — 커미셔닝용 (발광 여부를 라이브 배경 밝기로 확인) -->
+                        <Button Width="72" Height="26" Margin="8,0,0,0" Command="{Binding ToggleStrobeCommand}"
+                                ToolTip="스트로브 조명 ON/OFF (StrobeConfig 의 EnableRegister 설정 시 실동작)">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource MutedActionButtonStyle}">
+                                    <Setter Property="Background" Value="#1E293B"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsStrobeOn}" Value="True">
+                                            <Setter Property="Background" Value="#B45309"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <TextBlock Text="{Binding StrobeLabel}" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                        </Button>
                     </StackPanel>
 
                     <!-- 이미지 열기 버튼 (우측 정렬) — Glass/NJI 화면과 동일한 모양.
@@ -547,35 +563,58 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Velocity — 시리즈가 하나뿐이라 범례는 숨긴다(Y축 이름이 이미 무슨 값인지 말해줌).
-                 예전 Drop 1~5 다중 시리즈 시절의 잔재였다. -->
+            <!-- 시리즈가 하나뿐이라 범례는 숨기고, 대신 각 차트 위에 색상 점 + 제목 헤더를 단다.
+                 (LiveCharts 축 이름만으로는 무슨 그래프인지 안 보인다는 실장 피드백 반영) -->
+
+            <!-- Velocity -->
             <Border Grid.Row="0" Background="#111827" CornerRadius="12" Padding="8"
                     BorderBrush="#334155" BorderThickness="1">
-                <lvc:CartesianChart Series="{Binding VelocitySeries}"
-                                    XAxes="{Binding VelocityXAxes}"
-                                    YAxes="{Binding VelocityYAxes}"
-                                    LegendPosition="Hidden"
-                                    Background="Transparent"/>
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,0,4">
+                        <Ellipse Width="9" Height="9" Fill="#32CD32" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding VelocityChartTitle}" Foreground="#CBD5E1"
+                                   FontSize="12" FontWeight="Bold" Margin="6,0,0,0"/>
+                    </StackPanel>
+                    <lvc:CartesianChart Series="{Binding VelocitySeries}"
+                                        XAxes="{Binding VelocityXAxes}"
+                                        YAxes="{Binding VelocityYAxes}"
+                                        LegendPosition="Hidden"
+                                        Background="Transparent"/>
+                </DockPanel>
             </Border>
 
-            <!-- Drop Position -->
+            <!-- Drop Position (단일프레임: 낙하 위치 / 2점 측정: Δt 낙하거리 — 제목이 바뀐다) -->
             <Border Grid.Row="2" Background="#111827" CornerRadius="12" Padding="8"
                     BorderBrush="#334155" BorderThickness="1">
-                <lvc:CartesianChart Series="{Binding PositionSeries}"
-                                    XAxes="{Binding PositionXAxes}"
-                                    YAxes="{Binding PositionYAxes}"
-                                    LegendPosition="Hidden"
-                                    Background="Transparent"/>
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,0,4">
+                        <Ellipse Width="9" Height="9" Fill="#1E90FF" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding PositionChartTitle}" Foreground="#CBD5E1"
+                                   FontSize="12" FontWeight="Bold" Margin="6,0,0,0"/>
+                    </StackPanel>
+                    <lvc:CartesianChart Series="{Binding PositionSeries}"
+                                        XAxes="{Binding PositionXAxes}"
+                                        YAxes="{Binding PositionYAxes}"
+                                        LegendPosition="Hidden"
+                                        Background="Transparent"/>
+                </DockPanel>
             </Border>
 
             <!-- Volume (pL) -->
             <Border Grid.Row="4" Background="#111827" CornerRadius="12" Padding="8"
                     BorderBrush="#334155" BorderThickness="1">
-                <lvc:CartesianChart Series="{Binding SpitRateSeries}"
-                                    XAxes="{Binding SpitRateXAxes}"
-                                    YAxes="{Binding SpitRateYAxes}"
-                                    LegendPosition="Hidden"
-                                    Background="Transparent"/>
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,0,4">
+                        <Ellipse Width="9" Height="9" Fill="#FFA500" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding VolumeChartTitle}" Foreground="#CBD5E1"
+                                   FontSize="12" FontWeight="Bold" Margin="6,0,0,0"/>
+                    </StackPanel>
+                    <lvc:CartesianChart Series="{Binding SpitRateSeries}"
+                                        XAxes="{Binding SpitRateXAxes}"
+                                        YAxes="{Binding SpitRateYAxes}"
+                                        LegendPosition="Hidden"
+                                        Background="Transparent"/>
+                </DockPanel>
             </Border>
         </Grid>
     </Grid>

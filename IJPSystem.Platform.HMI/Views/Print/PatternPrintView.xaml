@@ -930,7 +930,7 @@
                                      Text="{Binding PrintDataPath, UpdateSourceTrigger=PropertyChanged}"/>
                             <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,5"
                                     Background="#1D4ED8" BorderBrush="#3B82F6" Content="Set Print Origin"
-                                    Command="{Binding SetPrintOriginCommand}"/>
+                                    Click="SetPrintOrigin_Click"/>
                             <Button Style="{StaticResource ActionBtn}" Height="28"
                                     Background="#1D4ED8" BorderBrush="#3B82F6" Content="Print Image Design"
                                     Click="PrintImageDesign_Click"/>

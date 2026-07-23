@@ -133,11 +133,11 @@
                                             </StackPanel>
 
                                             <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <Border Width="28" Height="16" CornerRadius="4" Margin="3,0" Background="{Binding Status.CwLimit, Converter={StaticResource SensorToBgConverter}}" ToolTip="CW Limit">
-                                                    <TextBlock Text="CW" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <Border Width="32" Height="16" CornerRadius="4" Margin="3,0" Background="{Binding Status.UpperLimit, Converter={StaticResource SensorToBgConverter}}" ToolTip="상한 리미트(+EL)">
+                                                    <TextBlock Text="상한" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
-                                                <Border Width="32" Height="16" CornerRadius="4" Margin="3,0" Background="{Binding Status.CcwLimit, Converter={StaticResource SensorToBgConverter}}" ToolTip="CCW Limit">
-                                                    <TextBlock Text="CCW" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <Border Width="32" Height="16" CornerRadius="4" Margin="3,0" Background="{Binding Status.LowerLimit, Converter={StaticResource SensorToBgConverter}}" ToolTip="하한 리미트(-EL)">
+                                                    <TextBlock Text="하한" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                                 <Border Width="38" Height="16" CornerRadius="4" Margin="3,0" Background="{Binding Status.HomeSensor, Converter={StaticResource SensorToBgConverter}}" ToolTip="Home Sensor">
                                                     <TextBlock Text="HOME" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>

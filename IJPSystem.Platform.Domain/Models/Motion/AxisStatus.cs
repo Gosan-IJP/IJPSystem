@@ -61,18 +61,18 @@ namespace IJPSystem.Platform.Domain.Models.Motion
         // --- 4. 센서 상태 (AxisViewModel 및 UI와 이름 일치) ---
         // 기존 IsLimitPos, IsLimitNeg, IsHomeSensor를 아래 3개로 통일합니다.
 
-        private bool _cwLimit;
-        public bool CwLimit
+        private bool _upperLimit;
+        public bool UpperLimit   // 상한(+EL) 하드리밋 센서
         {
-            get => _cwLimit;
-            set => SetProperty(ref _cwLimit, value);
+            get => _upperLimit;
+            set => SetProperty(ref _upperLimit, value);
         }
 
-        private bool _ccwLimit;
-        public bool CcwLimit
+        private bool _lowerLimit;
+        public bool LowerLimit   // 하한(-EL) 하드리밋 센서
         {
-            get => _ccwLimit;
-            set => SetProperty(ref _ccwLimit, value);
+            get => _lowerLimit;
+            set => SetProperty(ref _lowerLimit, value);
         }
 
         private bool _homeSensor;

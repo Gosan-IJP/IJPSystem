@@ -34,6 +34,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly MainViewModel _mainVM;
         private readonly DispatcherTimer _pollTimer;
         private readonly DispatcherTimer _liveTimer;   // Live View 연속 캡쳐
+        private int _liveInvalidCount;                 // 라이브 무효 프레임 연속 횟수
+        private const int LiveInvalidStopCount = 15;   // 약 3초(200ms×15) 실패 지속 시 정지+알림
+        private bool _liveFirstTickLogged;             // 크래시 지점 특정용 브레드크럼(1회성)
+        private bool _liveFirstFrameLogged;
         private bool _liveGrabbing;                     // 캡쳐 중복 방지
 
         // OpenCV 액적 분석기. 파라미터는 Config/DropWatcherConfig.json 에서 로드(없으면 기본값).
@@ -48,6 +52,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // → 노즐면(NozzleYPixel) 교정값에 의존하지 않는 측정(단일 프레임 Measure Velocity 와의 차이).
         // 가상 모드에선 가상 카메라에 지연을 흘려보내 낙하 위치를 바꾼다(파이프라인 검증용).
         private readonly IStrobeController _strobe;
+        private readonly StrobeConfig? _strobeCfg;   // 실장 설정(로그 표시용) — 가상 모드는 null
         private readonly DropVelocitySequence _twoPoint;
         private bool _strobeReady;
 
@@ -266,8 +271,27 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 한 프레임에 노즐들이 가로로 늘어선 구조 → X축은 항상 노즐 번호(시간축 아님).
         private const string XAxisName = "Nozzle #";
 
+        // 차트 헤더 제목 — LiveCharts 축 이름은 화면에서 눈에 잘 안 띄어(실장 피드백 2026-07-23)
+        // 각 차트 위에 명시적인 제목을 표시한다. 가운데 차트는 측정 방식에 따라 의미가 바뀐다.
+        public string VelocityChartTitle => "토출 속도 Velocity (m/s) — X: 노즐 번호";
+        public string VolumeChartTitle   => "액적 부피 Volume (pL) — X: 노즐 번호";
+
+        private string _positionChartTitle = "낙하 위치 Drop Position (µm) — X: 노즐 번호";
+        public string PositionChartTitle
+        {
+            get => _positionChartTitle;
+            private set => SetProperty(ref _positionChartTitle, value);
+        }
+
         private static readonly SKColor AxisText = new SKColor(0x94, 0xA3, 0xB8);
         private static readonly SKColor AxisGrid = new SKColor(0x33, 0x41, 0x55);
+
+        // ※ 2026-07-23 실장 크래시 이력 — 차트 텍스트는 절대 건드리지 말 것:
+        //   축에 SKTypeface(맑은 고딕)를 명시하자 제어 PC 첫 렌더에서 네이티브 즉사.
+        //   그 PC 는 Skia 글꼴 스택이 깨져 있어(기본 글꼴 글자도 안 그려짐) 코드로는 해결 불가.
+        //   → 오늘 이전의 검증된 축 구성(크기 10, 배율/글꼴 미지정) 그대로 유지한다.
+        //   축 글자 표시는 OS 수리(Font Cache 서비스/재부팅) 후 재검토. 차트 의미는 WPF 헤더가 전달한다.
+        private static SolidColorPaint TextPaint() => new(AxisText);
 
         // ── 커맨드 ────────────────────────────────────────────────────────────
         public ICommand SetDelay1Command           { get; }
@@ -281,9 +305,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand SaveCalibrationCommand     { get; }
         public ICommand ToggleSpitCommand          { get; }
         public ICommand CaptureFocusReferenceCommand { get; }
+        public ICommand ToggleStrobeCommand        { get; }
 
         public DropWatcherViewModel(MainViewModel mainVM)
         {
+            // 실장 크래시(2026-07-23, 화면 진입 즉사) 지점 특정용 브레드크럼 — 원인 확정 후 정리 예정.
+            LoggerService.WriteToFile("INFO", "[DW] VM init 시작");
             _mainVM = mainVM;
             _vision = mainVM.GetController().GetMachine().Vision;
             _cfgPath = PathUtils.GetConfigPath("DropWatcherConfig.json");
@@ -291,9 +318,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _proc   = new DropWatcherProcessor(_procCfg);
 
             // 실장은 iCore Modbus, 가상은 지연을 가상 카메라로 흘려보내는 대역.
-            _strobe = _vision is IJPSystem.Drivers.Vision.VirtualVisionDriver vvd
-                ? new VirtualStrobe(us => vvd.VirtualStrobeDelayUs = us)
-                : new ICoreStrobe(new ConfigLoader().LoadStrobeConfig(PathUtils.GetConfigPath("StrobeConfig.json")));
+            if (_vision is IJPSystem.Drivers.Vision.VirtualVisionDriver vvd)
+            {
+                _strobe = new VirtualStrobe(us => vvd.VirtualStrobeDelayUs = us);
+            }
+            else
+            {
+                _strobeCfg = new ConfigLoader().LoadStrobeConfig(PathUtils.GetConfigPath("StrobeConfig.json"));
+                _strobe    = new ICoreStrobe(_strobeCfg);
+            }
 
             // 트리거 체인 — 실장은 NI-DAQmx 어댑터, 가상은 가상 카메라의 트리거 시뮬레이션을 구동.
             _trigCfg = new ConfigLoader().LoadTriggerChainConfig(PathUtils.GetConfigPath("TriggerChainConfig.json"));
@@ -302,6 +335,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 : new NiDaqTriggerChain(_trigCfg,
                         msg => _mainVM.AddLog($"[VISION] DropWatcher: {msg}", LogLevel.Warning));
 
+            LoggerService.WriteToFile("INFO", "[DW] 디바이스 어댑터(스트로브/트리거) 준비 완료");
             _twoPoint = new DropVelocitySequence(_strobe, GrabAsync, _proc, _procCfg);
 
             SetDelay1Command           = new RelayCommand(_ => ExecuteSetDelay(1));
@@ -315,6 +349,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             SaveCalibrationCommand     = new RelayCommand(_ => ExecuteSaveCalibration());
             ToggleSpitCommand          = new RelayCommand(async _ => await ExecuteToggleSpitAsync());
             CaptureFocusReferenceCommand = new RelayCommand(_ => ExecuteCaptureFocusReference(), _ => !IsBusy);
+            ToggleStrobeCommand        = new RelayCommand(_ => ExecuteToggleStrobe());
 
             _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _pollTimer.Tick += (_, _) => CamStatus = _vision.GetStatus(CamId);
@@ -325,14 +360,24 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             CamStatus = _vision.GetStatus(CamId);
 
-            // 샘플 Raw 이미지가 있으면 화면 진입 시 바로 표시 — 측정 대상도 이것(보이는 것 = 측정 대상)
-            if (File.Exists(SampleImagePath))
+            bool isVirtual = _vision is IJPSystem.Drivers.Vision.VirtualVisionDriver;
+            if (isVirtual && File.Exists(SampleImagePath))
             {
+                // 가상 모드: 샘플 Raw 를 바로 표시 — 카메라 없이 측정 연습용(보이는 것 = 측정 대상)
                 _measureSourcePath = SampleImagePath;
                 CurrentImagePath   = SampleImagePath;
             }
+            else if (!isVirtual && CamStatus.IsConnected)
+            {
+                // 실장: 진입 즉시 Live 자동 시작 — 샘플 정지 이미지가 실영상처럼 보여
+                // "카메라가 안 산다"는 혼동을 준 실장 피드백(2026-07-23) 반영. 이탈 시 Dispose 가 정지.
+                ToggleLiveView();
+            }
+            // 실장 + 카메라 미연결: 아무것도 띄우지 않는다(연결 배지가 상태를 말해준다).
 
+            LoggerService.WriteToFile("INFO", "[DW] 차트 구성 시작");
             BuildCharts();
+            LoggerService.WriteToFile("INFO", "[DW] VM init 완료");
         }
 
         // Set Delay Time 버튼 — 현재 Delay Time 을 Delay 1/2 로 저장하고 스트로브에 실제로 적용한다.
@@ -354,11 +399,55 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 _strobe.SetDelayMicroseconds(DelayTimeUs);
                 _mainVM.AddLog($"[VISION] DropWatcher: Delay {which} = {DelayTimeUs:F1}us 적용", LogLevel.Info);
+
+                // 커미셔닝 검증 — LabVIEW 원본처럼 쓰기 직후 리드백으로 통신/주소를 확인한다.
+                var raw = _strobe.TryReadDelayRaw();
+                if (raw != null)
+                    _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 리드백 raw={raw} " +
+                                   $"({(raw == (uint)Math.Round(DelayTimeUs) ? "일치" : "쓴 값과 다름 — 주소/스케일 확인")})",
+                                   LogLevel.Info);
+                else
+                    _mainVM.AddLog("[VISION] DropWatcher: 스트로브 리드백 실패/미지원 — 쓰기 자체는 성공",
+                                   LogLevel.Warning);
             }
             catch (Exception ex)
             {
                 _strobeReady = false;   // 통신 끊김 → 다음 사용 시 재연결 시도
-                _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 지연 적용 실패: {ex.Message}", LogLevel.Error);
+                // 예외 타입이 진단 키다: TimeoutException=보레이트/UnitId, SlaveException=레지스터 주소.
+                _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 지연 적용 실패({ex.GetType().Name}): {ex.Message}",
+                               LogLevel.Error);
+            }
+        }
+
+        // ── 스트로브 조명 수동 온/오프 (커미셔닝용 — 발광 여부를 라이브 배경 밝기로 확인) ──
+        private bool _isStrobeOn;
+        public bool IsStrobeOn
+        {
+            get => _isStrobeOn;
+            private set
+            {
+                if (SetProperty(ref _isStrobeOn, value)) OnPropertyChanged(nameof(StrobeLabel));
+            }
+        }
+        public string StrobeLabel => IsStrobeOn ? "💡 ON" : "💡 OFF";
+
+        private void ExecuteToggleStrobe()
+        {
+            if (!EnsureStrobe()) return;   // 연결 실패 로그는 EnsureStrobe 가 남긴다
+            try
+            {
+                bool next = !IsStrobeOn;
+                _strobe.Enable(next);
+                IsStrobeOn = next;
+                // EnableRegister 미설정(-1) 장비면 Enable 은 no-op — 커미셔닝 중임을 로그로 상기.
+                _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 발광 {(next ? "ON" : "OFF")} 명령 " +
+                               "(StrobeConfig.EnableRegister 미설정이면 장비는 무시)", LogLevel.Info);
+            }
+            catch (Exception ex)
+            {
+                _strobeReady = false;
+                _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 온/오프 실패({ex.GetType().Name}): {ex.Message}",
+                               LogLevel.Error);
             }
         }
 
@@ -371,11 +460,23 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 _strobe.Init();
                 _strobe.Enable(true);
                 _strobeReady = _strobe.IsConnected;
+                if (_strobeReady)
+                {
+                    IsStrobeOn = true;   // 연결 시 Enable(true)로 켠 상태와 동기화
+                    string port = _strobeCfg != null
+                        ? $" ({_strobeCfg.ComPort}, {_strobeCfg.BaudRate}bps, Unit {_strobeCfg.UnitId}, " +
+                          $"Reg 0x{_strobeCfg.DelayRegister:X4})"
+                        : "";
+                    _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 연결됨(포트 열림){port} — 장비 응답은 Delay 적용/리드백으로 확인",
+                                   LogLevel.Info);
+                }
             }
             catch (Exception ex)
             {
                 _strobeReady = false;
-                _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 연결 실패: {ex.Message}", LogLevel.Warning);
+                // 포트 열기 실패(포트 없음/점유)와 Modbus 무응답(보레이트/UnitId)을 구분할 수 있게 타입도 남긴다.
+                _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 연결 실패({ex.GetType().Name}): {ex.Message}",
+                               LogLevel.Warning);
             }
             return _strobeReady;
         }
@@ -506,7 +607,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // ④ 발광 소등 — 중단 후 스트로브가 계속 켜져 있을 이유가 없다. 미연결이면 건너뛴다.
             if (_strobeReady)
             {
-                try { _strobe.Enable(false); }
+                try { _strobe.Enable(false); IsStrobeOn = false; }
                 catch (Exception ex)
                 {
                     _strobeReady = false;
@@ -665,12 +766,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 volPl[i] = drops[i].VolumePicoLiter;
             }
 
-            ApplyCharts(labels, vel, posUm, volPl, "Drop Position (um)");
+            ApplyCharts(labels, vel, posUm, volPl, "Drop Position (um)",
+                        "낙하 위치 Drop Position (µm) — X: 노즐 번호");
         }
 
         // 노즐별 3개 차트(속도/위치/부피)를 한 번에 갱신. 단일프레임·2점 측정이 공유한다.
-        private void ApplyCharts(string[] labels, double[] vel, double[] posUm, double[] volPl, string posAxisTitle)
+        private void ApplyCharts(string[] labels, double[] vel, double[] posUm, double[] volPl,
+                                 string posAxisTitle, string posChartTitle)
         {
+            PositionChartTitle = posChartTitle;
             VelocitySeries = new ISeries[] { MakeLine("Drop", SKColors.LimeGreen, vel) };
             PositionSeries = new ISeries[] { MakeLine("Drop", SKColors.DodgerBlue, posUm) };
             SpitRateSeries = new ISeries[] { MakeLine("Drop", SKColors.Orange, volPl) };
@@ -801,7 +905,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         r.Nozzles.Select(v => v.VelocityMps).ToArray(),
                         r.Nozzles.Select(v => v.FallDistanceUm).ToArray(),
                         r.Nozzles.Select(v => v.VolumePl).ToArray(),
-                        "Fall in Δt (um)");
+                        "Fall in Δt (um)",
+                        "Δt 낙하거리 Fall in Δt (µm) — X: 노즐 번호");
         }
 
         // ── Live View: 연속 캡쳐로 최신 프레임을 계속 갱신 ─────────────────────
@@ -827,17 +932,40 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _liveGrabbing = true;
             try
             {
+                if (!_liveFirstTickLogged)
+                {
+                    _liveFirstTickLogged = true;   // 크래시 지점 특정용(2026-07-23) — 원인 확정 후 정리
+                    LoggerService.WriteToFile("INFO", "[DW] Live 첫 캡쳐 호출");
+                }
                 // saveToDisk:false — 라이브는 초당 5장이라 파일로 남기면 디스크가 순식간에 찬다.
                 // 픽셀 버퍼를 그대로 화면에 그린다(파일이 없으므로 CurrentImagePath 는 건드리지 않음).
                 var image = await _vision.CaptureAsync(CamId, saveToDisk: false);
                 if (image.IsValid)
                 {
+                    if (!_liveFirstFrameLogged)
+                    {
+                        _liveFirstFrameLogged = true;
+                        LoggerService.WriteToFile("INFO",
+                            $"[DW] Live 첫 프레임 수신 ({image.Width}x{image.Height}, {image.PixelData?.Length ?? 0} bytes)");
+                    }
+                    _liveInvalidCount = 0;
                     var frame = Vision.VisionDriverImageSource.FromPixels(image);
                     if (frame != null)
                     {
                         CurrentFrame       = frame;
                         _measureSourcePath = null;   // 라이브 화면 → 측정은 그 시점에 새로 1장 캡쳐
                     }
+                }
+                else if (++_liveInvalidCount >= LiveInvalidStopCount)
+                {
+                    // 실카메라 촬영 실패가 계속되는데 화면은 이전 이미지에 머물러 "라이브가 안 바뀐다"로
+                    // 보였던 실장 이슈(2026-07-23) — 조용히 넘기지 말고 알리고 정지한다.
+                    _mainVM.AddLog("[VISION] DropWatcher: Live 프레임 획득이 계속 실패합니다 — " +
+                                   "VisionConfig 해상도/픽셀포맷 확인 필요 (C:\\Logs 의 [IMAQdx Vision] 참조)",
+                                   LogLevel.Error);
+                    _liveTimer.Stop();
+                    IsLiveView = false;
+                    _liveInvalidCount = 0;
                 }
                 CamStatus = _vision.GetStatus(CamId);
             }
@@ -1038,8 +1166,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 Labels          = labels,
                 Name            = name,
                 TextSize        = 10,
-                NamePaint       = new SolidColorPaint(AxisText),
-                LabelsPaint     = new SolidColorPaint(AxisText),
+                NamePaint       = TextPaint(),
+                LabelsPaint     = TextPaint(),
                 SeparatorsPaint = new SolidColorPaint(AxisGrid) { StrokeThickness = 0.5f },
             }
         };
@@ -1050,8 +1178,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 Name            = name,
                 TextSize        = 10,
-                NamePaint       = new SolidColorPaint(AxisText),
-                LabelsPaint     = new SolidColorPaint(AxisText),
+                NamePaint       = TextPaint(),
+                LabelsPaint     = TextPaint(),
                 SeparatorsPaint = new SolidColorPaint(AxisGrid) { StrokeThickness = 0.5f },
             }
         };

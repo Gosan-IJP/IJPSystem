@@ -165,7 +165,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             StartLiveCommand  = new RelayCommand(_ => StartLive(),              _ => !IsLiveMode && !IsBusy);
             StopLiveCommand   = new RelayCommand(_ => StopLive(),               _ => IsLiveMode);
             ToggleLiveCommand = new RelayCommand(_ => { if (IsLiveMode) StopLive(); else StartLive(); });
-            CaptureCommand    = new RelayCommand(async _ => await ExecuteCaptureAsync(), _ => !IsLiveMode && !IsBusy);
+            // 라이브 중에도 단발 캡쳐 허용(실장 피드백 2026-07-23) — IsBusy 게이트가 라이브 틱과
+            // 겹침을 막아주고, 캡쳐 순간의 프레임이 파일로 저장된 뒤 라이브는 그대로 이어진다.
+            CaptureCommand    = new RelayCommand(async _ => await ExecuteCaptureAsync(), _ => !IsBusy);
             LightOnCommand   = new RelayCommand(_ => ExecuteLight(true),  _ => !IsBusy);
             LightOffCommand  = new RelayCommand(_ => ExecuteLight(false), _ => !IsBusy);
             OpenImageCommand = new RelayCommand(_ => ExecuteOpenImage(),  _ => !IsLiveMode);
@@ -202,10 +204,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _mainVM.AddLog("[VISION] Glass: 라이브 모드 정지", LogLevel.Info);
         }
 
+        // 라이브 틱 재진입 방지 플래그 — IsBusy 와 분리한 이유: IsBusy 는 "⏳ 처리 중" 표시에
+        // 바인딩되어 있어, 틱마다 켜고 끄면 초당 5회 깜빡인다(실장 피드백 2026-07-23).
+        private bool _liveTicking;
+
         private async Task LiveTickAsync()
         {
-            if (IsBusy) return;
-            IsBusy = true;
+            if (_liveTicking || IsBusy) return;   // 단발 캡쳐(IsBusy) 중에도 건너뜀
+            _liveTicking = true;
             try
             {
                 // saveToDisk:false — 라이브는 연속 캡쳐라 파일로 남기면 디스크가 순식간에 찬다.
@@ -223,7 +229,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 // 라이브 중 오류는 화면 로그 노출 없이 파일에만 기록
                 LoggerService.WriteToFile("DEBUG", $"[GLASS_LIVE] capture failed: {ex.Message}");
             }
-            finally { IsBusy = false; }
+            finally { _liveTicking = false; }
         }
 
         // ── 단일 캡쳐 ──────────────────────────────────────────────────────────
@@ -236,9 +242,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 var image = await _vision.CaptureAsync(CamId);
                 if (image.IsValid)
                 {
-                    CurrentImagePath = image.FilePath;
+                    // 라이브 중이면 화면은 다음 틱에 라이브 프레임으로 되돌아간다 — 파일 저장이 목적.
+                    if (!IsLiveMode) CurrentImagePath = image.FilePath;
                     CaptureCount++;
-                    _mainVM.AddLog($"[VISION] Glass: 캡쳐 완료 ({image.Width}×{image.Height})", LogLevel.Info);
+                    _mainVM.AddLog($"[VISION] Glass: 캡쳐 완료 ({image.Width}×{image.Height})" +
+                                   (string.IsNullOrEmpty(image.FilePath) ? "" : $" → {image.FilePath}"),
+                                   LogLevel.Info);
                 }
             }
             catch (Exception ex)

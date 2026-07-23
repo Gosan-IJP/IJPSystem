@@ -2,7 +2,9 @@ using IJPSystem.Platform.Application.Sequences;
 using IJPSystem.Platform.Common.Enums;
 using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Common;
+using IJPSystem.Platform.HMI.Common;
 using IJPSystem.Platform.HMI.Services;
+using static IJPSystem.Platform.HMI.Common.Loc;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -293,6 +295,53 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         public double DropPitchMm => DpiConverter.DpiToPitchMm(_dpi);
 
+        // ── 인쇄 원점 관리자 (모달 + 저장) ────────────────────────────
+        // HW 무관 코어(Platform.Application). 라이브 위치는 SharedAxisList 어댑터로 넘긴다.
+        private IJPSystem.Platform.Application.Printing.PrintOriginManager? _originManager;
+
+        /// <summary>인쇄 원점 관리자 — 모달 창이 공유해 Set/Reset 한다.</summary>
+        public IJPSystem.Platform.Application.Printing.PrintOriginManager OriginManager
+        {
+            get
+            {
+                if (_originManager == null)
+                {
+                    string cfgDir = System.IO.Path.GetDirectoryName(PathUtils.GetConfigPath("x")) ?? "";
+                    _originManager = new IJPSystem.Platform.Application.Printing.PrintOriginManager(
+                        new SharedAxisStageAdapter(_mainVM), cfgDir);
+                    _originManager.Load();   // 저장된 원점이 있으면 복원
+                    _originManager.PrintOriginChanged += (_, _) => SyncOriginFromManager();
+                    SyncOriginFromManager();
+                }
+                return _originManager;
+            }
+        }
+
+        // 관리자 → 화면 원점 필드 동기화.
+        private void SyncOriginFromManager()
+        {
+            var p = _originManager!.PrintOrigin;
+            XOrigin = p.X; YOrigin = p.Y; ZOrigin = p.Z;
+            IsOriginSet = true;
+        }
+
+        // SharedAxisList 의 라이브 위치를 IStagePosition 으로 노출하는 어댑터(HW 무관 코어에 주입).
+        private sealed class SharedAxisStageAdapter : IJPSystem.Platform.Application.Printing.IStagePosition
+        {
+            private readonly MainViewModel _vm;
+            public SharedAxisStageAdapter(MainViewModel vm) => _vm = vm;
+
+            public IJPSystem.Platform.Application.Printing.AxisPoint GetCurrentPosition()
+                => new(Pos("X"), Pos("Y"), Pos("Z"));
+
+            private double Pos(string prefix)
+            {
+                var ax = _vm.SharedAxisList.FirstOrDefault(a =>
+                    (a.Info?.Name ?? "").StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+                return ax?.CurrentPos ?? 0.0;
+            }
+        }
+
         // ── 원점 (Set Print Origin 버튼으로 캡처) ─────────────────────
         private double _xOrigin;
         public double XOrigin { get => _xOrigin; private set => SetProperty(ref _xOrigin, value); }
@@ -450,7 +499,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public bool HasLoadedImage => !string.IsNullOrEmpty(_loadedImagePath);
 
         // ── Commands ─────────────────────────────────────────────────
-        public ICommand SetPrintOriginCommand { get; }
         public ICommand PrintCommand          { get; }
         public ICommand AbortCommand          { get; }
         public ICommand LoadImageCommand      { get; private set; } = null!;
@@ -466,7 +514,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _mainVM = mainVM;
             Monitor = new VisualMonitorViewModel(mainVM, "Drop");   // 드랍와쳐 기본
 
-            SetPrintOriginCommand = new RelayCommand(_ => CaptureCurrentOrigin());
             PrintCommand          = new RelayCommand(async _ => await RunPatternPrintAsync(),
                                                      _ => IsOriginSet && !IsPrinting);
             AbortCommand          = new RelayCommand(_ => _printCts?.Cancel(), _ => IsPrinting);
@@ -788,26 +835,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 LoadedImagePath = dlg.FileName;
         }
 
-        /// <summary>현재 X/Y/Z 축 위치를 인쇄 원점으로 캡처한다.</summary>
-        private void CaptureCurrentOrigin()
-        {
-            XOrigin = FindAxisPos("X");
-            YOrigin = FindAxisPos("Y");
-            ZOrigin = FindAxisPos("Z");
-            IsOriginSet = true;
-
-            _mainVM.AddLog(
-                $"[PATTERN] Print Origin set — X={XOrigin:F3}mm, Y={YOrigin:F3}mm, Z={ZOrigin:F3}mm",
-                LogLevel.Info);
-        }
-
-        /// <summary>SharedAxisList 에서 축 이름(접두 매칭)으로 현재 위치를 찾는다.</summary>
-        private double FindAxisPos(string namePrefix)
-        {
-            var ax = _mainVM.SharedAxisList.FirstOrDefault(a =>
-                (a.Info?.Name ?? "").StartsWith(namePrefix, StringComparison.OrdinalIgnoreCase));
-            return ax?.CurrentPos ?? 0.0;
-        }
+        // 인쇄 원점 캡처는 PrintOriginWindow 모달 + PrintOriginManager 로 이관됨
+        // (현재 위치 실시간 표시 + Set/Reset + 저장). SharedAxisStageAdapter 가 라이브 위치를 제공한다.
 
         /// <summary>
         /// 활성(APPLY된) 레시피의 스캔축 Printing 프로파일 속도를 화면에 반영한다.
@@ -840,6 +869,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             if (machine == null)
             {
                 _mainVM.AddLog("[SEQ] PATTERN PRINT — 중단 (머신 미초기화)", LogLevel.Warning);
+                Dialogs.Show("머신이 초기화되지 않았습니다.\n\n시스템 초기화 완료 후 다시 시도하세요.",
+                    T("Log_PrereqDialogTitle"),
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
                 return;
             }
             // 시퀀스는 활성 레시피의 티칭 포인트(PRINT START/END 등)를 참조
@@ -863,6 +895,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             if (notHomed.Count > 0)
             {
                 _mainVM.AddLog($"[SEQ] PATTERN PRINT — 중단 (INITIALIZE 미수행, 미원점 축: {string.Join(", ", notHomed)})", LogLevel.Warning);
+                // 오토런(MainDashboard.CheckPrerequisites)과 동일한 안내 팝업.
+                Dialogs.Show(T("Log_PrereqNotHomed", string.Join(", ", notHomed)),
+                    T("Log_PrereqDialogTitle"),
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
                 return;
             }
 

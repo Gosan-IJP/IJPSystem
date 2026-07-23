@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Print/DXF: DXF 파싱 + 래스터화(System.Drawing 은 net8-windows 에서 사용 가능) -->
+    <PackageReference Include="netDxf" Version="2023.11.10" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\IJPSystem.Platform.Common\IJPSystem.Platform.Common.csproj" />
     <ProjectReference Include="..\IJPSystem.Platform.Domain\IJPSystem.Platform.Domain.csproj" />
   </ItemGroup>

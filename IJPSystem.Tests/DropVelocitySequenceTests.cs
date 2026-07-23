@@ -37,6 +37,8 @@ namespace IJPSystem.Tests
             public void Init() { }
             public void Enable(bool on) { }
             public void SetDelayMicroseconds(double us) { LastDelayMicroseconds = us; AppliedDelays.Add(us); }
+            public uint? TryReadDelayRaw() =>
+                double.IsNaN(LastDelayMicroseconds) ? null : (uint)Math.Round(LastDelayMicroseconds);
             public void Dispose() { }
         }
 

@@ -210,8 +210,8 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 lock (_homedSync) homed = _homedAxes.Contains(ax);
                 s.IsHomeDone   = homed;
                 s.IsAlarm      = alarm;
-                s.CwLimit      = st.PositiveLimit;    // +하드리밋(CW)
-                s.CcwLimit     = st.NegativeLimit;    // -하드리밋(CCW)
+                s.UpperLimit   = st.UpperLimit;       // 상한 하드리밋(+EL)
+                s.LowerLimit   = st.LowerLimit;       // 하한 하드리밋(-EL)
                 s.HomeSensor   = st.HomeSensor;       // 원점(HOME) 센서
                 s.IsInPosition = !st.IsMoving;
             }
@@ -396,6 +396,16 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                         //   드라이브가 -1020(busy)로 거부한다(실장: 첫 실행 READY 미이동, 2차엔 정상).
                         //   → Stop 으로 ecmSx 모션상태를 정리해 busy 를 해제한다(축은 이미 원점 정지 상태라 안전).
                         try { _comi.Stop(ax); System.Threading.Thread.Sleep(30); } catch { /* 무시 */ }
+
+                        // ★ 원점복귀 후 위치를 0 으로 재정의. 홈 센서가 원하는 0 에서 떨어져 있어도
+                        //   (실장: 홈 후 -25.11 잔류) 항상 원점=0 을 보장한다. 축은 이미 정지 상태라 안전.
+                        //   ※ 실장 검증 필요: 재정의 시 축이 튀지 않는지 + 이후 절대이동이 정확한지.
+                        try { _comi.SetPosition(ax, 0.0); }
+                        catch (Exception ex)
+                        {
+                            LoggerService.WriteToFile("WARN",
+                                $"[Comizoa Motion] Home({axisNo}) 위치 0 재정의 실패: {ex.Message}");
+                        }
                     }
                     // 진단: 소요시간·위치변화로 실제 홈 동작이 오래 걸리는지(물리) vs 완료판정 지연인지 구분.
                     var post = _comi.GetState(ax);

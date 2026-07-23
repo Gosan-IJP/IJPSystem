@@ -118,6 +118,7 @@
     <system:String x:Key="SubMenu_Waveform">웨이브폼</system:String>
     <system:String x:Key="SubMenu_PatternPrint">패턴 인쇄</system:String>
     <system:String x:Key="SubMenu_PrintDropWatcher">드랍 와쳐</system:String>
+    <system:String x:Key="SubMenu_PrintGlassView">글라스 뷰</system:String>
     <system:String x:Key="Menu_Maintenance">유지보수</system:String>
     <system:String x:Key="Menu_Recipe">레시피</system:String>
 

@@ -647,6 +647,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     AddLog(T("Log_MoveDropWatcher"), LogLevel.Info);
                     break;
 
+                case "PRINT_GLASS_VIEW":
+                    IsPrintSubMenuVisible = true;
+                    SelectedMenu    = "PRINT";
+                    SelectedSubMenu = "PRINT_GLASS_VIEW";
+                    CurrentView = new GlassViewModel(this);
+                    AddLog(T("Log_MoveGlassView"), LogLevel.Info);
+                    break;
+
                 case "PRINT_INITIALIZE":
                     IsPrintSubMenuVisible = true;
                     SelectedMenu    = "PRINT";

@@ -1,3 +1,4 @@
+using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.Vision;
 using System;
@@ -32,27 +33,58 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
         private const string AttrGain     = "CameraAttributes::AnalogControl::Gain::Value";
 
         /// <summary>연결 가능한 IMAQdx 카메라 이름 목록을 열거한다(연결된 것만).</summary>
-        public List<string> EnumerateCameras(bool connectedOnly = true)
+        public List<string> EnumerateCameras(bool connectedOnly = true) =>
+            EnumerateCameraInfos(connectedOnly)
+                .Select(c => string.IsNullOrEmpty(c.InterfaceName) ? c.ModelName : c.InterfaceName)
+                .ToList();
+
+        /// <summary>IMAQdx 카메라 상세 열거(InterfaceName/Model/Serial). 실패 시 빈 목록.</summary>
+        private static List<ImaqdxCameraInformation> EnumerateCameraInfos(bool connectedOnly)
         {
-            var names = new List<string>();
+            var infos = new List<ImaqdxCameraInformation>();
             try
             {
                 uint count = 0;
                 ImaqdxInterop.IMAQdxEnumerateCameras(null, ref count, connectedOnly);   // 1차: 개수 조회
-                if (count == 0) return names;
+                if (count == 0) return infos;
 
                 var arr = new ImaqdxCameraInformation[count];
                 if (ImaqdxInterop.IMAQdxEnumerateCameras(arr, ref count, connectedOnly) != ImaqdxInterop.Success)
-                    return names;
+                    return infos;
 
-                for (int i = 0; i < count && i < arr.Length; i++)
-                    names.Add(string.IsNullOrEmpty(arr[i].InterfaceName) ? arr[i].ModelName : arr[i].InterfaceName);
+                for (int i = 0; i < count && i < arr.Length; i++) infos.Add(arr[i]);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[IMAQdx Vision] Enumerate failed: {ex.Message}");   // DLL 미설치 등
             }
-            return names;
+            return infos;
+        }
+
+        /// <summary>
+        /// 장비에 실제 보이는 IMAQdx 카메라 목록을 로그로 남긴다 — 실장 시
+        /// VisionConfig.json 의 Name(=InterfaceName, 보통 cam0/cam1…)을 맞추는 근거.
+        /// </summary>
+        private static void LogAvailableCameras()
+        {
+            var connected = EnumerateCameraInfos(connectedOnly: true);
+            if (connected.Count == 0)
+            {
+                // 케이블/전원/서브넷 문제와 이름 불일치를 구분하기 위해 비연결 캐시까지 조회한다.
+                var all = EnumerateCameraInfos(connectedOnly: false);
+                LoggerService.WriteToFile("WARN",
+                    all.Count == 0
+                        ? "[IMAQdx Vision] 감지된 카메라 없음 — NI MAX 에서 카메라 인식 여부(케이블/전원/서브넷/방화벽) 확인 필요"
+                        : "[IMAQdx Vision] 연결된 카메라 없음(비연결 캐시 " + all.Count + "대: " +
+                          string.Join(", ", all.Select(c => $"{c.InterfaceName}({c.ModelName})")) +
+                          ") — 케이블/전원/링크 확인 필요");
+                return;
+            }
+
+            foreach (var c in connected)
+                LoggerService.WriteToFile("INFO",
+                    $"[IMAQdx Vision] 감지된 카메라: \"{c.InterfaceName}\" — {c.VendorName} {c.ModelName} " +
+                    $"(S/N {c.SerialNumberHi:X}{c.SerialNumberLo:X8}) ← VisionConfig.json 의 Name 에 이 값을 사용");
         }
 
         // ── 1. 연결 / 초기화 ────────────────────────────────────────
@@ -83,25 +115,57 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             }
 
             Connect();
-            Debug.WriteLine($"[IMAQdx Vision] Init: {_sessions.Count}/{_configMap.Count} camera(s) opened.");
+            LoggerService.WriteToFile(_sessions.Count > 0 ? "INFO" : "WARN",
+                $"[IMAQdx Vision] Init: {_sessions.Count}/{_configMap.Count} 카메라 연결");
+
+            // 하나라도 못 열었으면 장비에 실제 보이는 이름을 로그로 남겨 설정 수정 근거를 준다.
+            if (_sessions.Count < _configMap.Count) LogAvailableCameras();
         }
 
         /// <summary>IMAQdx 카메라 Open + Configure Grab. 실패(미설치/미연결) 시 false.</summary>
         private bool TryOpen(CameraDeviceInfo cfg)
         {
+            string camName = string.IsNullOrEmpty(cfg.Name) ? cfg.CameraId : cfg.Name; // IMAQdx 카메라 이름
             try
             {
-                string camName = string.IsNullOrEmpty(cfg.Name) ? cfg.CameraId : cfg.Name; // IMAQdx 카메라 이름
                 uint err = ImaqdxInterop.IMAQdxOpenCamera(camName, ImaqdxCameraControlMode.Controller, out uint session);
-                if (err != ImaqdxInterop.Success) return false;
+                if (err != ImaqdxInterop.Success)
+                {
+                    LoggerService.WriteToFile("WARN",
+                        $"[IMAQdx Vision] OpenCamera 실패 ({cfg.CameraId}, Name=\"{camName}\") → {ImaqdxInterop.ErrorText(err)}");
+                    return false;
+                }
 
-                ImaqdxInterop.IMAQdxConfigureGrab(session);
+                // 이전 시스템(LabVIEW 트리거 체인)에서 카메라에 TriggerMode=On 이 저장돼 있으면
+                // 자유촬영 Grab 이 트리거를 기다리다 전부 Timeout 난다(실장 2026-07-23 CAM_DW 0xBFF6901B).
+                // 열 때 트리거 OFF 를 명시해 자유 촬영을 보장한다.
+                TrySetTriggerOff(cfg.CameraId, session);
+
+                // 픽셀 포맷 Mono8 강제 시도(분석 파이프라인이 Mono8 전제). 경로가 다르면 실패해도
+                // 계속한다 — 아래 실측 조회가 버퍼 크기를 실제 포맷에 맞춰 잡아준다.
+                uint pfErr = ImaqdxInterop.IMAQdxSetAttributeString(session, ImaqdxInterop.AttrPixelFormat,
+                    ImaqdxAttributeType.String, "Mono8");
+                if (pfErr != ImaqdxInterop.Success)
+                    LoggerService.WriteToFile("WARN",
+                        $"[IMAQdx Vision] {cfg.CameraId}: PixelFormat=Mono8 설정 실패 → {ImaqdxInterop.ErrorText(pfErr)}");
+
+                // ★ 실측 프레임 크기 조회 — 설정값(cfg)으로 버퍼를 잡으면 실제 프레임이 더 클 때
+                //   GetImageData 가 관리 버퍼 밖을 덮어써 프로세스가 즉사한다(실장 2026-07-23 크래시).
+                QueryFrameInfo(cfg, session);
+
+                uint cfgErr = ImaqdxInterop.IMAQdxConfigureGrab(session);
+                if (cfgErr != ImaqdxInterop.Success)
+                    LoggerService.WriteToFile("WARN",
+                        $"[IMAQdx Vision] ConfigureGrab 경고 ({cfg.CameraId}) → {ImaqdxInterop.ErrorText(cfgErr)}");
+
                 _sessions[cfg.CameraId] = session;
+                LoggerService.WriteToFile("INFO", $"[IMAQdx Vision] 카메라 열기 성공: {cfg.CameraId} ← \"{camName}\"");
                 return true;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[IMAQdx Vision] Open failed ({cfg.CameraId}): {ex.Message}");
+                LoggerService.WriteToFile("WARN",
+                    $"[IMAQdx Vision] OpenCamera 예외 ({cfg.CameraId}, Name=\"{camName}\"): {ex.Message}");
                 return false;   // DLL 미설치/카메라 미연결 — graceful
             }
         }
@@ -123,6 +187,7 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
                 try { ImaqdxInterop.IMAQdxCloseCamera(s); } catch { /* 해제 오류 무시 */ }
             }
             _sessions.Clear();
+            _frameInfo.Clear();
             IsConnected = false;
         }
 
@@ -145,7 +210,8 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             try
             {
                 var now = DateTime.Now;
-                var (path, buffer) = await Task.Run(() => Grab(session, cfg, now, saveToDisk));
+                var fi  = GetFrameInfo(cfg);   // 실측 크기 — 설정값과 다르면 실측이 이긴다
+                var (path, buffer) = await Task.Run(() => Grab(session, cfg, fi, now, saveToDisk));
 
                 status.LastCaptureTime = now;
                 status.TotalCaptureCount++;
@@ -154,8 +220,8 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
                 {
                     CameraId     = cameraId,
                     CaptureTime  = now,
-                    Width        = cfg.PixelWidth,
-                    Height       = cfg.PixelHeight,
+                    Width        = fi.Width,
+                    Height       = fi.Height,
                     IsValid      = buffer != null,   // 버퍼가 있으면 유효(파일 저장 실패와 무관하게 분석 가능)
                     FilePath     = path,
                     PixelData    = buffer,           // 분석(OpenCV)용 원본 Mono8 버퍼
@@ -169,17 +235,23 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
         /// IMAQdx 최신 버퍼를 읽어 (분석용) 원본 버퍼를 확보하고, 부가로 BMP 파일로도 저장한다.
         /// 파일 저장은 로깅/디버깅용이라 실패해도 버퍼는 그대로 반환한다. (Mono8 가정 — 실 포맷에 맞게 조정)
         /// </summary>
-        private (string? path, byte[]? buffer) Grab(uint session, CameraDeviceInfo cfg, DateTime ts,
-                                                    bool saveToDisk)
+        private (string? path, byte[]? buffer) Grab(uint session, CameraDeviceInfo cfg, FrameInfo fi,
+                                                    DateTime ts, bool saveToDisk)
         {
-            int w = cfg.PixelWidth, h = cfg.PixelHeight;
+            int w = fi.Width, h = fi.Height;
             if (w <= 0 || h <= 0) return (null, null);
 
-            // TODO: 픽셀 포맷(Mono8/Mono16/RGB) 확인 후 버퍼 크기·변환 조정.
-            var buffer = new byte[w * h];
-            uint err = ImaqdxInterop.IMAQdxGetImageData(session, buffer, (uint)buffer.Length,
+            // 실측 크기(payload 포함 최대치)로 수신 — 작게 잡으면 네이티브가 버퍼 밖을 덮어쓴다.
+            var raw = new byte[RawBufferSize(fi)];
+            uint err = ImaqdxInterop.IMAQdxGetImageData(session, raw, (uint)raw.Length,
                 ImaqdxBufferNumberMode.Last, 0, out _);
-            if (err != ImaqdxInterop.Success) return (null, null);
+            if (err != ImaqdxInterop.Success)
+            {
+                LogGrabError(cfg.CameraId, err, w, h);
+                return (null, null);
+            }
+            _lastGrabErr = 0;   // 정상 복귀 — 다음 오류는 다시 즉시 로그
+            var buffer = ToMono8(raw, fi);
 
             // 라이브 미리보기(saveToDisk=false)는 파일을 남기지 않는다 — 프레임마다 BMP 가 쌓이는 것을 막는다.
             if (!saveToDisk) return (null, buffer);
@@ -198,6 +270,119 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
                 Debug.WriteLine($"[IMAQdx Vision] Save failed: {ex.Message}");   // 저장 실패해도 분석은 계속
             }
             return (path, buffer);
+        }
+
+        /// <summary>세션의 실측 프레임 크기(설정 파일이 아니라 카메라가 말해주는 값).</summary>
+        private sealed record FrameInfo(int Width, int Height, int BytesPerPixel, uint PayloadSize);
+        private readonly Dictionary<string, FrameInfo> _frameInfo = new();
+
+        /// <summary>
+        /// 실측 Width/Height/BytesPerPixel/PayloadSize 를 조회해 저장한다. 조회 실패 시 설정값으로
+        /// 폴백하되, 설정과 실측이 다르면 경고를 남긴다 — VisionConfig 를 실측값으로 맞출 것.
+        /// </summary>
+        private void QueryFrameInfo(CameraDeviceInfo cfg, uint session)
+        {
+            uint w = 0, h = 0, bpp = 0, payload = 0;
+            try
+            {
+                ImaqdxInterop.IMAQdxGetAttributeU32(session, ImaqdxInterop.AttrWidth,         ImaqdxAttributeType.U32, out w);
+                ImaqdxInterop.IMAQdxGetAttributeU32(session, ImaqdxInterop.AttrHeight,        ImaqdxAttributeType.U32, out h);
+                ImaqdxInterop.IMAQdxGetAttributeU32(session, ImaqdxInterop.AttrBytesPerPixel, ImaqdxAttributeType.U32, out bpp);
+                ImaqdxInterop.IMAQdxGetAttributeU32(session, ImaqdxInterop.AttrPayloadSize,   ImaqdxAttributeType.U32, out payload);
+            }
+            catch { /* 아래 폴백 */ }
+
+            var fi = new FrameInfo(
+                w   > 0 ? (int)w   : cfg.PixelWidth,
+                h   > 0 ? (int)h   : cfg.PixelHeight,
+                bpp > 0 ? (int)bpp : 1,
+                payload);
+            _frameInfo[cfg.CameraId] = fi;
+
+            LoggerService.WriteToFile("INFO",
+                $"[IMAQdx Vision] {cfg.CameraId}: 실측 {fi.Width}x{fi.Height}, {fi.BytesPerPixel} B/px, " +
+                $"payload={fi.PayloadSize}");
+            if (fi.Width != cfg.PixelWidth || fi.Height != cfg.PixelHeight)
+                LoggerService.WriteToFile("WARN",
+                    $"[IMAQdx Vision] {cfg.CameraId}: VisionConfig({cfg.PixelWidth}x{cfg.PixelHeight})와 실측이 다름 " +
+                    "— VisionConfig.json 을 실측값으로 수정 권장");
+            if (fi.BytesPerPixel != 1)
+                LoggerService.WriteToFile("WARN",
+                    $"[IMAQdx Vision] {cfg.CameraId}: Mono8 이 아님({fi.BytesPerPixel} B/px) — 표시/분석 품질 저하. " +
+                    "NI MAX 에서 PixelFormat 을 Mono8 로 저장할 것");
+        }
+
+        private FrameInfo GetFrameInfo(CameraDeviceInfo cfg) =>
+            _frameInfo.TryGetValue(cfg.CameraId, out var fi)
+                ? fi
+                : new FrameInfo(cfg.PixelWidth, cfg.PixelHeight, 1, 0);
+
+        /// <summary>수신 버퍼 크기 — payload 와 W×H×B/px 중 큰 쪽(어느 쪽이 틀려도 오버런 방지).</summary>
+        private static int RawBufferSize(FrameInfo fi) =>
+            (int)Math.Max(fi.PayloadSize, (uint)(fi.Width * fi.Height * fi.BytesPerPixel));
+
+        /// <summary>
+        /// 수신 원본을 표시/분석용 Mono8 로 변환. 1 B/px 면 그대로(필요 시 절단),
+        /// 다중 바이트(Mono10/12/16 등)면 리틀엔디언 상위 바이트를 취한다(안전 우선 폴백).
+        /// </summary>
+        private static byte[] ToMono8(byte[] raw, FrameInfo fi)
+        {
+            int n = fi.Width * fi.Height;
+            if (fi.BytesPerPixel <= 1)
+            {
+                if (raw.Length == n) return raw;
+                var exact = new byte[n];
+                Array.Copy(raw, exact, Math.Min(n, raw.Length));
+                return exact;
+            }
+            var mono = new byte[n];
+            int bpp = fi.BytesPerPixel;
+            for (int i = 0; i < n && (i + 1) * bpp <= raw.Length; i++)
+                mono[i] = raw[i * bpp + bpp - 1];   // little-endian MSB
+            return mono;
+        }
+
+        /// <summary>
+        /// 카메라의 하드웨어 트리거를 끈다(자유 촬영 준비). Selector 를 먼저 지정해야
+        /// Mode 가 올바른 트리거(FrameStart)에 적용된다. 경로가 카메라와 달라 실패하면
+        /// 로그만 남기고 계속한다 — 이 경우 NI MAX 에서 실제 경로 확인 필요.
+        /// </summary>
+        private void TrySetTriggerOff(string cameraId, uint session)
+        {
+            var t = TriggerConfig;
+            try
+            {
+                ImaqdxInterop.IMAQdxSetAttributeString(session, t.SelectorPath,
+                    ImaqdxAttributeType.String, t.SelectorValue);
+                uint err = ImaqdxInterop.IMAQdxSetAttributeString(session, t.ModePath,
+                    ImaqdxAttributeType.String, "Off");
+                if (err == ImaqdxInterop.Success)
+                    LoggerService.WriteToFile("INFO",
+                        $"[IMAQdx Vision] {cameraId}: TriggerMode=Off — 자유 촬영 준비");
+                else
+                    LoggerService.WriteToFile("WARN",
+                        $"[IMAQdx Vision] {cameraId}: TriggerMode Off 실패 → {ImaqdxInterop.ErrorText(err)} " +
+                        $"— \"{t.ModePath}\" 경로를 NI MAX 로 확인");
+            }
+            catch (Exception ex)
+            {
+                LoggerService.WriteToFile("WARN",
+                    $"[IMAQdx Vision] {cameraId}: TriggerMode Off 시도 예외: {ex.Message}");
+            }
+        }
+
+        // 촬영 실패는 라이브(5fps)에서 반복되므로 그대로 로그하면 스팸이 된다 —
+        // 오류 코드가 바뀔 때 즉시, 같은 코드는 25회마다 한 번 남긴다.
+        private uint _lastGrabErr;
+        private int  _grabErrCount;
+
+        private void LogGrabError(string cameraId, uint err, int w, int h)
+        {
+            if (err != _lastGrabErr) { _lastGrabErr = err; _grabErrCount = 0; }
+            if (_grabErrCount++ % 25 == 0)
+                LoggerService.WriteToFile("WARN",
+                    $"[IMAQdx Vision] GetImageData 실패 ({cameraId}, 실측 {w}x{h}): " +
+                    $"{ImaqdxInterop.ErrorText(err)} (누적 {_grabErrCount}회)");
         }
 
         /// <summary>카메라별 하드웨어 트리거 설정. 미지정이면 기본값(GenICam 표준 명칭 추정).</summary>
@@ -223,11 +408,12 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             if (!EnsureTriggeredAcquisition(cameraId, session))
                 return VisionImage.Invalid(cameraId);
 
-            int w = cfg.PixelWidth, h = cfg.PixelHeight;
+            var fi = GetFrameInfo(cfg);   // 실측 크기 — 작게 잡으면 네이티브 버퍼 오버런
+            int w = fi.Width, h = fi.Height;
             if (w <= 0 || h <= 0) return VisionImage.Invalid(cameraId);
 
             var status = _statusMap[cameraId];
-            var buffer = new byte[w * h];
+            var raw = new byte[RawBufferSize(fi)];
 
             // 타임아웃은 "트리거가 아직 안 왔다"는 정상 상태다(세션 유효 → 재시도 가능).
             // 다만 카메라 단선 같은 진짜 오류도 같은 경로로 오므로, 연속 실패가 쌓이면 포기한다.
@@ -237,7 +423,7 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             while (!ct.IsCancellationRequested)
             {
                 uint err = await Task.Run(() => ImaqdxInterop.IMAQdxGetImageData(
-                    session, buffer, (uint)buffer.Length,
+                    session, raw, (uint)raw.Length,
                     ImaqdxBufferNumberMode.Next, 0, out _), ct).ConfigureAwait(false);
 
                 if (err == ImaqdxInterop.Success)
@@ -253,14 +439,15 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
                         Height       = h,
                         IsValid      = true,
                         FilePath     = null,          // 트리거 촬영은 파일로 남기지 않는다(초당 수~수십 장)
-                        PixelData    = buffer,
+                        PixelData    = ToMono8(raw, fi),
                         BitsPerPixel = 8,
                     };
                 }
 
                 if (++failures >= maxConsecutiveFailures)
                 {
-                    Debug.WriteLine($"[IMAQdx Vision] 트리거 대기 실패 {failures}회: {ImaqdxInterop.ErrorText(err)}");
+                    LoggerService.WriteToFile("WARN",
+                        $"[IMAQdx Vision] 트리거 대기 실패 {failures}회 ({cameraId}): {ImaqdxInterop.ErrorText(err)}");
                     return VisionImage.Invalid(cameraId);
                 }
             }
@@ -299,14 +486,16 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
                 uint err = ImaqdxInterop.IMAQdxConfigureAcquisition(session, continuous: 1, bufferCount: t.BufferCount);
                 if (err != ImaqdxInterop.Success)
                 {
-                    Debug.WriteLine($"[IMAQdx Vision] ConfigureAcquisition 실패: {ImaqdxInterop.ErrorText(err)}");
+                    LoggerService.WriteToFile("WARN",
+                        $"[IMAQdx Vision] ConfigureAcquisition 실패 ({cameraId}): {ImaqdxInterop.ErrorText(err)}");
                     return false;
                 }
 
                 err = ImaqdxInterop.IMAQdxStartAcquisition(session);
                 if (err != ImaqdxInterop.Success)
                 {
-                    Debug.WriteLine($"[IMAQdx Vision] StartAcquisition 실패: {ImaqdxInterop.ErrorText(err)}");
+                    LoggerService.WriteToFile("WARN",
+                        $"[IMAQdx Vision] StartAcquisition 실패 ({cameraId}): {ImaqdxInterop.ErrorText(err)}");
                     return false;
                 }
 
@@ -315,7 +504,7 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[IMAQdx Vision] 트리거 모드 전환 실패 ({cameraId}): {ex.Message}");
+                LoggerService.WriteToFile("WARN", $"[IMAQdx Vision] 트리거 모드 전환 실패 ({cameraId}): {ex.Message}");
                 return false;   // DLL 미설치 등 — graceful
             }
         }
@@ -328,7 +517,7 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
 
             // 카메라마다 CameraAttributes:: 하위 카테고리명이 달라 경로가 안 맞는 경우가 흔하다.
             // NI MAX 의 Camera Attributes 트리에서 실제 경로를 확인해 설정 파일을 고칠 것.
-            Debug.WriteLine($"[IMAQdx Vision] 속성 설정 실패: \"{path}\" = \"{value}\" → " +
+            LoggerService.WriteToFile("WARN", $"[IMAQdx Vision] 속성 설정 실패: \"{path}\" = \"{value}\" → " +
                             $"{ImaqdxInterop.ErrorText(err)} (NI MAX 에서 실제 경로 확인 필요)");
             return false;
         }

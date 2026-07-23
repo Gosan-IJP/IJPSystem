@@ -24,6 +24,12 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
         /// <summary>마지막으로 적용한 지연[us]. 측정 결과 기록/검증용.</summary>
         double LastDelayMicroseconds { get; }
+
+        /// <summary>
+        /// 지연 레지스터 리드백(raw). 커미셔닝 검증용 — 쓰기 직후 읽어 일치하면 통신·주소가 맞다.
+        /// (LabVIEW 원본도 Write 후 Read Holding Registers 로 확인한다) 미지원/실패 시 null.
+        /// </summary>
+        uint? TryReadDelayRaw();
     }
 
     /// <summary>
@@ -106,27 +112,49 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         {
             if (us < 0) throw new ArgumentOutOfRangeException(nameof(us), "지연은 음수일 수 없습니다.");
 
+            uint raw = (uint)Math.Round(us * _cfg.RegisterScale);
+            // 16bit 레지스터를 넘기면 조용히 잘린 값이 써져 지연이 엉뚱해진다 → 명시적으로 실패시킨다.
+            if (!_cfg.Use32BitDelay && raw > ushort.MaxValue)
+                throw new ArgumentOutOfRangeException(nameof(us),
+                    $"지연 {us:F1}us(raw {raw}) 이 16bit 범위를 넘습니다. StrobeConfig.Use32BitDelay 를 켜세요.");
+
             lock (_io)
             {
                 EnsureConnected();
-
-                uint raw = (uint)Math.Round(us * _cfg.RegisterScale);
-                if (_cfg.Use32BitDelay)
+                try { _port?.DiscardInBuffer(); } catch { /* 잔류 바이트 정리 실패 무시 */ }
+                try
                 {
-                    ushort hi = (ushort)(raw >> 16), lo = (ushort)(raw & 0xFFFF);
-                    _master!.WriteMultipleRegisters(_cfg.UnitId, _cfg.DelayRegister,
-                        _cfg.HighWordFirst ? new[] { hi, lo } : new[] { lo, hi });
+                    WriteRaw(raw);
                 }
-                else
+                catch (IOException ex) when (ex.Message.Contains("Checksum"))
                 {
-                    // 16bit 레지스터를 넘기면 조용히 잘린 값이 써져 지연이 엉뚱해진다 → 명시적으로 실패시킨다.
-                    if (raw > ushort.MaxValue)
-                        throw new ArgumentOutOfRangeException(nameof(us),
-                            $"지연 {us:F1}us(raw {raw}) 이 16bit 범위를 넘습니다. StrobeConfig.Use32BitDelay 를 켜세요.");
-                    _master!.WriteMultipleRegisters(_cfg.UnitId, _cfg.DelayRegister, new[] { (ushort)raw });
+                    // 실장 iCore 는 쓰기 응답 프레임이 비표준([02][86][00][00][01] 등, CRC 불일치)이라
+                    // NModbus 검증에 걸린다(2026-07-23). 실제 반영 여부는 리드백(FC3, 정상 동작)으로
+                    // 판정한다 — 일치하면 쓰기 성공으로 간주하고 비표준 ACK 는 무시.
+                    try { _port?.DiscardInBuffer(); } catch { }
+                    uint? rb = ReadRawCore();
+                    if (rb != raw)
+                        throw new IOException(
+                            $"쓰기 응답 CRC 불일치 + 리드백 불일치(리드백 {(rb?.ToString() ?? "실패")}, 기대 {raw})", ex);
                 }
             }
             LastDelayMicroseconds = us;
+        }
+
+        /// <summary>지연 raw 값을 장비 형식(16/32bit)에 맞춰 쓴다. _io 락 안에서 호출.</summary>
+        private void WriteRaw(uint raw)
+        {
+            if (_cfg.Use32BitDelay)
+            {
+                ushort hi = (ushort)(raw >> 16), lo = (ushort)(raw & 0xFFFF);
+                _master!.WriteMultipleRegisters(_cfg.UnitId, _cfg.DelayRegister,
+                    _cfg.HighWordFirst ? new[] { hi, lo } : new[] { lo, hi });
+            }
+            else
+            {
+                // FC6(Write Single) — 실장 iCore 가 FC16 에도 비표준 응답을 주지만 단일 레지스터엔 FC6 이 자연스럽다.
+                _master!.WriteSingleRegister(_cfg.UnitId, _cfg.DelayRegister, (ushort)raw);
+            }
         }
 
         public void Enable(bool on)
@@ -136,6 +164,47 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
             {
                 EnsureConnected();
                 _master!.WriteSingleRegister(_cfg.UnitId, (ushort)_cfg.EnableRegister, (ushort)(on ? 1 : 0));
+            }
+        }
+
+        /// <summary>
+        /// 지연 레지스터 리드백 — LabVIEW 원본(Write 후 Read Holding Registers 확인)과 동일.
+        /// 커미셔닝에서 통신/주소 검증에 쓴다: 타임아웃=보레이트·UnitId 오류,
+        /// Modbus IllegalDataAddress=주소 오류(통신은 정상), 일치=통신·주소 OK.
+        /// </summary>
+        public uint? TryReadDelayRaw()
+        {
+            try
+            {
+                lock (_io)
+                {
+                    EnsureConnected();
+                    try { _port?.DiscardInBuffer(); } catch { }
+                    return ReadRawCore();
+                }
+            }
+            catch
+            {
+                return null;   // 리드백 미지원 장비도 있으므로 실패는 오류가 아니라 '확인 불가'
+            }
+        }
+
+        /// <summary>지연 레지스터 읽기(FC3). _io 락 안에서 호출. 실패 시 null.</summary>
+        private uint? ReadRawCore()
+        {
+            try
+            {
+                ushort count = (ushort)(_cfg.Use32BitDelay ? 2 : 1);
+                ushort[] regs = _master!.ReadHoldingRegisters(_cfg.UnitId, _cfg.DelayRegister, count);
+                if (regs.Length < count) return null;
+                if (!_cfg.Use32BitDelay) return regs[0];
+                return _cfg.HighWordFirst
+                    ? ((uint)regs[0] << 16) | regs[1]
+                    : ((uint)regs[1] << 16) | regs[0];
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -183,6 +252,11 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         }
 
         public void Enable(bool on) => IsEnabled = on;
+
+        /// <summary>가상은 마지막 적용값을 그대로 돌려준다(리드백 일치 시나리오 재현).</summary>
+        public uint? TryReadDelayRaw() =>
+            double.IsNaN(LastDelayMicroseconds) ? null : (uint)Math.Round(LastDelayMicroseconds);
+
         public void Dispose() => IsConnected = false;
     }
 }

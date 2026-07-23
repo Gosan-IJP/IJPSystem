@@ -26,9 +26,23 @@ namespace IJPSystem.Platform.HMI
         private IMachine? _machine;
         private bool _errorDialogOpen;   // 미처리 예외 창 중복(무한 중첩) 방지
 
+        // 단일 인스턴스 가드 — 이미 실행 중일 때 재실행하면 드라이버(COM 포트/EtherCAT/카메라)를
+        // 이중 점유하려다 장비가 오동작한다(실장 요청 2026-07-23). OS 뮤텍스로 두 번째 실행을 차단.
+        private static System.Threading.Mutex? _singleInstanceMutex;
+
         protected override async void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
+            _singleInstanceMutex = new System.Threading.Mutex(true, @"Global\IJPSystem_HMI_Instance",
+                                                              out bool isFirstInstance);
+            if (!isFirstInstance)
+            {
+                Dialogs.Show("IJPSystem 이 이미 실행 중입니다.\n\n기존 창을 사용하세요. 이 창은 종료됩니다.",
+                             "중복 실행", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Shutdown();
+                return;
+            }
 
             // 글로벌 미처리 예외 → LoggerService 에 기록 (다음 충돌 진단용)
             DispatcherUnhandledException += (s, ev) =>

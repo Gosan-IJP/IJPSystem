@@ -35,6 +35,8 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         void SetVelocity(AxisId axis, VelocityProfile profile);
         /// <summary>Set EncResolution.vi : 엔코더 분해능(펄스/단위) 설정.</summary>
         void SetEncoderResolution(AxisId axis, double pulsePerUnit);
+        /// <summary>현재 위치를 지정값으로 재정의(모션 없이 카운터 재설정). 원점복귀 후 0 세팅용.</summary>
+        void SetPosition(AxisId axis, double position);
         /// <summary>Set Home Parameters.vi : 원점 복귀 파라미터(모드/오프셋/속도패턴 전체).</summary>
         void SetHomeParameters(AxisId axis, HomeParameters home);
         /// <summary>원점 복귀 '속도 패턴만' 설정(ecmHomeCfg_SetSpeedPatt). LabVIEW Set Home Parameters.vi 와 동일 — 모드/방향/오프셋 미변경.</summary>

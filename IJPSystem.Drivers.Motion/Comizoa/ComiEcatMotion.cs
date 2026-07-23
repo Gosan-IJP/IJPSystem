@@ -38,6 +38,7 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         private const int ecmDIR_P = 1;            // (+) 방향
         private const int ecmSMODE_TRAPE  = 1;     // 사다리꼴 가감속
         private const int ecmSMODE_SCURVE = 2;     // S-curve 가감속
+        private const int ecmCNT_CMD  = 0;         // Command(지령) 위치 카운터
         private const int ecmCNT_FEED = 1;         // Feedback(실제) 위치 카운터
 
         // ===== P/Invoke =====================================================
@@ -77,6 +78,8 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         [DllImport(Dll)] private static extern int ecmSxSt_WaitCompt(int netId, int axis, out int errCode);
         [DllImport(Dll)] private static extern ushort ecmSxSt_GetFlags(int netId, int axis, out int errCode);
         [DllImport(Dll)] private static extern double ecmSxSt_GetPosition(int netId, int axis, int targCntr, out int errCode);
+        // 현재 위치를 지정값으로 재정의(모션 없이 카운터만 재설정). Get 과 대칭 시그니처.
+        [DllImport(Dll)] private static extern int ecmSxSt_SetPosition(int netId, int axis, int targCntr, double pos, out int errCode);
         // 축 전용 디지털 입력(하드리밋 ±/원점 등). 반환은 t_word 비트필드(TEcmSxSt_DI).
         [DllImport(Dll)] private static extern ushort ecmSxSt_GetDI(int netId, int axis, out int errCode);
 
@@ -96,11 +99,13 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         // 센서(DI) 진단: 축별 마지막 DI 워드(변화 시에만 로깅). 비트 매핑 실장 검증용.
         private readonly System.Collections.Generic.Dictionary<AxisId, ushort> _lastDi = new();
 
-        // 축 전용 DI 비트 매핑(가장 일반적인 Comizoa 레이아웃 — 실장에서 raw 로그로 검증/보정).
-        //   bit0 +EL(CW 하드리밋), bit1 -EL(CCW 하드리밋), bit2 ORG(원점/HOME)
-        private const int DI_BIT_LIMIT_P = 0;   // +EL / CW
-        private const int DI_BIT_LIMIT_N = 1;   // -EL / CCW
-        private const int DI_BIT_ORG     = 2;   // ORG / HOME
+        // 축 전용 DI 비트 매핑. 실장 확인 결과 물리 배선 기준으로 표기:
+        //   bit0 = 하한(Lower, -EL),  bit1 = 상한(Upper, +EL),  bit2 = ORG(원점/HOME)
+        // ※ 상/하한은 스테이지 직선 이동 기준(위=상한). CW/CCW(모터 회전)와는 다른 개념이며,
+        //   회전방향↔상하한 관계는 기구 조립에 따라 달라지므로 물리 스위치 기준으로 표기한다.
+        private const int DI_BIT_LIMIT_LOWER = 0;   // -EL / 하한(물리 하단 스위치)
+        private const int DI_BIT_LIMIT_UPPER = 1;   // +EL / 상한(물리 상단 스위치)
+        private const int DI_BIT_ORG         = 2;   // ORG / HOME
 
         /// <summary>cmdidx(=0 실패) 반환 명령 함수 검사. 실패 시 오류코드를 이름·설명으로 디코딩.</summary>
         private static void CheckCmd(int cmdidx, int err, string op)
@@ -277,6 +282,18 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             CheckCmd(rc, err, "Home");
         }
 
+        /// <summary>
+        /// 현재 위치를 지정값으로 재정의한다(모션 없이 카운터만 재설정). 원점복귀 완료 후 0 세팅용.
+        /// 지령(CMD)·피드백(FEED) 카운터를 함께 맞춰 이후 절대이동이 어긋나지 않게 한다.
+        /// ※ 축이 정지 상태일 때만 호출할 것(구동 중 재정의는 위험).
+        /// </summary>
+        public void SetPosition(AxisId a, double pos)
+        {
+            Need();
+            int rc = ecmSxSt_SetPosition(NetID, (int)a, ecmCNT_CMD, pos, out int err);  CheckCmd(rc, err, "SetPosition(CMD)");
+            rc     = ecmSxSt_SetPosition(NetID, (int)a, ecmCNT_FEED, pos, out err);      CheckCmd(rc, err, "SetPosition(FEED)");
+        }
+
         public void SetHomeSpeedPattern(AxisId a, double vel, double acc, double dec, double specVel)
         {
             Need();
@@ -336,9 +353,9 @@ namespace IJPSystem.Drivers.Motion.Comizoa
 
             // 축 전용 DI(±하드리밋 / 원점) 읽기 — GetFlags(상태워드)엔 없으므로 ecmSxSt_GetDI 사용.
             ushort di = ecmSxSt_GetDI(NetID, (int)a, out _);
-            bool limitP = (di & (1 << DI_BIT_LIMIT_P)) != 0;   // CW  (+EL)
-            bool limitN = (di & (1 << DI_BIT_LIMIT_N)) != 0;   // CCW (-EL)
-            bool orgSns = (di & (1 << DI_BIT_ORG))     != 0;   // HOME(ORG)
+            bool upperLimit = (di & (1 << DI_BIT_LIMIT_UPPER)) != 0;   // 상한(+EL)
+            bool lowerLimit = (di & (1 << DI_BIT_LIMIT_LOWER)) != 0;   // 하한(-EL)
+            bool orgSns     = (di & (1 << DI_BIT_ORG))         != 0;   // HOME(ORG)
 
             // 센서 비트 매핑 검증용: DI 워드가 바뀔 때만 raw 를 1회 로깅(폴링 스팸 방지).
             // 실장에서 각 센서를 물리적으로 눌러 어느 비트가 서는지 확인 → 매핑 상수 보정.
@@ -346,20 +363,20 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             {
                 _lastDi[a] = di;
                 LoggerService.WriteToFile("INFO",
-                    $"[ComiEcat] Axis {(int)a} DI raw=0x{di:X4} (CW={(limitP ? 1 : 0)}, CCW={(limitN ? 1 : 0)}, HOME={(orgSns ? 1 : 0)})");
+                    $"[ComiEcat] Axis {(int)a} DI raw=0x{di:X4} (상한={(upperLimit ? 1 : 0)}, 하한={(lowerLimit ? 1 : 0)}, HOME={(orgSns ? 1 : 0)})");
             }
 
             return new AxisState
             {
-                Position      = pos,
-                IsMoving      = busy,
-                ServoOn       = servoOn,
-                IsHomed       = homeAttained,
-                HomeBusy      = homeBusy,
-                Alarm         = alarm,
-                PositiveLimit = limitP,   // CW  하드리밋
-                NegativeLimit = limitN,   // CCW 하드리밋
-                HomeSensor    = orgSns    // 원점(HOME) 센서
+                Position   = pos,
+                IsMoving   = busy,
+                ServoOn    = servoOn,
+                IsHomed    = homeAttained,
+                HomeBusy   = homeBusy,
+                Alarm      = alarm,
+                UpperLimit = upperLimit,   // 상한 하드리밋
+                LowerLimit = lowerLimit,   // 하한 하드리밋
+                HomeSensor = orgSns        // 원점(HOME) 센서
             };
         }
 

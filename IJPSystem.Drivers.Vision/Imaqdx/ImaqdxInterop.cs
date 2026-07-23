@@ -118,5 +118,20 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
 
         /// <summary>획득 타임아웃 속성(ms). 트리거가 드문 구성에서는 명시적으로 키워야 한다.</summary>
         public const string AttrTimeout = "AcquisitionAttributes::Timeout";
+
+        // ── 속성 조회 ─────────────────────────────────────────────────────────
+        // GetAttribute 는 SetAttribute 와 달리 가변인자가 아니다(헤더 NI_FUNC, void* 출력) → __stdcall.
+        /// <summary>U32 속성 조회(Width/Height/BytesPerPixel/PayloadSize 등).</summary>
+        [DllImport(Dll, EntryPoint = "IMAQdxGetAttribute", CharSet = CharSet.Ansi)]
+        public static extern uint IMAQdxGetAttributeU32(uint id, string name, ImaqdxAttributeType type, out uint value);
+
+        // 실측 프레임 크기 산정용 표준 획득 속성(niimaqdx.h 의 IMAQdxAttribute* 상수와 동일 문자열).
+        public const string AttrWidth         = "AcquisitionAttributes::Width";
+        public const string AttrHeight        = "AcquisitionAttributes::Height";
+        public const string AttrBytesPerPixel = "AcquisitionAttributes::BytesPerPixel";
+        public const string AttrPayloadSize   = "PayloadSize";
+
+        /// <summary>GenICam(SFNC) 픽셀 포맷 경로 — 카메라별로 다를 수 있음(NI MAX 확인).</summary>
+        public const string AttrPixelFormat   = "CameraAttributes::ImageFormatControl::PixelFormat";
     }
 }

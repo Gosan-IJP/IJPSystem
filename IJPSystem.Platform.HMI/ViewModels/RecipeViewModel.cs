@@ -585,8 +585,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     "IsMoving",
                     "IsInPosition",
                     "IsHomeDone",
-                    "CwLimit",
-                    "CcwLimit",
+                    "UpperLimit",
+                    "LowerLimit",
                     "HomeSensor",
 
                     // 시퀀스/모터제어 임시값 (레시피와 무관)

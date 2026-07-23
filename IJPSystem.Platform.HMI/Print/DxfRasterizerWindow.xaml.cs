@@ -13,7 +13,7 @@ namespace IJPSystem.Platform.HMI.Print
         {
             InitializeComponent();
 
-            var vm = new DxfRasterizerViewModel(new DxfRasterizerStub());
+            var vm = new DxfRasterizerViewModel(new DxfRasterizer());
 
             // Nozzle Select → 노즐 선택 창을 띄우고, 선택 결과(전역)를 반환
             vm.NozzleSelectAction = () =>

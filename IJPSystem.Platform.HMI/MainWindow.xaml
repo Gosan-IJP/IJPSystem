@@ -201,8 +201,10 @@
                     <Button Content="{DynamicResource SubMenu_DROP_WATCHER}"
                             Style="{StaticResource SubNavButtonStyle}"
                             Command="{Binding MoveWindowCommand}" CommandParameter="DROP_WATCHER"/>
+                    <!-- 비주얼 모니터: 기능은 유지하되 화면에서 숨김 (삭제하지 않음 — 실장 요청 2026-07-23) -->
                     <Button Content="{DynamicResource SubMenu_VISUAL_MONITOR}"
                             Style="{StaticResource SubNavButtonStyle}"
+                            Visibility="Collapsed"
                             Command="{Binding MoveWindowCommand}" CommandParameter="VISUAL_MONITOR"/>
 
                 </StackPanel>
@@ -221,6 +223,9 @@
                 <Button Content="{DynamicResource SubMenu_PrintDropWatcher}"
                         Style="{StaticResource PrintSubButtonStyle}"
                         Command="{Binding MoveWindowCommand}" CommandParameter="PRINT_DROP_WATCHER"/>
+                <Button Content="{DynamicResource SubMenu_PrintGlassView}"
+                        Style="{StaticResource PrintSubButtonStyle}"
+                        Command="{Binding MoveWindowCommand}" CommandParameter="PRINT_GLASS_VIEW"/>
                 <Button Content="{DynamicResource SubMenu_Waveform}"
                         Style="{StaticResource PrintSubButtonStyle}"
                         Command="{Binding MoveWindowCommand}" CommandParameter="WAVEFORM"/>

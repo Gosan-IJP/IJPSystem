@@ -210,9 +210,12 @@
 
             <StackPanel>
 
-                <!-- ── 조명 제어 ─────────────────────────────────────────── -->
+                <!-- ── 조명 제어 ───────────────────────────────────────────
+                     Pulse 장비에는 글라스뷰 조명 하드웨어가 없음(실장 확인 2026-07-23)
+                     → 기능은 유지하되 화면에서 숨김 (삭제하지 않음 — NJI/P&ID 와 동일 패턴) -->
                 <Border Background="#111827" CornerRadius="12" Padding="16" Margin="0,0,0,10"
-                        BorderBrush="#334155" BorderThickness="1">
+                        BorderBrush="#334155" BorderThickness="1"
+                        Visibility="Collapsed">
                     <StackPanel>
                         <TextBlock Text="LIGHT CONTROL" Foreground="#3B82F6"
                                    FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>

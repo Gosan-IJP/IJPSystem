@@ -118,18 +118,18 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
-        private bool _cwLimit;
-        public bool CwLimit
+        private bool _upperLimit;
+        public bool UpperLimit   // 상한(+EL) 하드리밋
         {
-            get => _cwLimit;
-            set => SetProperty(ref _cwLimit, value);
+            get => _upperLimit;
+            set => SetProperty(ref _upperLimit, value);
         }
 
-        private bool _ccwLimit;
-        public bool CcwLimit
+        private bool _lowerLimit;
+        public bool LowerLimit   // 하한(-EL) 하드리밋
         {
-            get => _ccwLimit;
-            set => SetProperty(ref _ccwLimit, value);
+            get => _lowerLimit;
+            set => SetProperty(ref _lowerLimit, value);
         }
 
         private bool _homeSensor;
@@ -426,8 +426,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     Status.IsMoving = latest.IsMoving;
 
                     // 센서 상태 동기화
-                    Status.CwLimit = latest.CwLimit;
-                    Status.CcwLimit = latest.CcwLimit;
+                    Status.UpperLimit = latest.UpperLimit;
+                    Status.LowerLimit = latest.LowerLimit;
                     Status.HomeSensor = latest.HomeSensor;
 
                     // ViewModel 직속 속성 동기화 (UI 바인딩 가속)
