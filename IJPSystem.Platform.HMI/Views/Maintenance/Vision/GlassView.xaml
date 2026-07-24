@@ -484,6 +484,115 @@
                     </StackPanel>
                 </Border>
 
+                <!-- ── 조그 (글라스를 카메라 시야에 맞춤) ──────────────────────
+                     모터 제어 화면과 같은 축(SharedAxisList)을 조작한다. 서보 OFF·알람·미연결이면
+                     CanJog=false 라 버튼이 자동 비활성된다. -->
+                <Border Background="#111827" CornerRadius="12" Padding="16" Margin="0,10,0,0"
+                        BorderBrush="#334155" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="JOG CONTROL" Foreground="#3B82F6"
+                                   FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
+
+                        <!-- 조그 단위 — 스타일이 폭 65 고정이라 UniformGrid 로 늘리면 사이가 벌어진다.
+                             가로 스택으로 붙여 배치한다. -->
+                        <StackPanel Orientation="Horizontal" Margin="3,0,0,12">
+                            <RadioButton Content="Cont."  GroupName="GlassJogUnit" Margin="0,0,6,0"
+                                         IsChecked="{Binding IsUnitContinuity, Mode=TwoWay}"
+                                         Style="{StaticResource ModernModeButtonStyle}"/>
+                            <RadioButton Content="10µm"   GroupName="GlassJogUnit" Margin="0,0,6,0"
+                                         IsChecked="{Binding IsUnit10um, Mode=TwoWay}"
+                                         Style="{StaticResource ModernModeButtonStyle}"/>
+                            <RadioButton Content="100µm"  GroupName="GlassJogUnit"
+                                         IsChecked="{Binding IsUnit100um, Mode=TwoWay}"
+                                         Style="{StaticResource ModernModeButtonStyle}"/>
+                        </StackPanel>
+
+                        <!-- 방향 패드 — 4열 균등 그리드라 모든 버튼 크기가 같다.
+                             XY 는 십자 배치(가운데 3열), Z 는 오른쪽 열에 Y 와 나란히 위/아래. -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Button Grid.Row="0" Grid.Column="1" Content="Y +" Tag="Y" Height="38" Margin="3"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B"
+                                    PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
+                                    IsEnabled="{Binding AxisY.CanJog, FallbackValue=False}"/>
+                            <Button Grid.Row="1" Grid.Column="0" Content="X −" Tag="X" Height="38" Margin="3"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B"
+                                    PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
+                                    IsEnabled="{Binding AxisX.CanJog, FallbackValue=False}"/>
+                            <Button Grid.Row="1" Grid.Column="2" Content="X +" Tag="X" Height="38" Margin="3"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B"
+                                    PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
+                                    IsEnabled="{Binding AxisX.CanJog, FallbackValue=False}"/>
+                            <Button Grid.Row="2" Grid.Column="1" Content="Y −" Tag="Y" Height="38" Margin="3"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B"
+                                    PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
+                                    IsEnabled="{Binding AxisY.CanJog, FallbackValue=False}"/>
+
+                            <Button Grid.Row="0" Grid.Column="3" Content="Z +" Tag="Z" Height="38" Margin="3"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B"
+                                    PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
+                                    IsEnabled="{Binding AxisZ.CanJog, FallbackValue=False}"/>
+                            <Button Grid.Row="2" Grid.Column="3" Content="Z −" Tag="Z" Height="38" Margin="3"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B"
+                                    PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
+                                    IsEnabled="{Binding AxisZ.CanJog, FallbackValue=False}"/>
+                        </Grid>
+
+                        <!-- 현재 위치[mm] — X │ Y │ Z 3열. 패드와 정렬(X는 col0~2, Z는 col3) -->
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0" Grid.ColumnSpan="1" Background="#0F172A" CornerRadius="6"
+                                    Padding="6,5" Margin="3,0">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock Text="X (mm)" Foreground="#64748B" FontSize="9" FontWeight="Bold"
+                                               HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding AxisX.CurrentPos, StringFormat={}{0:F3}, FallbackValue=0.000}"
+                                               Foreground="#EF4444" FontSize="16" FontWeight="Bold" FontFamily="Consolas"
+                                               HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Background="#0F172A" CornerRadius="6" Padding="6,5" Margin="3,0">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock Text="Y (mm)" Foreground="#64748B" FontSize="9" FontWeight="Bold"
+                                               HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding AxisY.CurrentPos, StringFormat={}{0:F3}, FallbackValue=0.000}"
+                                               Foreground="#EF4444" FontSize="16" FontWeight="Bold" FontFamily="Consolas"
+                                               HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Background="#0F172A" CornerRadius="6" Padding="6,5" Margin="3,0">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock Text="Z (mm)" Foreground="#64748B" FontSize="9" FontWeight="Bold"
+                                               HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding AxisZ.CurrentPos, StringFormat={}{0:F3}, FallbackValue=0.000}"
+                                               Foreground="#EF4444" FontSize="16" FontWeight="Bold" FontFamily="Consolas"
+                                               HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <TextBlock Text="※ 서보 ON·알람 해제 상태에서만 동작합니다"
+                                   Foreground="#475569" FontSize="10" Margin="0,10,0,0"/>
+                    </StackPanel>
+                </Border>
+
             </StackPanel>
         </ScrollViewer>
     </Grid>

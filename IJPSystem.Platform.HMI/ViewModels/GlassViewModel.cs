@@ -6,6 +6,7 @@ using IJPSystem.Platform.Domain.Models.Vision;
 using Microsoft.Win32;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -24,6 +25,36 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly DispatcherTimer _liveTimer;
 
         private CancellationTokenSource? _liveCts;
+
+        // ── 조그 (글라스를 카메라 시야에 맞추는 용도) ──────────────────────────
+        // 모터 제어 화면과 같은 축 인스턴스(SharedAxisList)를 그대로 쓴다 —
+        // 화면이 달라도 서보/알람 상태와 속도 프로파일이 하나로 유지된다.
+        public AxisViewModel? AxisX => FindAxis("X");
+        public AxisViewModel? AxisY => FindAxis("Y");
+        public AxisViewModel? AxisZ => FindAxis("Z");
+
+        private AxisViewModel? FindAxis(string prefix) =>
+            _mainVM.SharedAxisList.FirstOrDefault(a =>
+                (a.Info?.Name ?? "").StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+        // 조그 단위 — 0=연속(누르는 동안 이동), 0.01=10µm, 0.1=100µm (AxisViewModel.JogUnit 규약).
+        private double _jogUnit;
+        public double JogUnit
+        {
+            get => _jogUnit;
+            set
+            {
+                if (!SetProperty(ref _jogUnit, value)) return;
+                foreach (var ax in _mainVM.SharedAxisList) ax.JogUnit = value;   // 선택 축과 무관하게 전 축 동기
+                OnPropertyChanged(nameof(IsUnitContinuity));
+                OnPropertyChanged(nameof(IsUnit10um));
+                OnPropertyChanged(nameof(IsUnit100um));
+            }
+        }
+
+        public bool IsUnitContinuity { get => JogUnit == 0;    set { if (value) JogUnit = 0; } }
+        public bool IsUnit10um       { get => JogUnit == 0.01; set { if (value) JogUnit = 0.01; } }
+        public bool IsUnit100um      { get => JogUnit == 0.1;  set { if (value) JogUnit = 0.1; } }
 
         // ── 카메라 상태 ────────────────────────────────────────────────────────
         private CameraStatus? _camStatus;

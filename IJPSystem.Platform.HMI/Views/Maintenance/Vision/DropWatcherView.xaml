@@ -5,6 +5,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:cvts="clr-namespace:IJPSystem.Platform.HMI.Common.Converters"
              xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+             xmlns:vis="clr-namespace:IJPSystem.Platform.HMI.Vision"
              mc:Ignorable="d" d:DesignHeight="780" d:DesignWidth="1400"
              Background="#0B0F1A">
 
@@ -198,10 +199,12 @@
                             </StackPanel>
                         </Grid>
 
-                        <!-- 캡처 이미지 -->
-                        <Image Source="{Binding CurrentFrame}"
-                               Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
-                               Visibility="{Binding HasImage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <!-- 캡처 이미지 + µm 눈금자 — 한 요소가 같은 사각형으로 그려 항상 정렬된다.
+                             이미지는 좌상단 고정(가운데 정렬 안 함) → 이미지가 바뀌어도 원점(0,0)이 안 움직인다. -->
+                        <vis:ImageScaleRuler Source="{Binding CurrentFrame}"
+                                             MicronsPerPixel="{Binding MicronsPerPixel}"
+                                             IsHitTestVisible="False"
+                                             Visibility="{Binding HasImage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
                         <!-- 처리 중 오버레이 -->
                         <Border HorizontalAlignment="Center" VerticalAlignment="Center"
