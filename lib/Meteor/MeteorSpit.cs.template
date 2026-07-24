@@ -1,0 +1,151 @@
+// ─────────────────────────────────────────────────────────────────────────
+//  MeteorSpit.cs — 초안 템플릿 (아직 컴파일 대상 아님)
+//
+//  DLL(PrinterInterfaceCLS/MeteorCLS) 이 lib\Meteor\x86\ 에 배치되면
+//  이 파일을 IJPSystem.Platform.Infrastructure\Devices\DropWatcher\MeteorSpit.cs
+//  로 옮기고 csproj 에 참조를 추가한다. (lib\Meteor\x86\README.md 참고)
+//
+//  ※ 연결·전원·중단·busy 는 API 덤프로 확정된 호출. Spit() 노즐 페이로드만 TODO.
+//  ※ Pi* 가 static 인지 instance 인지는 실제 DLL 로 확인 후 호출부를 보정할 것
+//     (아래는 instance 가정: _pi.PiXxx(...)). static 이면 PrinterInterfaceCLS.PiXxx(...).
+// ─────────────────────────────────────────────────────────────────────────
+using System;
+using System.Threading;
+using Ttp.Meteor;   // PrinterInterfaceCLS, eRET, eCFGPARAMEx, SigTypes
+
+namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
+{
+    /// <summary>
+    /// 실장 Meteor 헤드 토출. <see cref="VirtualSpit"/> 자리에 들어가는 실제 어댑터.
+    /// x86 인프로세스로 PrinterInterfaceCLS(AnyCPU)+네이티브 x86 을 직접 호출한다.
+    /// 중단 절차(BUSY 재시도 → idle 폴링)는 <see cref="SpitBase"/> 를 그대로 재사용.
+    /// </summary>
+    public sealed class MeteorSpit : SpitBase
+    {
+        // eCFGPARAMEx (MeteorCLS) — 덤프 확정값. enum 이 있으면 enum 을 직접 쓸 것.
+        private const int CPEX_HeadVoltage     = 275;
+        private const int CPEX_SpitGreyLevel   = 359;
+        private const int CPEX_TickleGreyLevel = 360;
+        private const int CPEX_PageSpitInterval= 351;
+        private const int CPEX_PageSpitPixel   = 352;
+        private const int SIG_SPIT             = 11;   // SigTypes.SIG_SPIT
+        private const int HPS_HEAD             = 2;    // PiSetHeadPower 상태(헤드 ON)
+
+        private readonly string _configFile;
+        private readonly Action<string>? _log;
+        private readonly object _io = new();
+
+        private readonly PrinterInterfaceCLS _pi = new();   // static 이면 제거
+        private int _peAddress;
+        private bool _opened;
+        private bool _isSpitting;
+        private double _frequencyHz;
+
+        public MeteorSpit(string configFile, Action<string>? log = null)
+        {
+            _configFile = configFile ?? throw new ArgumentNullException(nameof(configFile));
+            _log = log;
+        }
+
+        public override double FrequencyHz => _frequencyHz;
+        public override bool   IsSpitting  => _isSpitting;
+
+        public override bool IsBusy
+        {
+            get { lock (_io) { return _opened && _pi.PiIsBusy(); } }
+        }
+
+        // ── 연결 ─────────────────────────────────────────────────────────
+        /// <summary>엔진 시작 → 연결 → 헤드 주소 산출. 최초 Start 전에 1회.</summary>
+        public void Open()
+        {
+            lock (_io)
+            {
+                if (_opened) return;
+
+                Check(_pi.PiStartPrintEngine(_configFile), nameof(_pi.PiStartPrintEngine));
+                Check(_pi.PiOpenPrinter(),                 nameof(_pi.PiOpenPrinter));
+
+                // 단일 헤드(PCC1/HDC1/Head1). 실제 번지 규약은 설정과 대조해 확정.
+                _peAddress = _pi.MakePEAddress(1, 1, 1, 0);
+                _opened = true;
+                _log?.Invoke("Meteor 연결 완료");
+            }
+        }
+
+        // ── 토출 개시 (Spit DW = ON) ──────────────────────────────────────
+        public override void Start(SpitSettings s)
+        {
+            if (s == null) throw new ArgumentNullException(nameof(s));
+            lock (_io)
+            {
+                if (!_opened) Open();
+
+                if (s.HeadVoltage is int v)
+                    SetParamEx(CPEX_HeadVoltage, v);
+                SetParamEx(CPEX_SpitGreyLevel,    s.SpitGreyLevel);
+                SetParamEx(CPEX_TickleGreyLevel,  s.TickleGreyLevel);
+                SetParamEx(CPEX_PageSpitInterval, s.PageSpitInterval);
+                SetParamEx(CPEX_PageSpitPixel,    s.PageSpitPixel);
+
+                Check(_pi.PiSetHeadPower(HPS_HEAD), nameof(_pi.PiSetHeadPower));
+
+                // ── TODO: 노즐 페이로드 ──────────────────────────────────
+                //  "Set Use Nozzle" 버튼 코드/VI 필요. 예상 흐름:
+                //   1) s.Nozzles(= NozzleExpression.Parse 결과) → 스핏바 버퍼
+                //      (노즐i = SpitGreyLevel, 나머지 0/틱클) — S800SingleSpitPatternBuilder 활용
+                //   2) _pi.PiAttachSpitBar(bufferId, details);
+                //   3) _pi.PiSetSignal(SIG_SPIT, 1);
+                //  ※ AttachSpitBarDetails 필드·bufferId 관리 규칙은 버튼 코드로 확정.
+                // ─────────────────────────────────────────────────────────
+
+                _frequencyHz = s.FrequencyHz;
+                CurrentSettings = s;
+                _isSpitting = true;
+                _log?.Invoke($"Spit ON — 노즐 {s.Nozzles?.Count ?? 0}개, {s.FrequencyHz}Hz");
+            }
+        }
+
+        // ── 중단 명령 1회 (SpitBase 가 재시도·idle 폴링) ────────────────────
+        protected override SpitAbortResult TryAbort()
+        {
+            lock (_io)
+            {
+                if (!_opened) return SpitAbortResult.Ok;
+
+                // TODO(확정 후): _pi.PiSetSignal(SIG_SPIT, 0); 로 스핏 신호 먼저 내려도 됨
+                var r = _pi.PiAbort();
+                _isSpitting = false;
+
+                return r switch
+                {
+                    eRET.RVAL_OK      => SpitAbortResult.Ok,
+                    eRET.RVAL_ABORTED => SpitAbortResult.Ok,   // 이미 중단됨 — 성공 취급
+                    eRET.RVAL_BUSY    => SpitAbortResult.Busy,
+                    _                 => SpitAbortResult.Failed,
+                };
+            }
+        }
+
+        // ── 정리 ─────────────────────────────────────────────────────────
+        public override void Dispose()
+        {
+            lock (_io)
+            {
+                if (!_opened) return;
+                try { _pi.PiClosePrinter(); } catch { /* 종료 경로 — 무시 */ }
+                _opened = false;
+            }
+        }
+
+        // ── 헬퍼 ─────────────────────────────────────────────────────────
+        private void SetParamEx(int paramId, long value)
+            => Check(_pi.PiSetParamEx(_peAddress, (eCFGPARAMEx)paramId, value), $"PiSetParamEx({paramId})");
+
+        private static void Check(eRET r, string call)
+        {
+            if (r != eRET.RVAL_OK)
+                throw new InvalidOperationException($"Meteor {call} 실패: {r}");
+        }
+    }
+}

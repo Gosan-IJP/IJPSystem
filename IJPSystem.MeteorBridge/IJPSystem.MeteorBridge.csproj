@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Meteor PrinterInterface(x64) 를 호스팅하는 별도 프로세스.
+       본 앱(x86)과 비트수가 달라 인프로세스로 못 붙이므로 named pipe 로 통신한다.
+       ※ x64 고정 — Meteor DLL 이 x64 라서 AnyCPU/x86 이면 BadImageFormatException. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
+    <SelfContained>false</SelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>MeteorBridge</AssemblyName>
+    <RootNamespace>IJPSystem.MeteorBridge</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- IPC 규약은 Infrastructure 와 단일 소스 공유(링크) — 스키마 불일치 방지 -->
+    <Compile Include="..\IJPSystem.Platform.Infrastructure\Devices\DropWatcher\MeteorBridgeProtocol.cs"
+             Link="MeteorBridgeProtocol.cs" />
+  </ItemGroup>
+
+  <!-- 실제 연동 시:
+       <ItemGroup>
+         <Reference Include="PrinterInterfaceCLS">
+           <HintPath>C:\Program Files\Meteor Inkjet\...\PrinterInterfaceCLS.dll</HintPath>
+         </Reference>
+       </ItemGroup>
+       그리고 MeteorController 의 Mock 호출을 실제 Pi* 호출로 교체. -->
+
+</Project>
