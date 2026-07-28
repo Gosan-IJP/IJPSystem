@@ -295,8 +295,12 @@ namespace IJPSystem.Platform.HMI.Views
             //  실측 매핑(HasReadyMapping) 있으면 Y모터 위치로 동기, 없으면 스텝 진입시각 스크립트.
             const int MoveStartStepNo = 4;    // MoveStart(인쇄 시작 위치로 이동)
             bool hasReadyMap = _vm != null && _vm.HasReadyMapping;
-            // 마지막 패스 종료 위치: 홀수 swath→PrintEnd(GlassScanEnd), 짝수→PrintStart(GlassScanStart)
-            bool lastForward = (swath % 2 == 1);
+            // 마지막 패스 종료 위치.
+            //  - 단방향: 매 패스 Return 으로 항상 Start 복귀 → 마지막도 Start (bidi 아니면 무조건 false)
+            //  - 양방향: 방향 교대(복귀 없음) → 홀수 swath 는 End, 짝수는 Start
+            // ※ bidi 를 빼먹으면 단방향에서 마지막을 End 로 오판해, MoveReady(예: 27스텝) 진입 시
+            //   글라스가 순간 반대 방향으로 튀었다가 Ready 로 이동한다.
+            bool lastForward = bidi && (swath % 2 == 1);
             double scanEndX  = lastForward ? GlassScanEnd : GlassScanStart;
             double lastEndMm = _vm != null ? (lastForward ? _vm.PrintEndScanMm : _vm.PrintStartScanMm) : 0.0;
 

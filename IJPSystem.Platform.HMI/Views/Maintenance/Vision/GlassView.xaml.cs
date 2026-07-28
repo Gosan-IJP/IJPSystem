@@ -25,6 +25,7 @@ namespace IJPSystem.Platform.HMI.Views
                 "X" => vm.AxisX,
                 "Y" => vm.AxisY,
                 "Z" => vm.AxisZ,
+                "T" => vm.AxisT,
                 _   => null,
             };
         }

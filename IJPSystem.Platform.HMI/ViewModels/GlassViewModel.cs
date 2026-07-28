@@ -32,6 +32,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public AxisViewModel? AxisX => FindAxis("X");
         public AxisViewModel? AxisY => FindAxis("Y");
         public AxisViewModel? AxisZ => FindAxis("Z");
+        public AxisViewModel? AxisT => FindAxis("T");   // 회전축(모션 드라이버 식별자 "T"). 없으면 null → 버튼 비활성
 
         private AxisViewModel? FindAxis(string prefix) =>
             _mainVM.SharedAxisList.FirstOrDefault(a =>
@@ -55,6 +56,18 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public bool IsUnitContinuity { get => JogUnit == 0;    set { if (value) JogUnit = 0; } }
         public bool IsUnit10um       { get => JogUnit == 0.01; set { if (value) JogUnit = 0.01; } }
         public bool IsUnit100um      { get => JogUnit == 0.1;  set { if (value) JogUnit = 0.1; } }
+
+        // 조그 단위 콤보(이미지 레이아웃) — 0=Continuous, 1=10µm, 2=100µm. JogUnit 으로 환산.
+        private int _jogUnitIndex;
+        public int JogUnitIndex
+        {
+            get => _jogUnitIndex;
+            set
+            {
+                if (!SetProperty(ref _jogUnitIndex, value)) return;
+                JogUnit = value switch { 1 => 0.01, 2 => 0.1, _ => 0.0 };
+            }
+        }
 
         // ── 카메라 상태 ────────────────────────────────────────────────────────
         private CameraStatus? _camStatus;

@@ -224,7 +224,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             try
             {
                 var file = WaveformParser.Parse(path);
-                target.LoadFromFile(file, repeats: 3);
+                // repeats:1 — 파일 내 전체 펄스 시퀀스를 1회만 그린다(MetWaveEpson 과 동일).
+                target.LoadFromFile(file, repeats: 1);
                 _mainVM.AddLog($"[WAVEFORM] {type} 파싱 완료 ({file.Pulses.Count} pulse)", LogLevel.Info);
                 return true;
             }

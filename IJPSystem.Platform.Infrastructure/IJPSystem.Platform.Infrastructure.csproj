@@ -25,6 +25,20 @@
     <ProjectReference Include="..\IJPSystem.Platform.Domain\IJPSystem.Platform.Domain.csproj" />
   </ItemGroup>
 
+  <!-- Devices/DropWatcher — Meteor PrinterInterface 직접 참조(x86 인프로세스, AnyCPU 래퍼).
+       네이티브 PrinterInterface.dll 은 제어PC의 Meteor 설치본을 런타임에 사용(또는 배포 시 동봉).
+       상세: lib\Meteor\x86\README.md, 메모리 project_meteor_bitness. -->
+  <ItemGroup>
+    <Reference Include="PrinterInterfaceCLS">
+      <HintPath>..\lib\Meteor\x86\PrinterInterfaceCLS.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="MeteorCLS">
+      <HintPath>..\lib\Meteor\x86\MeteorCLS.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
   <ItemGroup>
     <EmbeddedResource Include="Database\AlarmMaster_Seed.sql" />
   </ItemGroup>

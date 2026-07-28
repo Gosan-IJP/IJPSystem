@@ -170,10 +170,7 @@
                         <TextBlock Text="{DynamicResource SubMenu_SystemExit}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
-                <!-- 일반 서브메뉴 버튼 -->
-                <Button Content="{DynamicResource SubMenu_IO}"
-                        Style="{StaticResource MaintenanceSubButtonStyle}"
-                        Command="{Binding MoveWindowCommand}" CommandParameter="IO"/>
+                <!-- 일반 서브메뉴 버튼 (순서: 모터 → 비전 → I/O → 시퀀스) -->
                 <Button Content="{DynamicResource SubMenu_Motor}"
                         Style="{StaticResource MaintenanceSubButtonStyle}"
                         Command="{Binding MoveWindowCommand}" CommandParameter="MOTOR"/>
@@ -208,6 +205,9 @@
                             Command="{Binding MoveWindowCommand}" CommandParameter="VISUAL_MONITOR"/>
 
                 </StackPanel>
+                <Button Content="{DynamicResource SubMenu_IO}"
+                        Style="{StaticResource MaintenanceSubButtonStyle}"
+                        Command="{Binding MoveWindowCommand}" CommandParameter="IO"/>
                 <!-- P&ID 메뉴 임시 숨김(요청) — 기능 유지, 표시만 Collapsed -->
                 <Button Content="{DynamicResource SubMenu_PNID}"
                         Visibility="Collapsed"

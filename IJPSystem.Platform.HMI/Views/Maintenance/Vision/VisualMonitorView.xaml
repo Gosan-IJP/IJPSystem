@@ -80,13 +80,14 @@
         <Border Grid.Row="1" Background="#111827" CornerRadius="10" BorderBrush="#334155" BorderThickness="1"
                 ClipToBounds="True">
             <!-- ScrollViewer 없이 패널을 꽉 채운다.
-                 · Stretch=Uniform → 배율 1 = "화면 맞춤"(비율 유지한 채 패널을 채움), 스크롤바 없음
-                 · 확대/이동은 RenderTransform(Scale+Translate) 으로만 처리 → 레이아웃에 영향 없음
-                 (이전엔 ScrollViewer 가 자식에게 무한 폭을 줘서 Uniform 이 먹지 않고 원본 크기로 넘쳤다) -->
+                 · Stretch=UniformToFill → 비율 유지한 채 패널을 "가득" 채움(좌우 여백 제거, 상하 약간 크롭).
+                   카메라(GVC 5:4)가 넓은 패널에 들어갈 때 레터박스가 생기지 않도록. ClipToBounds 로 넘침 클립.
+                   (전체를 다 보려면 Fit=배율1; 왜곡 없이 채우므로 형상 비율은 유지됨)
+                 · 확대/이동은 RenderTransform(Scale+Translate) 으로만 처리 → 레이아웃에 영향 없음 -->
             <Grid x:Name="ViewHost" Background="#0D1117" ClipToBounds="True"
                   MouseDown="Host_Down" MouseMove="Host_Move" MouseUp="Host_Up" MouseWheel="Host_Wheel"
                   SizeChanged="Host_SizeChanged">
-                <Image x:Name="Img" Source="{Binding Frame}" Stretch="Uniform"
+                <Image x:Name="Img" Source="{Binding Frame}" Stretch="UniformToFill"
                        RenderOptions.BitmapScalingMode="HighQuality"
                        RenderTransformOrigin="0.5,0.5">
                     <Image.RenderTransform>

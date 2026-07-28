@@ -663,7 +663,17 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     AddLog(T("Log_MoveInitialize"), LogLevel.Info);
                     break;
 
+                // 유지보수 메뉴 진입 시 첫 화면 = 모터 제어(축 제어). 서브메뉴도 펼쳐 둔다.
                 case "MAINTENANCE":
+                    CollapseAllSubMenus();
+                    IsMotorSubMenuVisible = true;
+                    SelectedMenu    = "MAINTENANCE";
+                    SelectedSubMenu = "AXIS_CONTROL";
+                    _motorControlVM ??= new MotorControlViewModel(this);
+                    CurrentView = _motorControlVM;
+                    AddLog(T("Log_MoveMotor"), LogLevel.Info);
+                    break;
+
                 case "IO":
                     CollapseAllSubMenus();
                     SelectedMenu = "MAINTENANCE";
