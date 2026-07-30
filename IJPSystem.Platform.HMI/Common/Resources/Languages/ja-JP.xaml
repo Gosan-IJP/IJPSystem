@@ -1,0 +1,380 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:system="clr-namespace:System;assembly=mscorlib">
+
+    <!-- サブメニュー -->
+    <system:String x:Key="SubMenu_Title">サブメニュー</system:String>
+    <system:String x:Key="SubMenu_IO">I/O モニター</system:String>
+    <system:String x:Key="SubMenu_Motor">モーター制御</system:String>
+    <system:String x:Key="SubMenu_AxisControl">└ 軸制御</system:String>
+    <system:String x:Key="SubMenu_PositionTeach">└ 位置ティーチング</system:String>
+    <system:String x:Key="SubMenu_PNID">P&amp;ID</system:String>
+    <system:String x:Key="SubMenu_VISION">ビジョン</system:String>
+    <system:String x:Key="SubMenu_NJI">└ NJI</system:String>
+    <system:String x:Key="SubMenu_GLASS_VIEW">└ グラスビュー</system:String>
+    <system:String x:Key="SubMenu_DROP_WATCHER">└ ドロップウォッチャー</system:String>
+    <system:String x:Key="SubMenu_VISUAL_MONITOR">└ ビジュアルモニター</system:String>
+    <system:String x:Key="SubMenu_Sequence">シーケンス</system:String>
+    <system:String x:Key="SubMenu_MotorInfo">モーター情報</system:String>
+    <system:String x:Key="SubMenu_TeachingPoint">ティーチング情報</system:String>
+    <system:String x:Key="SubMenu_OtherPoint">その他情報</system:String>
+    <system:String x:Key="SubMenu_AutoPrint">自動印刷</system:String>
+    <system:String x:Key="SubMenu_Initialize">初期化</system:String>
+    <system:String x:Key="SubMenu_SystemExit">システム終了</system:String>
+    <system:String x:Key="Tip_SystemExit">システム終了 (Engineer/Admin 権限が必要)</system:String>
+    <system:String x:Key="Msg_ExitBlockedTitle">終了ブロック</system:String>
+    <system:String x:Key="Msg_ExitBlockedRunning">稼働中はシステムを終了できません。&#x0A;&#x0A;実行中のシーケンス（自動印刷／初期化 など）を停止してから再試行してください。</system:String>
+
+    <!-- ボタン — メインダッシュボード -->
+    <system:String x:Key="Btn_Start">▶ 開始</system:String>
+    <system:String x:Key="Btn_StartContinuous">▶▶ 連続</system:String>
+    <system:String x:Key="Lbl_ContinuousMode">連続運転</system:String>
+    <system:String x:Key="Lbl_ContinuousModeHint">ON — 1サイクル完了後に自動繰り返し</system:String>
+    <system:String x:Key="Btn_Stop">■ 停止</system:String>
+    <system:String x:Key="Btn_EmergencyReset">⚠️ 非常リセット</system:String>
+
+    <!-- ボタン — パターン印刷 -->
+    <system:String x:Key="Btn_Print">印刷</system:String>
+    <system:String x:Key="Btn_Abort">中断</system:String>
+    <system:String x:Key="Btn_SetPrintOrigin">印刷原点設定</system:String>
+
+    <!-- ボタン — ウェーブフォーム -->
+    <system:String x:Key="Btn_Load">ロード</system:String>
+    <system:String x:Key="Btn_Save">保存</system:String>
+    <system:String x:Key="Btn_ApplySpitParam">スピットパラメータ適用</system:String>
+    <system:String x:Key="Btn_StartSpit">スピット開始</system:String>
+    <system:String x:Key="Btn_AbortSpit">スピット中断</system:String>
+
+    <!-- ボタン — I/O モニター -->
+    <system:String x:Key="Btn_Set">設定</system:String>
+
+    <!-- ボタン — シーケンス画面 -->
+    <system:String x:Key="Btn_SeqStart">開始</system:String>
+
+    <!-- ボタン — モーター制御 -->
+    <system:String x:Key="Btn_Servo">サーボ</system:String>
+    <system:String x:Key="Btn_Home">原点</system:String>
+    <system:String x:Key="Btn_Reset">リセット</system:String>
+    <system:String x:Key="Btn_Move">▶ 移動</system:String>
+
+    <!-- ボタン — モーターティーチング -->
+    <system:String x:Key="Btn_SaveToRecipe">レシピに保存</system:String>
+
+    <!-- ボタン — ビジョン (Glass / DropWatcher) -->
+    <system:String x:Key="Btn_Capture">キャプチャ</system:String>
+    <system:String x:Key="Btn_InspectAll">全数検査</system:String>
+    <system:String x:Key="Btn_ClearResults">結果クリア</system:String>
+    <system:String x:Key="Btn_TrendSpc">📈 トレンド (SPC)</system:String>
+    <system:String x:Key="Btn_Refresh">🔄 更新</system:String>
+
+    <!-- ボタン — レシピ画面 -->
+    <system:String x:Key="Btn_Add">追加</system:String>
+    <system:String x:Key="Btn_Copy">コピー</system:String>
+    <system:String x:Key="Btn_Edit">編集</system:String>
+    <system:String x:Key="Btn_Delete">削除</system:String>
+    <system:String x:Key="Btn_MoveUp">▲ 上へ</system:String>
+    <system:String x:Key="Btn_MoveDown">▼ 下へ</system:String>
+    <system:String x:Key="Btn_CancelEdit">編集取消</system:String>
+    <system:String x:Key="Btn_DiffModels">モデル比較</system:String>
+    <system:String x:Key="Btn_SaveModel">モデル保存</system:String>
+    <system:String x:Key="Btn_ApplyToMachine">稼働モデルに設定</system:String>
+    <system:String x:Key="Btn_SaveModel_Tip">編集した値をこのモデルに保存します。（稼働モデルは変更しません）</system:String>
+    <system:String x:Key="Btn_ApplyToMachine_Tip">このモデルを装置の稼働モデルに設定します。保存された値が適用されるため、編集した場合は先に［モデル保存］してください。</system:String>
+
+    <!-- ボタン — アラーム -->
+    <system:String x:Key="Btn_Search">検索</system:String>
+    <system:String x:Key="Btn_Ack">確認</system:String>
+    <system:String x:Key="Btn_ExportCsv">CSV 出力</system:String>
+    <system:String x:Key="Btn_AlarmReset">アラームリセット</system:String>
+    <system:String x:Key="Btn_AlarmClear">アラーム解除</system:String>
+
+    <!-- セクションヘッダー — P&amp;ID 運転パネル -->
+    <system:String x:Key="Section_ContinuousOp">連 続 動 作</system:String>
+    <system:String x:Key="Section_AutoSequence">自動シーケンス</system:String>
+    <system:String x:Key="Section_ManualOps">手動操作</system:String>
+
+    <!-- ボタン — P&amp;ID 自動シーケンス -->
+    <system:String x:Key="Btn_AutoPurge">自動パージ</system:String>
+    <system:String x:Key="Btn_AutoBlotting">自動ブロッティング</system:String>
+    <system:String x:Key="Btn_PnidStop">停止</system:String>
+
+    <!-- ボタン — P&amp;ID 手動操作 -->
+    <system:String x:Key="Btn_Refill">インク充填</system:String>
+    <system:String x:Key="Btn_Purge">パージ</system:String>
+    <system:String x:Key="Btn_PurgeStop">パージ停止</system:String>
+    <system:String x:Key="Btn_Spitting">スピッティング</system:String>
+    <system:String x:Key="Btn_SpittingStop">スピッティング停止</system:String>
+    <system:String x:Key="Btn_Drain">ドレン</system:String>
+    <system:String x:Key="Btn_PosPressureOn">正圧 ON</system:String>
+    <system:String x:Key="Btn_PosPressureOff">正圧 OFF</system:String>
+    <system:String x:Key="Btn_NegPressureOn">負圧 ON</system:String>
+    <system:String x:Key="Btn_NegPressureOff">負圧 OFF</system:String>
+    <system:String x:Key="Btn_AllOpen">全 OPEN</system:String>
+    <system:String x:Key="Btn_AllClose">全 CLOSE</system:String>
+
+    <!-- メインメニュー -->
+    <system:String x:Key="Menu_Main">メイン画面</system:String>
+    <system:String x:Key="Menu_Print">プリント</system:String>
+    <system:String x:Key="SubMenu_Waveform">ウェーブフォーム</system:String>
+    <system:String x:Key="SubMenu_PatternPrint">パターン印刷</system:String>
+    <system:String x:Key="SubMenu_PrintDropWatcher">ドロップウォッチャー</system:String>
+    <system:String x:Key="SubMenu_PrintGlassView">グラスビュー</system:String>
+    <system:String x:Key="Menu_Maintenance">メンテナンス</system:String>
+    <system:String x:Key="Menu_Recipe">レシピ</system:String>
+
+    <system:String x:Key="Menu_AlarmHistory">アラーム履歴</system:String>
+    <system:String x:Key="Menu_LogView">ログ表示</system:String>
+
+    <!-- ステータスバー -->
+    <system:String x:Key="Status_AutoRun">自動運転</system:String>
+    <system:String x:Key="Status_SystemReady">システム準備完了...</system:String>
+    <system:String x:Key="Status_Recipe">レシピ :</system:String>
+    <system:String x:Key="Status_SystemTime">システム時刻</system:String>
+
+    <!-- その他 -->
+    <system:String x:Key="Lbl_PrintSettings">プリント設定</system:String>
+    <system:String x:Key="Lbl_Swath">印刷回数 (Swath)</system:String>
+    <system:String x:Key="Lbl_HeadLength">ヘッド長</system:String>
+    <system:String x:Key="Lbl_PrintDirection">印刷方向</system:String>
+    <system:String x:Key="Opt_Unidirectional">単方向</system:String>
+    <system:String x:Key="Opt_Bidirectional">双方向</system:String>
+    <system:String x:Key="Btn_Logout">ログアウト</system:String>
+    <system:String x:Key="Btn_ClearLog">クリア</system:String>
+    <system:String x:Key="Recipe_SaveApplyHint">* SAVE: 記録保存 | APPLY: パラメータを即時反映</system:String>
+
+    <!-- 画面タイトル -->
+    <system:String x:Key="Title_AlarmHistory">アラーム履歴管理</system:String>
+
+    <!-- Recipe メッセージ -->
+    <system:String x:Key="Msg_RecipeDirtyConfirm">[{0}] に未保存の変更があります。&#x0a;変更を保存しますか？</system:String>
+    <system:String x:Key="Msg_RecipeDirtyTitle">未保存の変更</system:String>
+    <system:String x:Key="Msg_RecipeCancelConfirm">[{0}] の変更を破棄して保存済みの値に戻しますか？</system:String>
+    <system:String x:Key="Msg_RecipeCancelTitle">変更を破棄</system:String>
+    <system:String x:Key="Msg_RecipeRenameActiveWarn">[{0}] は現在稼働中のレシピです。&#x0a;名称を変更すると稼働レシピ名も即時変更されます。&#x0a;続行しますか？</system:String>
+    <system:String x:Key="Msg_RecipeRenameActiveTitle">稼働レシピ名の変更</system:String>
+
+    <!-- ══ MessageBox メッセージ ══════════════════════════════════════ -->
+    <!-- アラーム出力 -->
+    <system:String x:Key="Msg_AlarmNoData">出力するアラームデータがありません。</system:String>
+    <system:String x:Key="Msg_AlarmExportSuccess">正常に出力しました！&#x0a;&#x0a;パス: {0}</system:String>
+    <system:String x:Key="Msg_AlarmExportTitle">出力完了</system:String>
+
+    <!-- アラーム履歴削除 -->
+    <system:String x:Key="Msg_AlarmDeleteConfirm">すべてのアラーム履歴を完全に削除しますか？</system:String>
+    <system:String x:Key="Msg_AlarmDeleteTitle">削除確認</system:String>
+    <system:String x:Key="Msg_AlarmDeleteSuccess">すべての履歴を削除しました。</system:String>
+    <system:String x:Key="Msg_AlarmDeleteError">削除エラー: {0}</system:String>
+
+    <!-- アラーム全リセット -->
+    <system:String x:Key="Msg_AlarmResetAllConfirm">すべてのアラーム履歴をリセットしますか？</system:String>
+    <system:String x:Key="Msg_AlarmResetAllTitle">リセット確認</system:String>
+
+    <!-- アラーム行 単件リセット -->
+    <system:String x:Key="Msg_AlarmResetRowConfirm">[{0}] {1}&#x0a;&#x0a;このアラームをリセットしますか？</system:String>
+    <system:String x:Key="Msg_AlarmResetRowTitle">アラームリセット</system:String>
+
+    <!-- システム終了 -->
+    <system:String x:Key="Msg_ExitConfirm">システムを終了しますか？</system:String>
+    <system:String x:Key="Msg_ExitTitle">システム終了</system:String>
+
+    <!-- 出力強制制御 -->
+    <system:String x:Key="Msg_ForceOutputConfirm">{0} を {1} にしますか？</system:String>
+    <system:String x:Key="Msg_ForceOutputTitle">出力制御</system:String>
+    <system:String x:Key="Msg_ForceOutputOn">ON</system:String>
+    <system:String x:Key="Msg_ForceOutputOff">OFF</system:String>
+
+    <!-- ログアウト -->
+    <system:String x:Key="Msg_LogoutConfirm">Operator モードに変更しますか？</system:String>
+    <system:String x:Key="Msg_LogoutTitle">ユーザー変更</system:String>
+
+    <!-- ティーチング保存 -->
+    <system:String x:Key="Msg_TeachSaveConfirm">レシピ [{0}] のティーチング情報を保存しますか？</system:String>
+    <system:String x:Key="Msg_TeachSaveTitle">ティーチング保存</system:String>
+
+    <!-- ══ AddLog メッセージ ══════════════════════════════════════════ -->
+    <!-- 画面移動 — [NAV] -->
+    <system:String x:Key="Log_MoveMain">[NAV] MAIN 画面へ移動します。</system:String>
+    <system:String x:Key="Log_MoveIO">[NAV] I/O モニター画面へ移動します。</system:String>
+    <system:String x:Key="Log_Waveform">[NAV] ウェーブフォーム画面へ移動します。</system:String>
+    <system:String x:Key="Log_PatternPrint">[NAV] パターン印刷画面へ移動します。</system:String>
+    <system:String x:Key="Log_MoveMotor">[NAV] モーター制御画面へ移動します。</system:String>
+    <system:String x:Key="Log_MoveAxisControl">[NAV] 軸制御画面へ移動します。</system:String>
+    <system:String x:Key="Log_MovePositionTeach">[NAV] 位置ティーチング画面へ移動します。</system:String>
+    <system:String x:Key="Log_MoveNJI">[NAV] ビジョン &gt; NJI 画面へ移動します。</system:String>
+    <system:String x:Key="Log_MoveGlassView">[NAV] ビジョン &gt; グラスビュー画面へ移動します。</system:String>
+    <system:String x:Key="Log_MoveDropWatcher">[NAV] ビジョン &gt; ドロップウォッチャー画面へ移動します。</system:String>
+    <system:String x:Key="Log_MovePNID">[NAV] P&amp;ID 画面へ移動します。</system:String>
+    <system:String x:Key="Log_Sequence">[NAV] シーケンス画面へ移動します。</system:String>
+    <system:String x:Key="Log_MoveRecipe">[NAV] レシピ管理画面へ移動します。</system:String>
+    <system:String x:Key="Log_MoveMotorInfo">[NAV] モーター情報画面へ移動します。</system:String>
+    <system:String x:Key="Log_MoveTeachPointInfo">[NAV] ティーチング情報画面へ移動します。</system:String>
+    <system:String x:Key="Log_OtherInfo">[NAV] その他情報画面へ移動します。</system:String>
+    <system:String x:Key="Log_MoveAutoPrint">[NAV] 自動印刷画面へ移動します。</system:String>
+    <system:String x:Key="Log_MoveInitialize">[NAV] 初期化画面へ移動します。</system:String>
+    <system:String x:Key="Log_MoveAlarm">[NAV] アラーム履歴管理画面へ移動します。</system:String>
+    <system:String x:Key="Log_UnknownMenu">[NAV] 不明なメニュー要求: {0}</system:String>
+    <system:String x:Key="Log_LogWindowOpened">[NAV] 詳細ログビューを開きました。</system:String>
+
+    <!-- 認証/権限 — [AUTH] -->
+    <system:String x:Key="Log_LoginSuccess">[AUTH] ユーザー認証成功: {0}</system:String>
+    <system:String x:Key="Log_LoginRole">[AUTH] {0} 権限でログインしました。</system:String>
+    <system:String x:Key="Log_LogoutToOperator">[AUTH] Operator 権限に変更しました。</system:String>
+    <system:String x:Key="Log_RoleChanged">[AUTH] ユーザー権限が [{0}] に変更されました。</system:String>
+
+    <!-- システム — [SYS] -->
+    <system:String x:Key="Log_SystemInit">[SYS] システムを初期化しました。</system:String>
+    <system:String x:Key="Log_ExitAttempt">[SYS] システム終了を試みます...</system:String>
+    <system:String x:Key="Log_LogCleared">[SYS] ログをクリアしました。</system:String>
+
+    <!-- 装置制御 — [IO] / [MOTION] -->
+    <system:String x:Key="Log_Start">[SYS] 装置の稼働を開始します。(START)</system:String>
+    <system:String x:Key="Log_Stop">[SYS] 装置の稼働を停止します。(STOP)</system:String>
+    <system:String x:Key="Log_ErrorReset">[ALARM] エラーが解除されました。</system:String>
+    <system:String x:Key="Log_DoorOpenBlocked">[IO] 稼働中はドアを開けられません。</system:String>
+    <system:String x:Key="Log_DoorOpen">[IO] ドア開信号を出力しました。</system:String>
+    <system:String x:Key="Log_DoorClose">[IO] ドア閉信号を出力しました。</system:String>
+    <system:String x:Key="Log_VacuumOn">[IO] Vacuum ON.</system:String>
+    <system:String x:Key="Log_VacuumOff">[IO] Vacuum OFF.</system:String>
+    <system:String x:Key="Log_ManualControl">[IO] {0} → {1}</system:String>
+
+    <!-- 安全 -->
+    <system:String x:Key="Log_SafetyBypass">[DEBUG] 安全条件チェックをスキップします。</system:String>
+    <system:String x:Key="Log_EmoDetected">[Safety] EMO 非常停止検知 — 起動不可。</system:String>
+    <system:String x:Key="Log_DoorLockFail">[Safety] ドアロック未確認 — 起動不可。</system:String>
+    <system:String x:Key="Log_PressureFail">[Safety] Pressure Switch &lt;{0}&gt; 異常 — 起動不可。</system:String>
+    <system:String x:Key="Log_EmoStopped">[Safety] EMO 検知 — 緊急停止。</system:String>
+    <system:String x:Key="Log_AlarmCleared">[ALARM] 解除: システムは待機(STANDBY)状態です。</system:String>
+
+    <!-- シーケンス ステップ表示名 (AutoPrintSequence / InitializeSequence の SequenceStepDef.Name キー) -->
+    <system:String x:Key="Step_AutoPrint_WaitGlass">ガラス検知待ち (V/C チャック進入)</system:String>
+    <system:String x:Key="Step_AutoPrint_VacuumOn">V/C チャック真空 ON (ガラス固定)</system:String>
+    <system:String x:Key="Step_AutoPrint_VacuumConfirm">V/C チャック真空確認 (チャック真空圧 ON)</system:String>
+    <system:String x:Key="Step_AutoPrint_VacuumStabilize">真空安定化待ち (1s)</system:String>
+    <system:String x:Key="Step_AutoPrint_MoveStart">印刷開始位置(PRINT START)へ移動</system:String>
+    <system:String x:Key="Step_AutoPrint_MoveStartDone">印刷開始位置 InPosition 確認</system:String>
+    <system:String x:Key="Step_AutoPrint_Print">印刷中 — スキャン(Y)吐出</system:String>
+    <system:String x:Key="Step_AutoPrint_PrintDone">印刷完了 InPosition 確認</system:String>
+    <system:String x:Key="Step_AutoPrint_Return">復帰 — 開始点へ移動(非印刷)</system:String>
+    <system:String x:Key="Step_AutoPrint_ReturnDone">復帰完了 InPosition 確認</system:String>
+    <system:String x:Key="Step_AutoPrint_SwathStep">スワス ステップオーバー — X軸をヘッド長分移動</system:String>
+    <system:String x:Key="Step_AutoPrint_SwathStepDone">ステップオーバー InPosition 確認</system:String>
+    <system:String x:Key="Step_AutoPrint_VacuumOff">V/C チャック真空解除 (ガラス搬出準備)</system:String>
+    <system:String x:Key="Step_AutoPrint_MoveReady">待機位置(READY)へ移動</system:String>
+    <system:String x:Key="Step_AutoPrint_MoveReadyDone">READY 位置 InPosition 確認</system:String>
+
+    <system:String x:Key="Step_Init_ServoOn">サーボ ON — 全軸</system:String>
+    <system:String x:Key="Step_Init_Homing">原点復帰 — 全軸</system:String>
+    <system:String x:Key="Step_Init_MoveReady">待機位置(READY)へ移動</system:String>
+    <system:String x:Key="Step_Init_MoveReadyDone">全軸 InPosition 確認</system:String>
+
+    <system:String x:Key="Step_Purge_VacuumOff">真空解除</system:String>
+    <system:String x:Key="Step_Purge_MovePurge">パージ位置(PURGE)へ移動</system:String>
+    <system:String x:Key="Step_Purge_MovePurgeDone">パージ位置 InPosition 確認</system:String>
+    <system:String x:Key="Step_Purge_WaitDispense">インクパージ完了待ち</system:String>
+    <system:String x:Key="Step_Purge_MoveReady">待機位置(READY)へ移動</system:String>
+    <system:String x:Key="Step_Purge_MoveReadyDone">READY 位置 InPosition 確認</system:String>
+
+    <system:String x:Key="Step_Blotting_VacuumOff">真空解除</system:String>
+    <system:String x:Key="Step_Blotting_MoveBlotting">ブロッティング位置(BLOTTING)へ移動</system:String>
+    <system:String x:Key="Step_Blotting_MoveBlottingDone">ブロッティング位置 InPosition 確認</system:String>
+    <system:String x:Key="Step_Blotting_Wait">ノズル表面吸収待ち (3秒)</system:String>
+    <system:String x:Key="Step_Blotting_MoveReady">待機位置(READY)へ移動</system:String>
+    <system:String x:Key="Step_Blotting_MoveReadyDone">READY 位置 InPosition 確認</system:String>
+
+    <system:String x:Key="Step_Maint_DoorUnlock">ドアロック解除確認</system:String>
+    <system:String x:Key="Step_Maint_MoveMt">メンテナンス位置(MT)へ移動</system:String>
+    <system:String x:Key="Step_Maint_MoveMtDone">メンテナンス位置 InPosition 確認</system:String>
+    <system:String x:Key="Step_Maint_WaitDoorClose">メンテナンス完了信号待ち (ドア閉)</system:String>
+    <system:String x:Key="Step_Maint_MoveReady">待機位置(READY)へ移動</system:String>
+    <system:String x:Key="Step_Maint_MoveReadyDone">READY 位置 InPosition 確認</system:String>
+
+    <system:String x:Key="Step_NJI_MoveNji">NJI 位置へ移動</system:String>
+    <system:String x:Key="Step_NJI_MoveNjiDone">NJI 位置 InPosition 確認</system:String>
+    <system:String x:Key="Step_NJI_LightOn">照明 ON</system:String>
+    <system:String x:Key="Step_NJI_Inspect">ノズルビジョン検査</system:String>
+    <system:String x:Key="Step_NJI_LightOff">照明 OFF</system:String>
+    <system:String x:Key="Step_NJI_MoveReady">待機位置(READY)へ移動</system:String>
+    <system:String x:Key="Step_NJI_MoveReadyDone">READY 位置 InPosition 確認</system:String>
+    <system:String x:Key="Step_DropWatcher_Move">ドロップウォッチャー位置(DROP WATCHER)へ移動</system:String>
+    <system:String x:Key="Step_DropWatcher_MoveDone">ドロップウォッチャー位置 InPosition 確認</system:String>
+
+    <!-- Pattern Print (Meteor PCC) ステップ -->
+    <system:String x:Key="Step_PatternPrint_OpenPrinter">プリンタ接続 (OpenPrinter — Meteor PCC)</system:String>
+    <system:String x:Key="Step_PatternPrint_CheckStatus">状態確認 (GetPccStatus/GetHeadStatus — Ready)</system:String>
+    <system:String x:Key="Step_PatternPrint_SetParam">印刷パラメータ設定 (解像度・速度・エンコーダ/PD)</system:String>
+    <system:String x:Key="Step_PatternPrint_SendConfig">ヘッド構成・波形送信 (ReSendPCCConfiguration)</system:String>
+    <system:String x:Key="Step_PatternPrint_HeadPowerOn">ヘッド電源 ON (SetHeadPower)</system:String>
+    <system:String x:Key="Step_PatternPrint_AlignHead">ヘッド整列・Xオフセット (SetHome/UpdateXoffsets)</system:String>
+    <system:String x:Key="Step_PatternPrint_DownloadImage">画像ダウンロード (DownloadIMG_ScanMODE → PCC バッファ)</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveStart">印刷開始位置(PRINT START)へ移動</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveStartDone">印刷開始位置 InPosition 確認</system:String>
+    <system:String x:Key="Step_PatternPrint_ArmTrigger">印刷トリガ ARM (SetSignal / PrintGo)</system:String>
+    <system:String x:Key="Step_PatternPrint_ScanPrint">スキャン走行印刷 — 終点(PRINT END)まで吐出</system:String>
+    <system:String x:Key="Step_PatternPrint_ScanPrintDone">印刷走行完了 InPosition 確認</system:String>
+    <system:String x:Key="Step_PatternPrint_WaitPrintDone">印刷完了待ち (isBusy/GetPrnStatus ポーリング)</system:String>
+    <system:String x:Key="Step_PatternPrint_HeadPowerOff">ヘッド電源 OFF (SetHeadPower)</system:String>
+    <system:String x:Key="Step_PatternPrint_ClosePrinter">プリンタ接続終了 (ClosePrinter)</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveReady">待機位置(READY)へ移動</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveReadyDone">READY 位置 InPosition 確認</system:String>
+
+    <!-- シーケンス表示名 / 説明 (SequenceRegistry の Name/Description キー) -->
+    <system:String x:Key="Seq_Init_Name">INITIALIZE</system:String>
+    <system:String x:Key="Seq_Init_Desc">全軸サーボON → 原点復帰 → 待機位置へ移動 → ガラス検知待ち</system:String>
+    <system:String x:Key="Seq_Purge_Name">PURGE</system:String>
+    <system:String x:Key="Seq_Purge_Desc">真空解除 → パージ位置 → ヘッド DOWN → バルブ OPEN → 正圧印加 → 吐出 → 正圧 OFF/負圧復元 → バルブ CLOSE → ヘッド UP → 復帰</system:String>
+    <system:String x:Key="Seq_Blotting_Name">BLOTTING</system:String>
+    <system:String x:Key="Seq_Blotting_Desc">真空解除 → ブロッティング位置へ移動 → ノズル表面吸収待ち → 復帰</system:String>
+    <system:String x:Key="Seq_Maintenance_Name">MAINTENANCE</system:String>
+    <system:String x:Key="Seq_Maintenance_Desc">メンテナンス位置へ移動 → ドア閉待ち → 復帰</system:String>
+    <system:String x:Key="Seq_NJI_Name">NJI</system:String>
+    <system:String x:Key="Seq_NJI_Desc">NJI 位置へ移動 → ビジョン検査 → NG時アラーム → 復帰</system:String>
+    <system:String x:Key="Seq_DropWatcher_Name">DROP WATCHER</system:String>
+    <system:String x:Key="Seq_DropWatcher_Desc">ドロップウォッチャー位置へ移動</system:String>
+    <system:String x:Key="Seq_AutoPrint_Name">AUTO PRINT</system:String>
+    <system:String x:Key="Seq_AutoPrint_Desc">ガラス検知 → 真空固定 → PRINT START へ移動 → ヘッド DOWN → 印刷中 → ヘッド UP → 真空解除 → 復帰</system:String>
+    <system:String x:Key="Seq_PatternPrint_Name">PATTERN PRINT</system:String>
+    <system:String x:Key="Seq_PatternPrint_Desc">プリンタ接続 → 状態確認 → パラメータ/構成送信 → ヘッド電源・整列 → 画像ダウンロード → PRINT START へ移動 → トリガ ARM → スキャン印刷 → 完了待ち → ヘッド OFF/終了 → 復帰 (Meteor PCC)</system:String>
+    <system:String x:Key="Seq_HeadUp_Name">HEAD UP</system:String>
+    <system:String x:Key="Seq_HeadUp_Desc">プリントヘッドを上へ移動 (ガラスから分離)</system:String>
+    <system:String x:Key="Seq_HeadDown_Name">HEAD DOWN</system:String>
+    <system:String x:Key="Seq_HeadDown_Desc">プリントヘッドを下へ移動 (ガラスに接近)</system:String>
+
+    <!-- HEAD UP/DOWN 単独シーケンス step -->
+    <system:String x:Key="Step_HeadUp_Move">プリントヘッド UP 位置へ移動</system:String>
+    <system:String x:Key="Step_HeadUp_MoveDone">プリントヘッド UP InPosition 確認</system:String>
+    <system:String x:Key="Step_HeadDown_Move">プリントヘッド DOWN 位置へ移動</system:String>
+    <system:String x:Key="Step_HeadDown_MoveDone">プリントヘッド DOWN InPosition 確認</system:String>
+
+    <!-- AUTO PRINT / PURGE シーケンス内 HEAD UP/DOWN step -->
+    <system:String x:Key="Step_AutoPrint_HeadDown">プリントヘッド DOWN 移動</system:String>
+    <system:String x:Key="Step_AutoPrint_HeadDownDone">プリントヘッド DOWN InPosition 確認</system:String>
+    <system:String x:Key="Step_AutoPrint_HeadUp">プリントヘッド UP 移動</system:String>
+    <system:String x:Key="Step_AutoPrint_HeadUpDone">プリントヘッド UP InPosition 確認</system:String>
+    <system:String x:Key="Step_Purge_HeadDown">プリントヘッド DOWN 移動</system:String>
+    <system:String x:Key="Step_Purge_HeadDownDone">プリントヘッド DOWN InPosition 確認</system:String>
+    <system:String x:Key="Step_Purge_HeadUp">プリントヘッド UP 移動</system:String>
+    <system:String x:Key="Step_Purge_HeadUpDone">プリントヘッド UP InPosition 確認</system:String>
+    <system:String x:Key="Step_Purge_ValveOpen">ヘッド インレット/リターン バルブ OPEN (Y700~Y715)</system:String>
+    <system:String x:Key="Step_Purge_PressurizeOn">正圧印加 (Purge Pressure) + 安定化待ち</system:String>
+    <system:String x:Key="Step_Purge_PressurizeOff">正圧 OFF + 負圧印加 (メニスカス復元)</system:String>
+    <system:String x:Key="Step_Purge_ValveClose">ヘッドバルブ CLOSE (16個一括)</system:String>
+
+    <!-- AUTO PRINT シーケンス -->
+    <system:String x:Key="Log_AutoPrintAlarmPause">[AUTO PRINT] アラーム発生 — モーション停止後に一時停止</system:String>
+    <system:String x:Key="Log_AutoPrintAlarmResume">[AUTO PRINT] アラーム解除 — 再開</system:String>
+    <system:String x:Key="Log_AutoPrintStopMotionError">[AUTO PRINT] モーション停止中のエラー: {0}</system:String>
+    <system:String x:Key="Log_AutoPrintResume">[AUTO PRINT] 再開 — 次のステップから継続</system:String>
+    <system:String x:Key="Log_AutoPrintStopPause">[AUTO PRINT] STOP — 現在のステップ完了後に一時停止 (STARTで再開)</system:String>
+    <system:String x:Key="Log_AutoPrintContinuousStart">[AUTO PRINT] 連続運転開始 — 停止までサイクルを繰り返し</system:String>
+    <system:String x:Key="Log_AutoPrintStepAborted">[AUTO PRINT] Step {0} 中断 — 再開時に再実行</system:String>
+    <system:String x:Key="Log_AutoPrintCompleted">AUTO PRINT 完了 ({0}s)</system:String>
+    <system:String x:Key="Log_AutoPrintTimeoutMsg">AUTO PRINT タイムアウト: {0}</system:String>
+    <system:String x:Key="Log_AutoPrintFailureMsg">AUTO PRINT 失敗: {0}</system:String>
+
+    <!-- 前提条件 -->
+    <system:String x:Key="Log_AxisInfoMissing">軸情報なし — モーションドライバを確認してください</system:String>
+    <system:String x:Key="Log_PrereqNotHomed">先に INITIALIZE シーケンスを実行してください。&#10;&#10;未原点の軸: {0}</system:String>
+    <system:String x:Key="Log_PrereqNotServoOn">サーボ OFF 状態です。INITIALIZE を再実行してください。&#10;&#10;サーボON が必要な軸: {0}</system:String>
+    <system:String x:Key="Log_PrereqDialogTitle">前提条件を満たしていません</system:String>
+
+</ResourceDictionary>

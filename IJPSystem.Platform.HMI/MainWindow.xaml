@@ -455,7 +455,21 @@
                             </Style>
                         </Ellipse.Style>
                     </Ellipse>
-                    <TextBlock Text="VISION" Foreground="#94A3B8" FontSize="10" FontFamily="Consolas"/>
+                    <TextBlock Text="VISION" Foreground="#94A3B8" FontSize="10" FontFamily="Consolas" Margin="0,0,8,0"/>
+                    <!-- HEAD (Meteor PCC) — 미연결/미구성=회색, PCC 부착 시 초록. 툴팁에 상세 상태 -->
+                    <Ellipse Width="7" Height="7" Margin="0,0,3,0" ToolTip="{Binding HeadStatusText}">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="#64748B"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HeadConnected}" Value="True">
+                                        <Setter Property="Fill" Value="#22C55E"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock Text="HEAD" Foreground="#94A3B8" FontSize="10" FontFamily="Consolas" ToolTip="{Binding HeadStatusText}"/>
                 </StackPanel>
             </StatusBarItem>
 

@@ -213,6 +213,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 }
             }
         }
+
+        // 진행 중인 시퀀스 스텝 번호(1-based, 대기=0). 화면 전환 후 재진입한 View 가
+        // 애니메이션을 현재 스텝 기준으로 복원할 때 사용한다(AutoPrintStepChanged 와 동기).
+        public int CurrentStepNumber { get; private set; }
         private string _activeRecipeName = string.Empty;
         public string ActiveRecipeName
         {
@@ -281,32 +285,38 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set => SetProperty(ref _isEmoActive, value);
         }
 
-        private double _motorXPosition;
-        public double MotorXPosition
+        // MOTOR POSITION 패널 — 축 개수와 무관하게 설정(MotionAxisList) 기반으로 표시.
+        // 1호기(3축)/2호기(6축)를 같은 바이너리로 지원하기 위해 고정 X/Y/Z/T 속성 대신 컬렉션 사용.
+        public System.Collections.ObjectModel.ObservableCollection<MotorPositionVm> MotorPositions { get; }
+            = new System.Collections.ObjectModel.ObservableCollection<MotorPositionVm>();
+        private readonly System.Collections.Generic.Dictionary<string, MotorPositionVm> _motorPosMap = new();
+        private bool _motorPosBuilt;
+
+        // ── 드라이브(서보) 준비 표시등 ──────────────────────────────
+        // 냉부팅 직후엔 서보 드라이브가 폴트로 올라올 수 있어, 이 상태에서 초기화를 누르면
+        // ServoOn 이 EtherCAT 에러(-20280)로 실패한다. 작업자가 누르기 전에 눈으로 확인하도록
+        // 모터 포지션 패널에 3색 표시등을 둔다. "Fault"=🔴 / "Connecting"=🟡 / "Ready"=🟢.
+        private string _motorReadyState = "Connecting";
+        public string MotorReadyState
         {
-            get => _motorXPosition;
-            set => SetProperty(ref _motorXPosition, value);
+            get => _motorReadyState;
+            set => SetProperty(ref _motorReadyState, value);
         }
 
-        private double _motorYPosition;
-        public double MotorYPosition
+        // 패널에 짧게 표기할 캡션
+        private string _motorReadyText = "연결 대기중";
+        public string MotorReadyText
         {
-            get => _motorYPosition;
-            set => SetProperty(ref _motorYPosition, value);
+            get => _motorReadyText;
+            set => SetProperty(ref _motorReadyText, value);
         }
 
-        private double _motorZPosition;
-        public double MotorZPosition
+        // 툴팁에 표기할 상세(폴트 축 등)
+        private string _motorReadyDetail = "드라이브 연결 대기중";
+        public string MotorReadyDetail
         {
-            get => _motorZPosition;
-            set => SetProperty(ref _motorZPosition, value);
-        }
-
-        private double _motorQPosition;
-        public double MotorQPosition
-        {
-            get => _motorQPosition;
-            set => SetProperty(ref _motorQPosition, value);
+            get => _motorReadyDetail;
+            set => SetProperty(ref _motorReadyDetail, value);
         }
         #endregion
 
@@ -463,6 +473,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             IsRunning  = true;
             IsError    = false;
             ProcessProgress = 0;
+            CurrentStepNumber = 0;
             CurrentStepName = "STARTING";
             CachePrintRange();
             _machine.SetSystemStatus(MachineState.Running);
@@ -506,6 +517,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         _cts.Token.ThrowIfCancellationRequested();   // STOP → 외부 catch
 
                         CurrentStepName = $"[{step.Number}/{total}] {step.Name}";
+                        CurrentStepNumber = step.Number;   // 재진입 View 애니메이션 복원용
                         ProcessProgress = (double)i / total * 100;
                         AutoPrintStepChanged?.Invoke(step.Number);
 
@@ -580,6 +592,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 IsRunning = false;
                 IsPaused  = false;     // 다음 런을 위해 게이트 해제
+                CurrentStepNumber = 0;
                 IsVacuumOn = _machine.IsGlassDetected();
                 _stepCts?.Dispose();
                 _stepCts = null;
@@ -672,10 +685,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // HMI 표기는 X/Y/Z/Q 인데 모션 드라이버는 회전축을 "T" 로 식별
             if (_machine.Motion != null)
             {
-                MotorXPosition = _machine.Motion.GetActualPosition("X");
-                MotorYPosition = _machine.Motion.GetActualPosition("Y");
-                MotorZPosition = _machine.Motion.GetActualPosition("Z");
-                MotorQPosition = _machine.Motion.GetActualPosition("T");
+                UpdateMotorPositions();
+                UpdateMotorReadyState();
             }
 
             // 시퀀스 도중 EMO 가 들어오면 메인 CTS 를 즉시 취소해 step 을 깨운다
@@ -690,6 +701,87 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
+        /// <summary>
+        /// MOTOR POSITION 패널 갱신 — 설정된 축을 최초 1회 구성한 뒤 매 폴링마다 위치만 갱신.
+        /// 축 목록이 MotionAxisList(설정) 기준이라 3축/6축을 코드 변경 없이 표시한다.
+        /// </summary>
+        private void UpdateMotorPositions()
+        {
+            var motion = _machine?.Motion;
+            if (motion == null) return;
+
+            if (!_motorPosBuilt)
+            {
+                var axes = _machine?.Config?.MotionAxisList;
+                if (axes != null && axes.Count > 0)
+                {
+                    foreach (var a in axes)
+                    {
+                        if (string.IsNullOrEmpty(a.AxisNo)) continue;
+                        var vm = new MotorPositionVm(a.AxisNo);
+                        _motorPosMap[a.AxisNo] = vm;
+                        MotorPositions.Add(vm);
+                    }
+                    _motorPosBuilt = true;
+                }
+            }
+
+            foreach (var kv in _motorPosMap)
+                kv.Value.Position = motion.GetActualPosition(kv.Key);
+        }
+
+        /// <summary>
+        /// 드라이브(서보) 준비 표시등 상태 갱신.
+        /// 🔴 Fault      : 연결됐지만 폴트(ServoFault|CtlrFault)인 축이 있음 → 초기화 금지.
+        /// 🟡 Connecting : 연결 전 / 상태 미수신 → 대기.
+        /// 🟢 Ready      : 연결 OK + 모든 축 폴트 없음 → 초기화 가능.
+        /// (냉부팅 직후 Y드라이브가 ServoFault 로 올라오는 구간을 작업자에게 보여주기 위함.)
+        /// </summary>
+        private void UpdateMotorReadyState()
+        {
+            var motion = _machine?.Motion;
+            if (motion == null || !motion.IsConnected)
+            {
+                MotorReadyState  = "Connecting";
+                MotorReadyText   = "연결 대기중";
+                MotorReadyDetail = "드라이브 연결 대기중";
+                return;
+            }
+
+            var all = motion.GetAllStatus();
+            if (all == null || all.Count == 0)
+            {
+                MotorReadyState  = "Connecting";
+                MotorReadyText   = "연결 대기중";
+                MotorReadyDetail = "드라이브 상태 수신 대기중";
+                return;
+            }
+
+            var faulted = all.Where(s => s.IsAlarm).Select(s => s.AxisNo).ToArray();
+            if (faulted.Length > 0)
+            {
+                MotorReadyState  = "Fault";
+                MotorReadyText   = "드라이브 폴트";
+                MotorReadyDetail = $"드라이브 폴트({string.Join(",", faulted)}) — 폴트 정리 후 초기화";
+            }
+            else
+            {
+                MotorReadyState  = "Ready";
+                MotorReadyText   = "초기화 가능";
+                MotorReadyDetail = "드라이브 폴트 없음 — 초기화 가능";
+            }
+        }
+
+    }
+
+    /// <summary>MOTOR POSITION 패널 한 축의 표시 항목(축 라벨 + 현재 위치).</summary>
+    public sealed class MotorPositionVm : IJPSystem.Platform.Domain.Common.ViewModelBase
+    {
+        public string Label { get; }
+        public MotorPositionVm(string label) => Label = label;
+
+        private double _position;
+        public double Position { get => _position; set => SetProperty(ref _position, value); }
     }
 
 }

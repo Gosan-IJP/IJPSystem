@@ -152,6 +152,17 @@
                                             </Border>
 
                                             <StackPanel Grid.Column="5" Orientation="Horizontal" HorizontalAlignment="Center">
+                                                <!-- 축별 조그(누르는 동안 이동) — DataContext(행 축) 기반이라 축 개수 무관 -->
+                                                <Button Content="◀" Width="30" Margin="2" FontSize="12" FontWeight="Bold"
+                                                        MouseDown="JogBackward_MouseDown" MouseUp="JogStop_MouseUp"
+                                                        IsEnabled="{Binding CanJog, FallbackValue=False}"
+                                                        Style="{StaticResource ModernActionButton}" Background="#334155"
+                                                        ToolTip="조그 (−) — 누르는 동안 이동"/>
+                                                <Button Content="▶" Width="30" Margin="2" FontSize="12" FontWeight="Bold"
+                                                        MouseDown="JogForward_MouseDown" MouseUp="JogStop_MouseUp"
+                                                        IsEnabled="{Binding CanJog, FallbackValue=False}"
+                                                        Style="{StaticResource ModernActionButton}" Background="#334155"
+                                                        ToolTip="조그 (+) — 누르는 동안 이동"/>
                                                 <Button Content="{DynamicResource Btn_Servo}" Command="{Binding ServoCommand}" Width="52" Margin="2" FontSize="10">
                                                     <Button.Style>
                                                         <Style TargetType="Button" BasedOn="{StaticResource ModernActionButton}">

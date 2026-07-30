@@ -1,4 +1,5 @@
 {
+  "_comment": "2호기(6축) 템플릿. 2호기 PC의 Config\\MotorConfig.json 을 이 내용으로 교체해 사용. 1호기(3축) MotorConfig.json 은 그대로 둘 것(6축으로 덮으면 HomeAll 이 없는 dw 드라이브를 기다려 INITIALIZE 가 멈춤). HwAxis/EncoderPulsePerUnit/Home 값은 실장 드라이브·배선으로 확정 필요(아래는 placeholder).",
   "MotionAxisList": [
     {
       "AxisNo": "X",
@@ -31,6 +32,45 @@
       "Name": "Z AXIS",
       "Unit": "mm",
       "HwAxis": 2,
+      "EncoderPulsePerUnit": 2000,
+      "Home": {
+        "Velocity": 10,
+        "Acceleration": 100,
+        "Deceleration": 100,
+        "SpecVelocity": 2.0
+      }
+    },
+    {
+      "AxisNo": "T",
+      "Name": "T AXIS",
+      "Unit": "deg",
+      "HwAxis": 3,
+      "EncoderPulsePerUnit": 1000,
+      "Home": {
+        "Velocity": 10,
+        "Acceleration": 100,
+        "Deceleration": 100,
+        "SpecVelocity": 2.0
+      }
+    },
+    {
+      "AxisNo": "DW-X",
+      "Name": "DW-X AXIS",
+      "Unit": "mm",
+      "HwAxis": 4,
+      "EncoderPulsePerUnit": 2000,
+      "Home": {
+        "Velocity": 10,
+        "Acceleration": 100,
+        "Deceleration": 100,
+        "SpecVelocity": 2.0
+      }
+    },
+    {
+      "AxisNo": "DW-Y",
+      "Name": "DW-Y AXIS",
+      "Unit": "mm",
+      "HwAxis": 5,
       "EncoderPulsePerUnit": 2000,
       "Home": {
         "Velocity": 10,

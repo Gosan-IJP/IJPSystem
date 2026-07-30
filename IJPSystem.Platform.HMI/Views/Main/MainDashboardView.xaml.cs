@@ -102,6 +102,8 @@ namespace IJPSystem.Platform.HMI.Views
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
             CreateNozzleDots();
+            // 이미 가동 중인 VM 에 재진입한 경우(정지→다른 화면→복귀) 애니메이션을 이어서 복원.
+            ResumeAnimationIfRunning();
         }
 
         // ── ViewModel 이벤트 구독/해제 ──────────────────────────────
@@ -115,11 +117,43 @@ namespace IJPSystem.Platform.HMI.Views
                 _vm.AutoPrintStepChanged += OnStepChanged;
                 _vm.AutoPrintAborted     += StopAnimation;
                 _vm.AutoPrintCompleted   += StopAnimation;
+
+                // DataContext 가 로드 이후에 붙는 경우에도 복원(순서 무관 안전망).
+                if (IsLoaded) ResumeAnimationIfRunning();
             }
         }
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
-            => UnsubscribeFromViewModel();
+        {
+            // 언로드된 뷰가 CompositionTarget.Rendering 훅을 계속 물고 있지 않도록 정리.
+            UnhookRendering();
+            _isAnimating = false;
+            UnsubscribeFromViewModel();
+        }
+
+        // 화면 전환 후 재진입 시, VM 이 아직 가동 중이면 애니메이션을 현재 스텝부터 이어 재개.
+        // (AutoPrintStarted 는 사이클 시작에만 발생하므로, 중간 재진입한 새 View 는 이 경로로 복원한다.)
+        private void ResumeAnimationIfRunning()
+        {
+            if (_isAnimating) return;                 // 이미 애니 중이면 건너뜀
+            if (_vm == null || !_vm.IsRunning) return;
+            if (_vm.CurrentStepNumber <= 0) return;   // 스텝 진입 전(STARTING) — 곧 이벤트로 시작됨
+
+            _isAnimating      = true;
+            _isScanning       = false;
+            _currentStepNo    = _vm.CurrentStepNumber;
+            _passFill         = 0;
+            _currentPassIndex = 0;
+            _stepTimes.Clear();       // 시간기반 phase 는 비움 → 완료(1.0)로 간주(헤드 이미 하강 등)
+            _animStart        = DateTime.Now;
+            _lastFrameAt      = default;
+            _lastScanMm       = double.NaN;
+
+            // 글라스/헤드 위치는 OnFrameTick 이 실모터 위치(GetLiveScanMm)로 매 프레임 맞추므로,
+            // 여기서는 렌더 훅만 걸면 다음 프레임부터 현재 위치로 자연스럽게 이어진다.
+            SetStatus("▶  RESUMING ...", "#38BDF8");
+            HookRendering();
+        }
 
         private void UnsubscribeFromViewModel()
         {

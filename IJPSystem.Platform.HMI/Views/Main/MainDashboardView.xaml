@@ -294,39 +294,60 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Background="#1E293B" CornerRadius="12" Padding="14,8" Margin="0,0,10,0"  BorderBrush="#334155" BorderThickness="1">
-                    <StackPanel VerticalAlignment="Center">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
                         <TextBlock Text="MOTOR POSITION (mm)" Foreground="#64748B" FontSize="11" FontWeight="Bold" Margin="0,0,0,6"/>
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
+                        <!-- 설정(MotionAxisList) 기반 — 3축/6축을 같은 바이너리로 표시. 2열 배치. -->
+                        <ItemsControl ItemsSource="{Binding MotorPositions}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="2"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,1,12,1">
+                                        <TextBlock Text="{Binding Label}" Foreground="#94A3B8" FontFamily="Consolas" FontSize="13"/>
+                                        <TextBlock Text=" :" Foreground="#94A3B8" FontFamily="Consolas" FontSize="13"/>
+                                        <TextBlock Text="{Binding Position, StringFormat={}{0:F3}}" Foreground="#3B82F6" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Margin="6,0,0,0"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        </StackPanel>
 
-                            <!-- Row 0 : X | Y -->
-                            <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,1,12,1">
-                                <TextBlock Text="X :" Foreground="#94A3B8" FontFamily="Consolas" FontSize="13"/>
-                                <TextBlock Text="{Binding MotorXPosition, StringFormat={}{0:F3}}" Foreground="#3B82F6" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Margin="6,0,0,0"/>
-                            </StackPanel>
-                            <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Margin="0,1,0,1">
-                                <TextBlock Text="Y :" Foreground="#94A3B8" FontFamily="Consolas" FontSize="13"/>
-                                <TextBlock Text="{Binding MotorYPosition, StringFormat={}{0:F3}}" Foreground="#3B82F6" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Margin="6,0,0,0"/>
-                            </StackPanel>
-
-                            <!-- Row 1 : Z | Q -->
-                            <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" Margin="0,1,12,1">
-                                <TextBlock Text="Z :" Foreground="#94A3B8" FontFamily="Consolas" FontSize="13"/>
-                                <TextBlock Text="{Binding MotorZPosition, StringFormat={}{0:F3}}" Foreground="#3B82F6" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Margin="6,0,0,0"/>
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,1,0,1">
-                                <TextBlock Text="T :" Foreground="#94A3B8" FontFamily="Consolas" FontSize="13"/>
-                                <TextBlock Text="{Binding MotorQPosition, StringFormat={}{0:F3}}" Foreground="#3B82F6" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Margin="6,0,0,0"/>
-                            </StackPanel>
-                        </Grid>
-                    </StackPanel>
+                        <!-- ── 드라이브(서보) 준비 표시등 (3색) ──────────────────
+                             🔴 Fault=폴트(초기화 금지) / 🟡 Connecting=연결·리셋중 / 🟢 Ready=초기화 가능.
+                             냉부팅 직후 서보 폴트 구간을 작업자가 눈으로 확인하도록. 상세는 툴팁. -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                    Margin="12,0,4,0" ToolTip="{Binding MotorReadyDetail}">
+                            <TextBlock Text="{Binding MotorReadyText}" Foreground="#94A3B8" FontSize="11"
+                                       HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                            <Ellipse Width="15" Height="15" HorizontalAlignment="Center">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <!-- 기본: Connecting = 앰버 -->
+                                        <Setter Property="Fill" Value="#F59E0B"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding MotorReadyState}" Value="Fault">
+                                                <Setter Property="Fill" Value="#EF4444"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding MotorReadyState}" Value="Ready">
+                                                <Setter Property="Fill" Value="#22C55E"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                                <Ellipse.Effect>
+                                    <DropShadowEffect Color="#000000" BlurRadius="4" ShadowDepth="1" Opacity="0.5"/>
+                                </Ellipse.Effect>
+                            </Ellipse>
+                        </StackPanel>
+                    </Grid>
                 </Border>
                 <!-- 연속 운전 — 모드 토글 스위치(액션 아님). 상단 상태 띠로 이동. -->
                 <Border Grid.Column="1" Background="#1E293B" CornerRadius="12" Padding="14,8" BorderBrush="#334155" BorderThickness="1">

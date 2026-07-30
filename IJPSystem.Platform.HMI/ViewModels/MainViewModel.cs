@@ -9,6 +9,7 @@ using IJPSystem.Platform.Domain.Models.Log;
 using IJPSystem.Platform.Domain.Models.Motion;
 using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Infrastructure.Repositories;
+using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
 using IJPSystem.Platform.HMI.Common;
 using static IJPSystem.Platform.HMI.Common.Loc;
 using IJPSystem.Platform.HMI.Views;
@@ -36,6 +37,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private NJIViewModel? _njiVM;
         public ObservableCollection<AxisViewModel> SharedAxisList { get; } = new();
         private LogWindowView? _logWindowView;
+
+        // Meteor 헤드(PCC) 연결 모니터 — 읽기 전용 attach. 네이티브 DLL 없으면 스스로 비활성(개발PC 안전).
+        private readonly MeteorStatusMonitor _headMonitor = new();
 
         private bool _hasActiveAlarm;
         public bool HasActiveAlarm
@@ -114,6 +118,30 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             get => _visionConnected;
             private set => SetProperty(ref _visionConnected, value);
+        }
+
+        // ── 헤드(Meteor PCC) 연결 상태 ─────────────────────────────────────
+        // 상태바 4번째 점(HEAD). MeteorSpit 배선 전엔 데이터 소스가 없어 회색(미연결).
+        // 배선 후 SetHeadConnection()으로 PCC 부착 상태를 반영하면 초록으로 켜진다.
+        private bool _headConnected;
+        public bool HeadConnected
+        {
+            get => _headConnected;
+            private set => SetProperty(ref _headConnected, value);
+        }
+
+        private string _headStatusText = "헤드(Meteor) 미연결 — 발사(Spit) 연동 전";
+        public string HeadStatusText
+        {
+            get => _headStatusText;
+            private set => SetProperty(ref _headStatusText, value);
+        }
+
+        /// <summary>MeteorSpit 배선 시 호출 — PCC 부착 상태를 상태바 HEAD 점/툴팁에 반영.</summary>
+        public void SetHeadConnection(bool connected, string status)
+        {
+            HeadConnected  = connected;
+            HeadStatusText = status;
         }
 
         private string _lastLogMessage = "System Ready...";
@@ -203,7 +231,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             CurrentUserRole == UserRole.Engineer ||
             CurrentUserRole == UserRole.Admin;
 
-        private string[] _languages = { "KO", "EN" };
+        private string[] _languages = { "KO", "EN", "JP" };
         private int _langIndex = 0;          // 초기 언어 = KO
 
         private string _currentLanguage = "KO";
@@ -332,7 +360,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             IsStandby = true;
             _controller.GetMachine().SetSystemStatus(MachineState.Standby);
 
-            AddLog(T("Log_SystemInit"), LogLevel.Success);
+            AddLog(TLog("Log_SystemInit"), LogLevel.Success);
 
             // 드라이버 실제 로드 상태를 화면 로그에 표시(실장/가상·연결여부 즉시 확인용)
             LogDriverStatus();
@@ -391,6 +419,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 OnPropertyChanged(nameof(SystemTime));
                 Task.Run(() => UpdateIOStates());
                 UpdateDriverConnections();
+                Task.Run(() => UpdateHeadConnection());
             };
 
             _fastTimer.Start();
@@ -513,6 +542,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
             VisionConnected = machine.Vision?.IsConnected ?? false;
         }
 
+        // 헤드(Meteor PCC) 연결 상태 폴링 — 백그라운드에서 attach·조회 후 UI 스레드로 반영.
+        // 네이티브 DLL 미탑재/엔진 미실행/점유중이면 회색 + 사유 툴팁으로 조용히 표시(예외 없음).
+        private void UpdateHeadConnection()
+        {
+            var s = _headMonitor.Poll();
+            System.Windows.Application.Current?.Dispatcher.Invoke(
+                () => SetHeadConnection(s.Connected, s.Detail));
+        }
+
         private void ExecuteForceOutput(IOViewModel vm)
         {
             if (string.IsNullOrEmpty(vm.Index)) return;
@@ -525,7 +563,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 T("Msg_ForceOutputTitle"), MessageBoxButton.YesNo) == MessageBoxResult.Yes)
             {
                 _controller.GetMachine().IO.SetOutput(vm.Index, nextState);
-                AddLog(T("Log_ManualControl", desc, onOff), LogLevel.Warning);
+                AddLog(TLog("Log_ManualControl", desc, onOff), LogLevel.Warning);
             }
         }
 
@@ -578,7 +616,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 if (loginWin.ShowDialog() == true)
                 {
                     CurrentUserRole = loginWin.ResultRole;
-                    AddLog(T("Log_LoginRole", CurrentUserRole), LogLevel.Success);
+                    AddLog(TLog("Log_LoginRole", CurrentUserRole), LogLevel.Success);
                 }
                 else return;
             }
@@ -593,7 +631,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu    = "MAIN";
                     SelectedSubMenu = "AUTO_PRINT";
                     CurrentView = _mainDashboardVM;
-                    AddLog(T("Log_MoveAutoPrint"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveAutoPrint"), LogLevel.Info);
                     break;
 
                 case "INITIALIZE":
@@ -601,7 +639,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu    = "MAIN";
                     SelectedSubMenu = "INITIALIZE";
                     CurrentView = new InitializeView { DataContext = new InitializeViewModel(this) };
-                    AddLog(T("Log_MoveInitialize"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveInitialize"), LogLevel.Info);
                     break;
 
                 // ── PRINT ─────────────────────────────────────────────
@@ -618,7 +656,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         SelectedSubMenu = "PATTERN_PRINT";
                         _patternPrintVM ??= new PatternPrintViewModel(this);
                         CurrentView = _patternPrintVM;
-                        AddLog(T("Log_Waveform"), LogLevel.Info);
+                        AddLog(TLog("Log_Waveform"), LogLevel.Info);
                     }
                     break;
 
@@ -627,7 +665,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu    = "PRINT";
                     SelectedSubMenu = "WAVEFORM";
                     CurrentView = new WaveformViewModel(this);
-                    AddLog(T("Log_Waveform"), LogLevel.Info);
+                    AddLog(TLog("Log_Waveform"), LogLevel.Info);
                     break;
 
                 case "PATTERN_PRINT":
@@ -636,7 +674,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedSubMenu = "PATTERN_PRINT";
                     _patternPrintVM ??= new PatternPrintViewModel(this);
                     CurrentView = _patternPrintVM;
-                    AddLog(T("Log_PatternPrint"), LogLevel.Info);
+                    AddLog(TLog("Log_PatternPrint"), LogLevel.Info);
                     break;
 
                 case "PRINT_DROP_WATCHER":
@@ -644,7 +682,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu    = "PRINT";
                     SelectedSubMenu = "PRINT_DROP_WATCHER";
                     CurrentView = new DropWatcherViewModel(this);
-                    AddLog(T("Log_MoveDropWatcher"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveDropWatcher"), LogLevel.Info);
                     break;
 
                 case "PRINT_GLASS_VIEW":
@@ -652,7 +690,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu    = "PRINT";
                     SelectedSubMenu = "PRINT_GLASS_VIEW";
                     CurrentView = new GlassViewModel(this);
-                    AddLog(T("Log_MoveGlassView"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveGlassView"), LogLevel.Info);
                     break;
 
                 case "PRINT_INITIALIZE":
@@ -660,7 +698,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu    = "PRINT";
                     SelectedSubMenu = "PRINT_INITIALIZE";
                     CurrentView = new InitializeView { DataContext = new InitializeViewModel(this) };
-                    AddLog(T("Log_MoveInitialize"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveInitialize"), LogLevel.Info);
                     break;
 
                 // 유지보수 메뉴 진입 시 첫 화면 = 모터 제어(축 제어). 서브메뉴도 펼쳐 둔다.
@@ -671,7 +709,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedSubMenu = "AXIS_CONTROL";
                     _motorControlVM ??= new MotorControlViewModel(this);
                     CurrentView = _motorControlVM;
-                    AddLog(T("Log_MoveMotor"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveMotor"), LogLevel.Info);
                     break;
 
                 case "IO":
@@ -679,7 +717,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu = "MAINTENANCE";
                     SelectedSubMenu = "IO";
                     CurrentView = new IOMonitorView { DataContext = new IOMonitorViewModel(this) };
-                    AddLog(T("Log_MoveIO"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveIO"), LogLevel.Info);
                     break;
 
                 case "MOTOR":
@@ -695,7 +733,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         SelectedSubMenu = "AXIS_CONTROL";
                         _motorControlVM ??= new MotorControlViewModel(this);
                         CurrentView = _motorControlVM;
-                        AddLog(T("Log_MoveMotor"), LogLevel.Info);
+                        AddLog(TLog("Log_MoveMotor"), LogLevel.Info);
                     }
                     break;
 
@@ -706,7 +744,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedSubMenu = "AXIS_CONTROL";
                     _motorControlVM ??= new MotorControlViewModel(this);
                     CurrentView = _motorControlVM;
-                    AddLog(T("Log_MoveAxisControl"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveAxisControl"), LogLevel.Info);
                     break;
 
                 case "POSITION_TEACH":
@@ -715,7 +753,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu    = "MAINTENANCE";
                     SelectedSubMenu = "POSITION_TEACH";
                     CurrentView = new MotorTeachingViewModel(this);
-                    AddLog(T("Log_MovePositionTeach"), LogLevel.Info);
+                    AddLog(TLog("Log_MovePositionTeach"), LogLevel.Info);
                     break;
 
                 case "VISION":
@@ -731,7 +769,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         // NJI 버튼은 숨김 상태이므로 비전 메뉴 기본 화면은 Glass View
                         SelectedSubMenu = "GLASS_VIEW";
                         CurrentView = new GlassViewModel(this);
-                        AddLog(T("Log_MoveGlassView"), LogLevel.Info);
+                        AddLog(TLog("Log_MoveGlassView"), LogLevel.Info);
                     }
                     break;
 
@@ -742,7 +780,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedSubMenu = "NJI";
                     _njiVM ??= new NJIViewModel(this);
                     CurrentView = _njiVM;
-                    AddLog(T("Log_MoveNJI"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveNJI"), LogLevel.Info);
                     break;
 
                 case "GLASS_VIEW":
@@ -751,7 +789,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu    = "MAINTENANCE";
                     SelectedSubMenu = "GLASS_VIEW";
                     CurrentView = new GlassViewModel(this);
-                    AddLog(T("Log_MoveGlassView"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveGlassView"), LogLevel.Info);
                     break;
 
                 case "DROP_WATCHER":
@@ -760,7 +798,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu    = "MAINTENANCE";
                     SelectedSubMenu = "DROP_WATCHER";
                     CurrentView = new DropWatcherViewModel(this);
-                    AddLog(T("Log_MoveDropWatcher"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveDropWatcher"), LogLevel.Info);
                     break;
 
                 case "VISUAL_MONITOR":
@@ -777,7 +815,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu    = "MAINTENANCE";
                     SelectedSubMenu = "PNID";
                     CurrentView = new PnidView { DataContext = new PnidViewModel(this) };
-                    AddLog(T("Log_MovePNID"), LogLevel.Info);
+                    AddLog(TLog("Log_MovePNID"), LogLevel.Info);
                     break;
 
                 case "SEQUENCE":
@@ -785,7 +823,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu    = "MAINTENANCE";
                     SelectedSubMenu = "SEQUENCE";
                     CurrentView = new SequenceViewModel(this);
-                    AddLog(T("Log_Sequence"), LogLevel.Info);
+                    AddLog(TLog("Log_Sequence"), LogLevel.Info);
                     break;
 
                 case "RECIPE":
@@ -794,7 +832,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedSubMenu = "MOTOR_INFO";
                     CurrentView = RecipeVM;
                     RecipeVM.CurrentDataType = RecipeDataType.Motor;
-                    AddLog(T("Log_MoveRecipe"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveRecipe"), LogLevel.Info);
                     break;
 
                 case "MOTOR_INFO":
@@ -802,7 +840,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedSubMenu = "MOTOR_INFO";
                     CurrentView = RecipeVM;
                     RecipeVM.CurrentDataType = RecipeDataType.Motor;
-                    AddLog(T("Log_MoveMotorInfo"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveMotorInfo"), LogLevel.Info);
                     break;
 
                 case "TEACH_INFO":
@@ -810,7 +848,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedSubMenu = "TEACH_INFO";
                     CurrentView = RecipeVM;
                     RecipeVM.CurrentDataType = RecipeDataType.Teach;
-                    AddLog(T("Log_MoveTeachPointInfo"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveTeachPointInfo"), LogLevel.Info);
                     break;
 
                 case "OTHER_INFO":
@@ -818,7 +856,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedSubMenu = "OTHER_INFO";
                     CurrentView = RecipeVM;
                     RecipeVM.CurrentDataType = RecipeDataType.Other;
-                    AddLog(T("Log_OtherInfo"), LogLevel.Info);
+                    AddLog(TLog("Log_OtherInfo"), LogLevel.Info);
                     break;
 
                 case "ALARM":
@@ -826,19 +864,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedMenu    = "ALARM";
                     SelectedSubMenu = "";
                     CurrentView = new AlarmHistoryView { DataContext = this };
-                    AddLog(T("Log_MoveAlarm"), LogLevel.Info);
+                    AddLog(TLog("Log_MoveAlarm"), LogLevel.Info);
                     break;
 
                 case "LOG":
                     if (ExecuteOpenLogWindow())
-                        AddLog(T("Log_LogWindowOpened"), LogLevel.Info);
+                        AddLog(TLog("Log_LogWindowOpened"), LogLevel.Info);
                     break;
 
                 default:
                     CollapseAllSubMenus();
                     SelectedMenu = "MAIN"; 
                     CurrentView = _mainDashboardVM;
-                    AddLog(T("Log_UnknownMenu", destination), LogLevel.Warning);
+                    AddLog(TLog("Log_UnknownMenu", destination), LogLevel.Warning);
                     break;
             }
 
@@ -861,7 +899,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private void ChangeUserRole(UserRole newRole)
         {
             CurrentUserRole = newRole;
-            AddLog(T("Log_RoleChanged", newRole), LogLevel.Info);
+            AddLog(TLog("Log_RoleChanged", newRole), LogLevel.Info);
         }
 
         private void OnClearLog()
@@ -869,7 +907,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
                 SystemLogs.Clear();
-                AddLog(T("Log_LogCleared"), LogLevel.Info);
+                AddLog(TLog("Log_LogCleared"), LogLevel.Info);
             });
         }
 
@@ -887,11 +925,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // MainWindow.Closing에서 호출 — 종료 직전 ViewModel 측 정리
         public void OnApplicationClosing()
         {
-            AddLog(T("Log_ExitAttempt"), LogLevel.Fatal);
+            AddLog(TLog("Log_ExitAttempt"), LogLevel.Fatal);
 
             // DispatcherTimer 정지 — Tick 핸들러가 VM 참조를 잡고 있어 미정지 시 GC 누수
             _fastTimer.Stop();
             _slowTimer.Stop();
+
+            // Meteor 프린터 점유 해제(열려 있었다면 PiClosePrinter)
+            _headMonitor.Dispose();
 
             // 종료 전 램프 소등 (드라이버 정리는 App.OnExit에서 일괄 처리)
             _controller?.GetMachine()?.SetSystemStatus(MachineState.Idle);
@@ -922,7 +963,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 this.IsStandby = true;
                 this.IsRunning = false;
                 _controller.GetMachine().SetSystemStatus(MachineState.Standby); 
-                AddLog(T("Log_AlarmCleared"), LogLevel.Info);
+                AddLog(TLog("Log_AlarmCleared"), LogLevel.Info);
             }
             else
             {
@@ -969,7 +1010,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 if (loginWin.ShowDialog() == true)
                 {
                     CurrentUserRole = loginWin.ResultRole;
-                    AddLog(T("Log_LoginRole", CurrentUserRole), LogLevel.Success);
+                    AddLog(TLog("Log_LoginRole", CurrentUserRole), LogLevel.Success);
                 }
                 return;
             }
@@ -980,7 +1021,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             if (result == MessageBoxResult.Yes)
             {
                 ChangeUserRole(UserRole.Operator);
-                AddLog(T("Log_LogoutToOperator"), LogLevel.Info);
+                AddLog(TLog("Log_LogoutToOperator"), LogLevel.Info);
                 SelectedMenu = "MAIN";
                 ExecuteMoveWindow("MAIN");
             }
@@ -995,6 +1036,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 "KO" => "Common/Resources/Languages/ko-KR.xaml",
                 "EN" => "Common/Resources/Languages/en-US.xaml",
+                "JP" => "Common/Resources/Languages/ja-JP.xaml",
                 _ => "Common/Resources/Languages/ko-KR.xaml"
             };
 

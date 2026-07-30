@@ -1,6 +1,7 @@
 using IJPSystem.Platform.HMI.ViewModels;
 using System;
 using System.Linq;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -14,13 +15,18 @@ namespace IJPSystem.Platform.HMI.Views
         }
 
         /// <summary>
-        /// Tag 기반으로 대상 축을 찾습니다.
-        /// Tag="SEL" 또는 Tag 없음  → SelectedAxis
-        /// Tag="X"/"Y"/"Z"/"T"      → AxisList에서 이름에 해당 문자가 포함된 축
+        /// 대상 축을 찾습니다(모든 축을 데이터기반으로 지원).
+        /// ① 축 리스트(ItemsControl) 행의 버튼 → 그 행의 DataContext(AxisViewModel) 직접 사용 → 축 개수 무관.
+        /// ② Tag="SEL" 또는 Tag 없음  → SelectedAxis
+        /// ③ Tag="X"/"Y"/"Z"/"T"(D-패드) → 이름에 해당 문자가 포함된 축
         /// </summary>
         private AxisViewModel? ResolveAxis(object sender)
         {
             if (DataContext is not MotorControlViewModel vm) return null;
+
+            // ① 축 리스트 행의 조그 버튼: DataContext 가 곧 그 축(AxisViewModel)이다.
+            if ((sender as FrameworkElement)?.DataContext is AxisViewModel rowAxis)
+                return rowAxis;
 
             string? tag = (sender as Button)?.Tag?.ToString();
 

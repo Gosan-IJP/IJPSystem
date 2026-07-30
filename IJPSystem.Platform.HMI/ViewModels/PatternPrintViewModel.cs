@@ -554,10 +554,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             RefreshValveStates();
             InitMeniscusDevice();
 
-            // VV Control 패널(Final VV / Switching Pressure / Pump + 상태 LED) — 머신 IO 지연 바인딩
+            // VV Control 패널(Final VV / Switching Pressure / Pump + 상태 LED) — 머신 IO 지연 바인딩.
+            // MPC AL = DMD 상태머신 알람(현재는 HasError 로 대응, 전용 알람 레지스터 확정 시 교체),
+            // 압력 = DMD 실측(kPa). 상태머신 미연결이면 각각 off / 0.
             Vv = new IJPSystem.Platform.HMI.Print.VvControlViewModel(
                      () => _mainVM.GetController()?.GetMachine()?.IO,
-                     msg => _mainVM.AddLog(msg, LogLevel.Info));
+                     msg => _mainVM.AddLog(msg, LogLevel.Info),
+                     mpcAlarmProvider: () => _meniscus?.State?.HasError ?? false,
+                     pressureProvider: () => _meniscus?.State?.Pressure ?? 0.0);
 
             // 배럴 액위 센서(X100/X101) 주기 폴링 시작 (300ms)
             _levelPollTimer = new System.Threading.Timer(_ => PollLevelSensors(), null, 0, 300);

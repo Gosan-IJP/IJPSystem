@@ -5,7 +5,7 @@
 ; ============================================================================
 
 #define MyAppName      "IJPSystem HMI"
-#define MyAppVersion   "1.0.21"
+#define MyAppVersion   "1.0.22"
 #define MyAppPublisher "GosanTech"                      ; ← 회사명으로 수정
 #define MyAppExeName   "IJPSystem.Platform.HMI.exe"
 #define PublishDir     "publish"                        ; build-installer.ps1 의 publish 출력
