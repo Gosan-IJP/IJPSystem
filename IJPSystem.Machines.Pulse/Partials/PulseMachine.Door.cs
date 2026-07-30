@@ -1,16 +1,18 @@
 namespace IJPSystem.Machines.Pulse
 {
-    // 도어 감지 — 현재 IO.json(ETS-D08MN 8/7점)에는 도어 센서/개폐 출력이 없다.
-    // ※ IsDoorLocked()는 항상 false, OpenDoor/CloseDoor는 no-op(인터페이스 계약 유지용).
-    //   도어 IO가 추가되면 IO.json 에 등록 후 아래 상수를 실제 Index 로 교체할 것.
+    // 도어 감지 — 2호기 정면 DOOR SW(IO.json X007 = DI_DOOR_FRONT)로 판단.
+    // ※ 1호기 IO.json 에는 도어 Index 가 없어 GetInput→echo false 가 되지만,
+    //   도어 인터록은 현재 가동을 막지 않으므로(CanOperate 미사용, CheckSafetyBeforeStart 도 도어 제외)
+    //   동일 코드로 무해하다. 개폐 액추에이터 출력은 없어 OpenDoor/CloseDoor 는 no-op.
+    //   극성 가정: 입력 true = 도어 닫힘(잠김). 실장에서 반대면 아래 한 줄만 반전.
     public partial class PulseMachine
     {
         private static partial class DI
         {
-            public const string DOOR = "DI_DOOR";
+            public const string DOOR = "DI_DOOR_FRONT";   // 2호기 X007 정면 DOOR SW
         }
 
-        // IO.json에 도어 개폐 출력이 없어 실제 제어 대상 없음
+        // 도어 개폐 액추에이터 출력이 없어 실제 제어 대상 없음
         public void OpenDoor()  { /* no door actuator on this hardware */ }
         public void CloseDoor() { /* no door actuator on this hardware */ }
 

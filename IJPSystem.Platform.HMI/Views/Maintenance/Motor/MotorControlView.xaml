@@ -85,7 +85,7 @@
                                 <Run Text="(Servo/Orgin/InPos)" FontSize="9"/>
                             </TextBlock>
                             <TextBlock Grid.Column="3" Text="MOTOR SENSOR" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
-                            <TextBlock Grid.Column="4" Text="POSITION(mm)" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
+                            <TextBlock Grid.Column="4" Text="POSITION(mm,deg)" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
                             <TextBlock Grid.Column="5" Text="ACTION" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
                         </Grid>
 
@@ -154,12 +154,12 @@
                                             <StackPanel Grid.Column="5" Orientation="Horizontal" HorizontalAlignment="Center">
                                                 <!-- 축별 조그(누르는 동안 이동) — DataContext(행 축) 기반이라 축 개수 무관 -->
                                                 <Button Content="◀" Width="30" Margin="2" FontSize="12" FontWeight="Bold"
-                                                        MouseDown="JogBackward_MouseDown" MouseUp="JogStop_MouseUp"
+                                                        PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
                                                         IsEnabled="{Binding CanJog, FallbackValue=False}"
                                                         Style="{StaticResource ModernActionButton}" Background="#334155"
                                                         ToolTip="조그 (−) — 누르는 동안 이동"/>
                                                 <Button Content="▶" Width="30" Margin="2" FontSize="12" FontWeight="Bold"
-                                                        MouseDown="JogForward_MouseDown" MouseUp="JogStop_MouseUp"
+                                                        PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
                                                         IsEnabled="{Binding CanJog, FallbackValue=False}"
                                                         Style="{StaticResource ModernActionButton}" Background="#334155"
                                                         ToolTip="조그 (+) — 누르는 동안 이동"/>

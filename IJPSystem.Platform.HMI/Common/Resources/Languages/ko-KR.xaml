@@ -243,6 +243,8 @@
     <system:String x:Key="Log_DoorLockFail">[Safety] 도어 잠금 미확인 — 가동 불가.</system:String>
     <system:String x:Key="Log_PressureFail">[Safety] Pressure Switch &lt;{0}&gt; 이상 — 가동 불가.</system:String>
     <system:String x:Key="Log_EmoStopped">[Safety] EMO 감지 — 긴급 정지.</system:String>
+    <system:String x:Key="Log_TempHighAlarm">[Safety] 온도 상한 알람 감지.</system:String>
+    <system:String x:Key="Log_TempLowAlarm">[Safety] 온도 하한 알람 감지.</system:String>
     <system:String x:Key="Log_AlarmCleared">[ALARM] 해제: 시스템이 대기(STANDBY) 상태입니다.</system:String>
 
     <!-- 시퀀스 단계 표시명 (AutoPrintSequence / InitializeSequence 의 SequenceStepDef.Name 키) -->

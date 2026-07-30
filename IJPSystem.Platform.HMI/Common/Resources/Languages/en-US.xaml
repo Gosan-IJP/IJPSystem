@@ -243,6 +243,8 @@
     <system:String x:Key="Log_DoorLockFail">[Safety] Door not locked — cannot start.</system:String>
     <system:String x:Key="Log_PressureFail">[Safety] Pressure Switch &lt;{0}&gt; error — cannot start.</system:String>
     <system:String x:Key="Log_EmoStopped">[Safety] EMO detected — emergency stop.</system:String>
+    <system:String x:Key="Log_TempHighAlarm">[Safety] Temperature HIGH alarm detected.</system:String>
+    <system:String x:Key="Log_TempLowAlarm">[Safety] Temperature LOW alarm detected.</system:String>
     <system:String x:Key="Log_AlarmCleared">[ALARM] Cleared — system in STANDBY.</system:String>
 
     <!-- Sequence step display names (matching SequenceStepDef.Name keys) -->

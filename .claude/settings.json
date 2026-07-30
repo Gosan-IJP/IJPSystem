@@ -264,7 +264,15 @@
       "Bash(cp -f IJPSystem.Platform.HMI/__TRACKED_VAR__/IJPSystem.Platform.HMI.dll /d/IJP/)",
       "Bash(cp -f IJPSystem.Platform.Domain/__TRACKED_VAR__/IJPSystem.Platform.Domain.dll /d/IJP/)",
       "Bash(cp -f IJPSystem.Machines.Pulse/__TRACKED_VAR__/IJPSystem.Machines.Pulse.dll /d/IJP/)",
-      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\\\IJP\\\\IJPSystem\\\\Installer\\\\build-installer.ps1\")"
+      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\\\IJP\\\\IJPSystem\\\\Installer\\\\build-installer.ps1\")",
+      "Bash(MSYS2_ARG_CONV_EXCL=\"*\" dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -c Release -p:Platform=x86 -v m)",
+      "Bash(cd \"d:/IJP/IJPSystem\" && cp Config/IO.2*.json _hotfix/Config/ && echo \"=== _hotfix DLL ===\" && ls --time-style=+%H:%M:%S -la _hotfix/*.dll && echo \"=== _hotfix/Config ===\" && ls --time-style=+%H:%M:%S -la _hotfix/Config/)",
+      "Bash(MSYS2_ARG_CONV_EXCL=\"*\" dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -c Release -p:Platform=x86 -v q -clp:ErrorsOnly)",
+      "Bash(echo \"=== 빌드 종료코드: $? ===\")",
+      "Bash(python -c \"import json;d=json.load\\(open\\('Config/MotorConfig.json',encoding='utf-8'\\)\\);axs=d['MotionAxisList'];print\\('축수:',len\\(axs\\)\\);[print\\(' ',a['AxisNo'],'Jog.Vel=',a['MotionConfig']['Jog']['Velocity'],'Move.Vel=',a['MotionConfig']['Move']['Velocity']\\) for a in axs]\")",
+      "Bash(cp Config/MotorConfig.json _hotfix/Config/)",
+      "Bash(node -e \"const d=require\\('./Config/MotorConfig.json'\\);console.log\\('축수:',d.MotionAxisList.length\\);d.MotionAxisList.forEach\\(a=>console.log\\('  '+a.AxisNo+' Jog.Vel='+a.MotionConfig.Jog.Velocity+' Move.Vel='+a.MotionConfig.Move.Velocity\\)\\)\")",
+      "Bash(powershell.exe -NoProfile -Command 'try { $d = Get-Content -Raw -Encoding UTF8 Config/MotorConfig.json | ConvertFrom-Json; Write-Output \\('\\\\''축수: '\\\\'' + $d.MotionAxisList.Count\\); $d.MotionAxisList | ForEach-Object { Write-Output \\('\\\\''  '\\\\'' + $_.AxisNo + '\\\\'' Jog.Vel='\\\\'' + $_.MotionConfig.Jog.Velocity + '\\\\'' Move.Vel='\\\\'' + $_.MotionConfig.Move.Velocity + '\\\\'' Printing.Vel='\\\\'' + $_.MotionConfig.Printing.Velocity\\) }; Write-Output '\\\\''JSON OK'\\\\'' } catch { Write-Output \\('\\\\''JSON ERROR: '\\\\'' + $_.Exception.Message\\) }')"
     ],
     "additionalDirectories": [
       "d:\\tmp",
@@ -284,7 +292,8 @@
       "C:\\Users\\bluey\\AppData\\Local\\Temp\\claude\\d--IJP-IJPSystem\\fc660880-50bf-4c7d-87fd-3a0b4067e104\\scratchpad\\StrobeScan\\publish\"* _hotfix\\StrobeScan\\ && rm _hotfix\\StrobeScan\\StrobeScan.pdb && ls _hotfix",
       "C:\\Users\\bluey\\AppData\\Local\\Temp\\claude\\d--IJP-IJPSystem\\fc660880-50bf-4c7d-87fd-3a0b4067e104\\scratchpad\\StrobeScan\\publish",
       "d:\\IJP\\IJPSystem\\publish",
-      "d:\\IJP"
+      "d:\\IJP",
+      "D:\\IJP\\IJPSystem\\Config"
     ]
   }
 }

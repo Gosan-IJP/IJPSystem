@@ -9,6 +9,10 @@ namespace IJPSystem.Machines.Pulse
             //   EMO 배선이 추가되면 IO.json 에 등록 후 이 상수를 실제 Index 로 교체할 것.
             public const string EMO = "DI_EMO";
 
+            // 온도 알람 (2호기 X008/X009). 1호기 IO.json 에는 없어 GetInput→echo false(무해).
+            public const string TEMP_LOW_ALARM  = "DI_TEMP_LOW_ALARM";
+            public const string TEMP_HIGH_ALARM = "DI_TEMP_HIGH_ALARM";
+
             // 압력 스위치 (1-based index, swNo). 값은 IO.json Index 와 일치해야 한다.
             // 호출부(MainDashboard)는 swNo 1~3 을 확인한다.
             public static readonly string[] PRESSURE_SW =
@@ -24,6 +28,14 @@ namespace IJPSystem.Machines.Pulse
         // ── EMO (비상정지) ──
         public bool IsEmoActive()
             => IO?.GetInput(DI.EMO) ?? false;
+
+        // ── 온도 알람 (2호기) ──
+        // 1호기는 IO.json 에 해당 Index 가 없어 항상 false(동일 코드로 무해).
+        public bool IsTempLowAlarm()
+            => IO?.GetInput(DI.TEMP_LOW_ALARM) ?? false;
+
+        public bool IsTempHighAlarm()
+            => IO?.GetInput(DI.TEMP_HIGH_ALARM) ?? false;
 
         // ── Pressure Switch ──
         public bool IsPressureOk(int swNo)

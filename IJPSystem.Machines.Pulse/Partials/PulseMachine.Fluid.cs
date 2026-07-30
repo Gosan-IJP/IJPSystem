@@ -38,6 +38,9 @@ namespace IJPSystem.Machines.Pulse
 
         private static partial class DO
         {
+            // ── 드레인 밸브 (2호기 Y011). 1호기 미배선 → SetOutput no-op(무해) ──
+            public const string DRAIN_SV = "DO_DRAIN_SV";
+
             // ── 약액 공급/회수 ──
             public const string BOTTLE_INK_SUPPLY        = "DO_BOTTLE_INK_SUPPLY";
             public const string SUCTION_TO_SPT           = "DO_SUCTION_TO_SPT";
@@ -114,6 +117,10 @@ namespace IJPSystem.Machines.Pulse
         // ── 오버플로우 감지 ──
         public bool IsOverflowDetected()  => IO?.GetInput(DI.OVERFLOW)        ?? false;
         public bool IsMtSptOverflow()     => IO?.GetInput(DI.MT_SPT_OVERFLOW) ?? false;
+
+        // ── 드레인 밸브 (2호기) ──
+        public void SetDrainValve(bool on)    => IO?.SetOutput(DO.DRAIN_SV, on);
+        public bool IsDrainValveOn()          => IO?.GetOutput(DO.DRAIN_SV) ?? false;
 
         // ── 약액 공급/회수 밸브/펌프 ──
         public void InkSupplyOn(bool on)      => IO?.SetOutput(DO.BOTTLE_INK_SUPPLY,        on);

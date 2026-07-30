@@ -243,6 +243,8 @@
     <system:String x:Key="Log_DoorLockFail">[Safety] ドアロック未確認 — 起動不可。</system:String>
     <system:String x:Key="Log_PressureFail">[Safety] Pressure Switch &lt;{0}&gt; 異常 — 起動不可。</system:String>
     <system:String x:Key="Log_EmoStopped">[Safety] EMO 検知 — 緊急停止。</system:String>
+    <system:String x:Key="Log_TempHighAlarm">[Safety] 温度上限アラーム検知。</system:String>
+    <system:String x:Key="Log_TempLowAlarm">[Safety] 温度下限アラーム検知。</system:String>
     <system:String x:Key="Log_AlarmCleared">[ALARM] 解除: システムは待機(STANDBY)状態です。</system:String>
 
     <!-- シーケンス ステップ表示名 (AutoPrintSequence / InitializeSequence の SequenceStepDef.Name キー) -->

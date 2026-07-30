@@ -1,0 +1,160 @@
+{
+  "_comment": "★2호기(6축) 전용 IO 맵 — 10 DI(X000~X009) + 12 DO(Y000~Y011). 실배선 IO 리스트 기준(2026-07-30). 이 파일을 2호기 PC 에서 IO.json 으로 교체(rename)해 사용한다. ★1호기 IO.json(8DI/8DO, X007=SPARE·타워램프/부저/도어/온도 없음)을 이 내용으로 덮어쓰지 말 것. Index 이름은 코드 참조와 반드시 일치해야 한다. (파일명 ASCII 고정: 한글 파일명은 일부 도구 경로에서 깨질 수 있음)",
+  "Digital_IO_List": [
+    {
+      "Address": "X000",
+      "Index": "DI_PRESS_SW_CHUCK_VAC",
+      "Description": "Chuck Table Vacuum Switch",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X001",
+      "Index": "DI_PRESS_SW_DMPC_VAC",
+      "Description": "DMPC Vacuum Switch",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X002",
+      "Index": "DI_PRESS_SW_HEAD",
+      "Description": "Head Pressure Switch",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X003",
+      "Index": "DI_PRESS_SW_3WAY",
+      "Description": "3Way Pressure Switch",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X004",
+      "Index": "DI_LEVEL_SND_LOW",
+      "Description": "Level Sensor Low (BAE00KJ)",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X005",
+      "Index": "DI_LEVEL_SND_HIGH",
+      "Description": "Level Sensor High (BAE00KJ)",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X006",
+      "Index": "DI_OVER_FLOW_SND",
+      "Description": "Over Flow Sensor (FS-N11N)",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X007",
+      "Index": "DI_DOOR_FRONT",
+      "Description": "정면 DOOR SW",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X008",
+      "Index": "DI_TEMP_LOW_ALARM",
+      "Description": "TEMP LOW ALARM",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X009",
+      "Index": "DI_TEMP_HIGH_ALARM",
+      "Description": "TEMP HIGH ALARM",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+
+    {
+      "Address": "Y000",
+      "Index": "DO_SOL_VV_CHUCK_VAC",
+      "Description": "Chuck Table Vacuum Sol' V/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y001",
+      "Index": "DO_SOL_VV_DMPC_VAC",
+      "Description": "DMD Vacuum Sol' V/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y002",
+      "Index": "DO_SOL_VV_HEAD_CONV",
+      "Description": "Head CDA/VAC Convert Sol' V/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y003",
+      "Index": "DO_SOL_VV_INK_1",
+      "Description": "Ink Supply 1 Sol' V/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y004",
+      "Index": "DO_SOL_VV_INK_2",
+      "Description": "Ink Supply 2 Sol' V/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y005",
+      "Index": "DO_SOL_VV_EXHAUST",
+      "Description": "배기 Sol V/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y006",
+      "Index": "DO_MIST_COLLECTOR",
+      "Description": "MIST COLLECTOR",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y007",
+      "Index": "DO_BUZZER",
+      "Description": "BUZZER",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y008",
+      "Index": "DO_TOWER_LAMP_RED",
+      "Description": "LED R (Tower Lamp Red)",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y009",
+      "Index": "DO_TOWER_LAMP_GREEN",
+      "Description": "LED G (Tower Lamp Green)",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y010",
+      "Index": "DO_TOWER_LAMP_BLUE",
+      "Description": "LED B (Tower Lamp Blue)",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y011",
+      "Index": "DO_DRAIN_SV",
+      "Description": "DRAIN S/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    }
+  ]
+}

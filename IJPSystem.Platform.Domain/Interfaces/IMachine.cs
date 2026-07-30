@@ -31,6 +31,13 @@ namespace IJPSystem.Platform.Domain.Interfaces
         bool IsEmoActive();
         bool IsPressureOk(int swNo);
 
+        // 온도 알람 (2호기 X008/X009 — 1호기는 미배선이라 항상 false)
+        bool IsTempLowAlarm();
+        bool IsTempHighAlarm();
+
+        // 드레인 밸브 (2호기 Y011 — 1호기는 미배선이라 no-op)
+        void SetDrainValve(bool on);
+
         // 시뮬레이션 전용 (가상 드라이버에서만 의미 있음)
         void SimulateDoorLockAfter(int delayMs);
     }

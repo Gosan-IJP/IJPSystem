@@ -285,6 +285,25 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set => SetProperty(ref _isEmoActive, value);
         }
 
+        // 온도 알람 (2호기 X008/X009). 1호기는 미배선이라 항상 false.
+        private bool _isTempHighAlarm;
+        public bool IsTempHighAlarm
+        {
+            get => _isTempHighAlarm;
+            set => SetProperty(ref _isTempHighAlarm, value);
+        }
+
+        private bool _isTempLowAlarm;
+        public bool IsTempLowAlarm
+        {
+            get => _isTempLowAlarm;
+            set => SetProperty(ref _isTempLowAlarm, value);
+        }
+
+        // 온도 알람 rising-edge 추적(100ms 폴링에서 알람 1회만 발생시키기 위함)
+        private bool _tempHighPrev;
+        private bool _tempLowPrev;
+
         // MOTOR POSITION 패널 — 축 개수와 무관하게 설정(MotionAxisList) 기반으로 표시.
         // 1호기(3축)/2호기(6축)를 같은 바이너리로 지원하기 위해 고정 X/Y/Z/T 속성 대신 컬렉션 사용.
         public System.Collections.ObjectModel.ObservableCollection<MotorPositionVm> MotorPositions { get; }
@@ -699,6 +718,29 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 _logAction?.Invoke(T("Log_EmoStopped"), LogLevel.Fatal);
                 _raiseAlarm?.Invoke("SNS-EMO");
             }
+
+            // ── 온도 알람 (2호기 X008/X009) — rising-edge 에서 1회만 발생 ──
+            // 1호기는 미배선이라 항상 false → 아무 것도 하지 않음(동일 코드로 무해).
+            IsTempHighAlarm = _machine.IsTempHighAlarm();
+            IsTempLowAlarm  = _machine.IsTempLowAlarm();
+
+            if (IsTempHighAlarm && !_tempHighPrev)
+            {
+                _machine.SetSystemStatus(MachineState.Alarm);
+                _onAlarmChanged?.Invoke(true);
+                _logAction?.Invoke(T("Log_TempHighAlarm"), LogLevel.Error);
+                _raiseAlarm?.Invoke("SNS-TEMP-HIGH");
+            }
+            _tempHighPrev = IsTempHighAlarm;
+
+            if (IsTempLowAlarm && !_tempLowPrev)
+            {
+                _machine.SetSystemStatus(MachineState.Alarm);
+                _onAlarmChanged?.Invoke(true);
+                _logAction?.Invoke(T("Log_TempLowAlarm"), LogLevel.Error);
+                _raiseAlarm?.Invoke("SNS-TEMP-LOW");
+            }
+            _tempLowPrev = IsTempLowAlarm;
         }
 
         /// <summary>
