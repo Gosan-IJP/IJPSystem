@@ -106,6 +106,7 @@ namespace IJPSystem.Drivers.IO
 
         // ── int 기반 (인터페이스 구현용, 미사용) ──
         public bool GetInput(int bitNo) => false;
+        public uint GetInputBits() => 0;   // 가상 드라이버 — 진단 비트 없음
         public bool GetOutput(int bitNo) => false;
         public void SetOutput(int bitNo, bool on) { }
         public double GetAnalogInput(int channel) => 0.0;

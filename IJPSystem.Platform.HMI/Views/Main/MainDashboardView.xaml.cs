@@ -625,17 +625,5 @@ namespace IJPSystem.Platform.HMI.Views
             });
         }
 
-        // ── 알람 팝업 테스트 ────────────────────────────────────────
-        private void OpenAlarm_Click(object sender, RoutedEventArgs e)
-        {
-            // Application.Current.MainWindow 는 로그인 시점에 등록된 LoginWindow 일 수 있어
-            // Windows 컬렉션에서 실제 MainWindow 타입을 직접 찾는다
-            var mainWin = System.Windows.Application.Current.Windows
-                .OfType<MainWindow>()
-                .FirstOrDefault();
-            
-            if (mainWin?.DataContext is MainViewModel mainVM)
-                mainVM.AlarmVM.RaiseAlarm("SNS-EMO");
-        }
     }
 }

@@ -8,6 +8,7 @@ using IJPSystem.Platform.Domain.Models.IO;
 using IJPSystem.Platform.Domain.Models.Log;
 using IJPSystem.Platform.Domain.Models.Motion;
 using IJPSystem.Platform.Common.Utilities;
+using IJPSystem.Platform.Infrastructure.Config;
 using IJPSystem.Platform.Infrastructure.Repositories;
 using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
 using IJPSystem.Platform.HMI.Common;
@@ -32,6 +33,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private DispatcherTimer _slowTimer;
 
         private MainDashboardViewModel _mainDashboardVM;
+        // 상시 구동(항상 살아있는) 대시보드 VM — 드라이브 준비상태(MotorReadyState 등)는
+        // _procTimer(100ms)로 상시 갱신되므로 다른 화면(INITIALIZE)에서도 그대로 바인딩해 쓴다.
+        public MainDashboardViewModel DashboardVM => _mainDashboardVM;
         private PatternPrintViewModel? _patternPrintVM;
         private MotorControlViewModel? _motorControlVM;
         private NJIViewModel? _njiVM;
@@ -40,6 +44,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         // Meteor 헤드(PCC) 연결 모니터 — 읽기 전용 attach. 네이티브 DLL 없으면 스스로 비활성(개발PC 안전).
         private readonly MeteorStatusMonitor _headMonitor = new();
+
+        // AppConfig.json 의 DriverMode.Head 가 "Meteor" 일 때만 폴링한다.
+        // 헤드가 없는 장비에서 500ms 마다 PiOpenPrinter 를 두드리지 않게 하는 스위치.
+        private readonly bool _headEnabled = string.Equals(
+            AppSettingsService.Current?.DriverMode?.Head?.Trim(), "Meteor",
+            StringComparison.OrdinalIgnoreCase);
 
         private bool _hasActiveAlarm;
         public bool HasActiveAlarm
@@ -500,6 +510,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
+        // 진단용: 직전 DI raw 비트(변화 시에만 로그). 0xFFFFFFFF = 첫 폴링에서 1회 강제 로그.
+        private uint _lastDiDiagBits = 0xFFFFFFFF;
+
         private void UpdateIOStates()
         {
             var ioDriver = _controller?.GetMachine()?.IO;
@@ -531,6 +544,21 @@ namespace IJPSystem.Platform.HMI.ViewModels
             UpdateList(dgOutputList);
             UpdateList(agInputList);
             UpdateList(agOutputList);
+
+            // ── 진단(2026-07-31): 실 DI 채널 확인용 ──
+            // DI 전역 32비트가 바뀔 때만 로그. 물리 입력(예: X000)을 토글했을 때
+            //  · 어떤 비트가 바뀌면 → 그 비트번호가 실제 채널(IO.json Address 를 그 채널에 맞추면 됨).
+            //  · 아무 비트도 안 바뀌면 → 마스터가 FASTECH DI 를 ecdi 이미지에 안 올린 것(마스터 구성/ESI 문제).
+            try
+            {
+                uint di = ioDriver.GetInputBits();
+                if (di != _lastDiDiagBits)
+                {
+                    _lastDiDiagBits = di;
+                    AddLog($"[IO-DIAG] DI raw = 0x{di:X8}  (bit0=ch0=X000 … bit9=ch9=X009)", LogLevel.Info);
+                }
+            }
+            catch { /* 진단 로그 실패는 무시 */ }
         }
 
         private void UpdateDriverConnections()
@@ -546,6 +574,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 네이티브 DLL 미탑재/엔진 미실행/점유중이면 회색 + 사유 툴팁으로 조용히 표시(예외 없음).
         private void UpdateHeadConnection()
         {
+            if (!_headEnabled) return;   // DriverMode.Head=None — 헤드 미탑재 장비
             var s = _headMonitor.Poll();
             System.Windows.Application.Current?.Dispatcher.Invoke(
                 () => SetHeadConnection(s.Connected, s.Detail));

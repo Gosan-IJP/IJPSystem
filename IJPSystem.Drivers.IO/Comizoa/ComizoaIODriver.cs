@@ -205,10 +205,27 @@ namespace IJPSystem.Drivers.IO.Comizoa
         }
 
         // 여러 입력/출력을 한 번에 (비트마스크) — 실장비 HAL 과 동일.
+        // 진단: DI 채널 0~127(32채널×4블록) 스캔 결과. 값이 바뀔 때만 로그(채널 오프셋 탐색용).
+        private (uint b0, uint b32, uint b64, uint b96, int err) _lastScan = (0xFFFFFFFF, 0, 0, 0, int.MinValue);
         public uint GetInputBits()
         {
             if (!_hwUsable) return 0;
-            try { return _dio.GetInputBits(); }
+            try
+            {
+                uint b0  = _dio.GetInputBits(0u,  out int err);
+                uint b32 = _dio.GetInputBits(32u, out _);
+                uint b64 = _dio.GetInputBits(64u, out _);
+                uint b96 = _dio.GetInputBits(96u, out _);
+                var now = (b0, b32, b64, b96, err);
+                if (!now.Equals(_lastScan))
+                {
+                    _lastScan = now;
+                    LoggerService.WriteToFile("INFO",
+                        $"[IO-DIAG] DI scan err={err}  ch0-31=0x{b0:X8}  ch32-63=0x{b32:X8}  ch64-95=0x{b64:X8}  ch96-127=0x{b96:X8}" +
+                        "  (X000 이 ON 이면 여기 어느 비트가 1 — 그 채널이 실제 DI 채널)");
+                }
+                return b0;   // MainViewModel 진단은 ch0-31 기준
+            }
             catch (Exception ex) { DegradeToEcho(ex); return 0; }
         }
 

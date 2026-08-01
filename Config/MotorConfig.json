@@ -11,11 +11,6 @@
         "Acceleration": 150,
         "Deceleration": 150,
         "SpecVelocity": 2.0
-      },
-      "MotionConfig": {
-        "Move":     { "Velocity": 20, "Acceleration": 200, "Deceleration": 200 },
-        "Jog":      { "Velocity": 10, "Acceleration": 100, "Deceleration": 100 },
-        "Printing": { "Velocity": 5,  "Acceleration": 50,  "Deceleration": 50  }
       }
     },
     {
@@ -29,11 +24,6 @@
         "Acceleration": 100,
         "Deceleration": 100,
         "SpecVelocity": 2.0
-      },
-      "MotionConfig": {
-        "Move":     { "Velocity": 20, "Acceleration": 200, "Deceleration": 200 },
-        "Jog":      { "Velocity": 10, "Acceleration": 100, "Deceleration": 100 },
-        "Printing": { "Velocity": 5,  "Acceleration": 50,  "Deceleration": 50  }
       }
     },
     {
@@ -47,11 +37,6 @@
         "Acceleration": 100,
         "Deceleration": 100,
         "SpecVelocity": 2.0
-      },
-      "MotionConfig": {
-        "Move":     { "Velocity": 15, "Acceleration": 150, "Deceleration": 150 },
-        "Jog":      { "Velocity": 8,  "Acceleration": 80,  "Deceleration": 80  },
-        "Printing": { "Velocity": 4,  "Acceleration": 40,  "Deceleration": 40  }
       }
     },
     {
@@ -59,17 +44,12 @@
       "Name": "T AXIS",
       "Unit": "deg",
       "HwAxis": 2,
-      "EncoderPulsePerUnit": 1000,
+      "EncoderPulsePerUnit": 10370,
       "Home": {
         "Velocity": 10,
         "Acceleration": 100,
         "Deceleration": 100,
         "SpecVelocity": 2.0
-      },
-      "MotionConfig": {
-        "Move":     { "Velocity": 20, "Acceleration": 200, "Deceleration": 200 },
-        "Jog":      { "Velocity": 10, "Acceleration": 100, "Deceleration": 100 },
-        "Printing": { "Velocity": 5,  "Acceleration": 50,  "Deceleration": 50  }
       }
     },
     {
@@ -83,11 +63,6 @@
         "Acceleration": 100,
         "Deceleration": 100,
         "SpecVelocity": 2.0
-      },
-      "MotionConfig": {
-        "Move":     { "Velocity": 15, "Acceleration": 150, "Deceleration": 150 },
-        "Jog":      { "Velocity": 8,  "Acceleration": 80,  "Deceleration": 80  },
-        "Printing": { "Velocity": 4,  "Acceleration": 40,  "Deceleration": 40  }
       }
     },
     {
@@ -101,11 +76,6 @@
         "Acceleration": 100,
         "Deceleration": 100,
         "SpecVelocity": 2.0
-      },
-      "MotionConfig": {
-        "Move":     { "Velocity": 15, "Acceleration": 150, "Deceleration": 150 },
-        "Jog":      { "Velocity": 8,  "Acceleration": 80,  "Deceleration": 80  },
-        "Printing": { "Velocity": 4,  "Acceleration": 40,  "Deceleration": 40  }
       }
     }
   ]

@@ -79,15 +79,16 @@
         <!-- ══ 뷰 영역 ════════════════════════════════════════════════════ -->
         <Border Grid.Row="1" Background="#111827" CornerRadius="10" BorderBrush="#334155" BorderThickness="1"
                 ClipToBounds="True">
-            <!-- ScrollViewer 없이 패널을 꽉 채운다.
-                 · Stretch=UniformToFill → 비율 유지한 채 패널을 "가득" 채움(좌우 여백 제거, 상하 약간 크롭).
-                   카메라(GVC 5:4)가 넓은 패널에 들어갈 때 레터박스가 생기지 않도록. ClipToBounds 로 넘침 클립.
-                   (전체를 다 보려면 Fit=배율1; 왜곡 없이 채우므로 형상 비율은 유지됨)
+            <!-- ScrollViewer 없이 패널에 이미지를 맞춘다.
+                 · Stretch=Uniform → 비율 유지 + 전체가 보이도록 맞춤. 넓은 패널에서는 좌우 여백(레터박스)이
+                   생기지만 화면 밖으로 잘리는 픽셀이 없다. 액적/노즐이 프레임 가장자리에 있을 수 있어
+                   크롭(UniformToFill)은 측정 대상 자체를 가릴 수 있으므로 쓰지 않는다.
+                   GlassView·NJIView 도 동일하게 Uniform — 비전 화면 전체가 같은 규칙을 따른다.
                  · 확대/이동은 RenderTransform(Scale+Translate) 으로만 처리 → 레이아웃에 영향 없음 -->
             <Grid x:Name="ViewHost" Background="#0D1117" ClipToBounds="True"
                   MouseDown="Host_Down" MouseMove="Host_Move" MouseUp="Host_Up" MouseWheel="Host_Wheel"
                   SizeChanged="Host_SizeChanged">
-                <Image x:Name="Img" Source="{Binding Frame}" Stretch="UniformToFill"
+                <Image x:Name="Img" Source="{Binding Frame}" Stretch="Uniform"
                        RenderOptions.BitmapScalingMode="HighQuality"
                        RenderTransformOrigin="0.5,0.5">
                     <Image.RenderTransform>

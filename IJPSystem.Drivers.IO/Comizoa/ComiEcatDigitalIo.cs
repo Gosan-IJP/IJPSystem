@@ -75,6 +75,8 @@ namespace IJPSystem.Drivers.IO.Comizoa
 
         // 다중 채널(비트마스크) ─────────────────────────────────
         public uint GetInputBits() => ecdiGetMulti(NetID, 0, 32, out _);   // 0번 채널부터 32비트
+        public uint GetInputBits(out int errCode) => ecdiGetMulti(NetID, 0, 32, out errCode);   // 진단: errCode 동반
+        public uint GetInputBits(uint iniChannel, out int errCode) => ecdiGetMulti(NetID, iniChannel, 32, out errCode);   // 진단: 채널 오프셋 블록
 
         public void SetOutputBits(uint bits)
         {

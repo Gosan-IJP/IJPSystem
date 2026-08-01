@@ -5,6 +5,7 @@ using IJPSystem.Drivers.Motion.ACS;
 using IJPSystem.Drivers.Motion.Comizoa;
 using IJPSystem.Drivers.Vision;
 using IJPSystem.Drivers.Vision.Imaqdx;
+using IJPSystem.Drivers.Vision.Ebus;
 using IJPSystem.Machines.Pulse;
 using IJPSystem.Platform.Common.Constants;
 using IJPSystem.Platform.Common.Utilities;
@@ -12,9 +13,11 @@ using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.Config;
 using IJPSystem.Platform.Domain.Models.Motion;
 using IJPSystem.Platform.HMI.Common;
+using IJPSystem.Platform.HMI.Common.Models;
 using IJPSystem.Platform.HMI.ViewModels;
 using IJPSystem.Platform.HMI.Views;
 using IJPSystem.Platform.Infrastructure.Config;
+using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
 using System;
 using System.Threading.Tasks;
 using System.Windows;
@@ -105,6 +108,16 @@ namespace IJPSystem.Platform.HMI
                     "Vision Driver", $"{appSettings.DriverMode.Vision} Vision 드라이버 연결",
                     InitializeVisionDriver);
 
+                // 헤드(Meteor PCC) 연결 확인 — 읽기 전용 1회 조회. 미부착은 실패가 아니라 경고(!)로
+                // 표시하고 기동은 계속한다(약액/엔진 없이도 HMI 는 떠야 함).
+                if (DriverMode(d => d.Head) == "meteor")
+                {
+                    await splashVM.RunStepAsync(
+                        "Print Head", "Meteor 헤드 PCC 부착 상태 확인",
+                        ProbeMeteorHead,
+                        r => (r.Connected ? InitStepStatus.Done : InitStepStatus.Warning, r.Detail));
+                }
+
                 _machine = await splashVM.RunStepAsync(
                     "Machine Setup", "PulseMachine 초기화 + Motor Config 로드",
                     () => appSettings.MachineType.ToUpper() switch
@@ -184,6 +197,19 @@ namespace IJPSystem.Platform.HMI
 
         
         
+        /// <summary>
+        /// Meteor 헤드(PCC) 부착 상태 1회 조회. 예외를 던지지 않으므로 스플래시 단계가 실패로 끝나지 않는다.
+        /// PiOpenPrinter 는 프린터를 점유(claim)하므로 확인 후 즉시 해제 —
+        /// 이어서 생성되는 MainViewModel 의 상시 모니터가 다시 붙을 수 있게 한다.
+        /// </summary>
+        private static MeteorHeadStatus ProbeMeteorHead()
+        {
+            using var monitor = new MeteorStatusMonitor();
+            var status = monitor.Poll();
+            LoggerService.WriteToFile(status.Connected ? "INFO" : "WARN", $"[HEAD] {status.Detail}");
+            return status;
+        }
+
         /// <summary>AppConfig.json 의 DriverMode 값(대소문자·공백 무시). 미설정 시 Virtual.</summary>
         private static string DriverMode(Func<DriverModeSettings, string> pick)
             => (pick(AppSettingsService.Current?.DriverMode ?? new DriverModeSettings()) ?? "Virtual")
@@ -234,8 +260,9 @@ namespace IJPSystem.Platform.HMI
 
             IVisionDriver visionDriver = DriverMode(d => d.Vision) switch
             {
-                "imaqdx" => new ImaqdxVisionDriver(),
-                _        => new VirtualVisionDriver(), 
+                "imaqdx" => new ImaqdxVisionDriver(),   // 0호기 — NI-IMAQdx(niimaqdx.dll)
+                "ebus"   => new EbusVisionDriver(),     // 9호기 — Pleora eBUS SDK(JAI+하이크로봇 혼합)
+                _        => new VirtualVisionDriver(),
             };
             visionDriver.Initialize(root.VisionCameraList);
 

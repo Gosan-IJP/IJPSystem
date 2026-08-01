@@ -48,11 +48,45 @@
             <Setter Property="FontWeight"  Value="Bold"/>
             <Setter Property="Margin"      Value="0,0,0,12"/>
         </Style>
+
+        <!-- ── 아이콘: 벡터 Path (이모지 대신) ─────────────────────────────────
+             이모지는 OS/제어PC 글꼴에 따라 굵기·크기·컬러가 제각각으로 렌더된다.
+             Geometry 로 그리면 어디서든 동일하고 Foreground 로 색을 맞출 수 있다. -->
+        <Geometry x:Key="IcoDroplet">M 8,0 C 8,0 15,8.4 15,12 A 7,7 0 0 1 1,12 C 1,8.4 8,0 8,0 Z</Geometry>
+        <Geometry x:Key="IcoFolder">M 1,3 A 1,1 0 0 1 2,2 H 6 L 8,4 H 14 A 1,1 0 0 1 15,5 V 13 A 1,1 0 0 1 14,14 H 2 A 1,1 0 0 1 1,13 Z</Geometry>
+        <Geometry x:Key="IcoBulb">M 8,1 A 5,5 0 0 1 11,10 V 12 H 5 V 10 A 5,5 0 0 1 8,1 Z M 6,13.5 H 10 V 15 H 6 Z</Geometry>
+
+        <!-- 결과 카드의 한 칸(값 + 단위 + 라벨) -->
+        <Style x:Key="DwMetricValue" TargetType="TextBlock">
+            <Setter Property="Foreground"  Value="White"/>
+            <Setter Property="FontSize"    Value="17"/>
+            <Setter Property="FontWeight"  Value="Bold"/>
+            <Setter Property="FontFamily"  Value="Consolas"/>
+            <Style.Triggers>
+                <!-- 측정 전/실패면 "-" 이 흰색으로 또렷하게 보여 값처럼 읽힌다 → 죽은 색으로 -->
+                <DataTrigger Binding="{Binding HasResult}" Value="False">
+                    <Setter Property="Foreground" Value="#334155"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="DwMetricUnit" TargetType="TextBlock">
+            <Setter Property="Foreground"        Value="#64748B"/>
+            <Setter Property="FontSize"          Value="10"/>
+            <Setter Property="Margin"            Value="3,0,0,2"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+        </Style>
+        <Style x:Key="DwMetricLabel" TargetType="TextBlock">
+            <Setter Property="Foreground"  Value="#64748B"/>
+            <Setter Property="FontSize"    Value="10"/>
+            <Setter Property="Margin"      Value="0,2,0,0"/>
+        </Style>
     </UserControl.Resources>
 
     <Grid Margin="16">
+        <!-- 이미지 폭이 곧 영상 크기다(세로는 비율 때문에 남는다) → 좌측 컬럼에 폭을 몰아준다.
+             차트(마지막 컬럼)는 세로로 쌓인 형태라 폭에 덜 민감하다. -->
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="1.4*"/>
+            <ColumnDefinition Width="2*"/>
             <ColumnDefinition Width="12"/>
             <ColumnDefinition Width="380"/>
             <ColumnDefinition Width="12"/>
@@ -63,17 +97,22 @@
         <Border Grid.Column="0" Background="#111827" CornerRadius="12"
                 BorderBrush="#334155" BorderThickness="1">
             <Grid>
+                <!-- 이미지 행이 Auto 인 이유: ImageScaleRuler 가 주어진 폭에서 이미지가 실제로
+                     차지하는 높이만 요구하므로(MeasureOverride), 가로로 넓은 DW 이미지 아래에
+                     빈 검은 공간이 남지 않는다. 남는 세로는 결과 카드 행(*)이 가져간다. -->
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>   <!-- 헤더 -->
+                    <RowDefinition Height="Auto"/>   <!-- 툴바 -->
+                    <RowDefinition Height="Auto"/>   <!-- 이미지 -->
+                    <RowDefinition Height="*"/>      <!-- 결과 카드 -->
+                    <RowDefinition Height="Auto"/>   <!-- 상태바 -->
                 </Grid.RowDefinitions>
 
                 <!-- 헤더 -->
                 <Border Grid.Row="0" Background="#1E293B" CornerRadius="12,12,0,0" Padding="16,10">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="💧" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <Path Data="{StaticResource IcoDroplet}" Fill="#38BDF8" Width="14" Height="15"
+                              Stretch="Uniform" Margin="0,0,9,0" VerticalAlignment="Center"/>
                         <TextBlock Text="DROP WATCHER  —  CAM_DW" Foreground="White"
                                    FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
                         <Border Margin="12,0,0,0" CornerRadius="6" Padding="8,3">
@@ -102,24 +141,25 @@
                                 </TextBlock.Style>
                             </TextBlock>
                         </Border>
+
+                        <!-- 드라이버 모드 칩 — 가상 드라이버인데 초록 CONNECTED 만 보여 실장으로 오해하는 것을 막는다. -->
+                        <Border Margin="6,0,0,0" CornerRadius="6" Padding="7,3"
+                                Background="#0B1220" BorderBrush="#334155" BorderThickness="1">
+                            <TextBlock Text="{Binding DriverModeText}" Foreground="#64748B"
+                                       FontSize="10" FontWeight="Bold" FontFamily="Consolas"/>
+                        </Border>
                     </StackPanel>
                 </Border>
 
-                <!-- 툴바 (돋보기 / 포인터 / 손 / 선) — 표시용 -->
+                <!-- 툴바.
+                     확대/포인터/이동/선 4개 버튼은 Command 가 없는 장식이라 눌러도 아무 일이 없었다
+                     (고장으로 오해할 소지) → 제거. 확대·이동이 필요하면 Visual Monitor 의 툴 로직을
+                     가져와 실제로 연결할 것. 여기 남은 것은 전부 실동작하는 버튼이다. -->
                 <Border Grid.Row="1" Background="#0F172A" Padding="8,5" BorderBrush="#1F2937" BorderThickness="0,0,0,1">
                     <Grid>
                     <StackPanel Orientation="Horizontal">
-                        <Button Width="30" Height="26" Margin="0,0,4,0" Content="🔍" FontSize="13"
-                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B" ToolTip="Zoom"/>
-                        <Button Width="30" Height="26" Margin="0,0,4,0" Content="🖈" FontSize="13"
-                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B" ToolTip="Select"/>
-                        <Button Width="30" Height="26" Margin="0,0,4,0" Content="✋" FontSize="13"
-                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B" ToolTip="Pan"/>
-                        <Button Width="30" Height="26" Content="╱" FontSize="13"
-                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B" ToolTip="Line"/>
-
                         <!-- Live View 토글 -->
-                        <Button Width="72" Height="26" Margin="12,0,0,0" Command="{Binding ToggleLiveViewCommand}"
+                        <Button Width="72" Height="26" Command="{Binding ToggleLiveViewCommand}"
                                 ToolTip="Live View 토글 (연속 캡쳐)">
                             <Button.Style>
                                 <Style TargetType="Button" BasedOn="{StaticResource MutedActionButtonStyle}">
@@ -147,7 +187,12 @@
                                     </Style.Triggers>
                                 </Style>
                             </Button.Style>
-                            <TextBlock Text="{Binding StrobeLabel}" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Path Data="{StaticResource IcoBulb}" Fill="White" Width="11" Height="13"
+                                      Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding StrobeLabel}" FontSize="11" FontWeight="Bold"
+                                           Foreground="White" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </Button>
                     </StackPanel>
 
@@ -174,7 +219,8 @@
                                 </Style>
                             </Border.Style>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="📂" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <Path Data="{StaticResource IcoFolder}" Fill="#94A3B8" Width="14" Height="13"
+                                      Stretch="Uniform" Margin="0,0,7,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="이미지 열기" Foreground="#94A3B8"
                                            FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
                             </StackPanel>
@@ -183,43 +229,93 @@
                     </Grid>
                 </Border>
 
-                <!-- 이미지 영역 -->
-                <Border Grid.Row="2" Background="#0D1117" Margin="2,0">
+                <!-- 이미지 영역 — 높이는 이미지가 실제로 차지하는 만큼(Auto). 이미지가 없으면 0. -->
+                <Border Grid.Row="2" Background="#0D1117" Margin="2,0"
+                        Visibility="{Binding HasImage, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Grid>
-                        <!-- 플레이스홀더 (이미지 없을 때) -->
-                        <Grid Visibility="{Binding HasNoImage, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <TextBlock Text="💧" FontSize="52" HorizontalAlignment="Center" Opacity="0.15"/>
-                                <TextBlock Text="DROP WATCHER" Foreground="#1E3A5F"
-                                           FontSize="13" FontWeight="Bold" FontFamily="Consolas"
-                                           HorizontalAlignment="Center" Margin="0,10,0,0"/>
-                                <TextBlock Text="MEASURE VELOCITY 또는 TIME INTERVAL MEASURE 를 누르세요"
-                                           Foreground="#1E293B" FontSize="11"
-                                           HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                            </StackPanel>
-                        </Grid>
-
                         <!-- 캡처 이미지 + µm 눈금자 — 한 요소가 같은 사각형으로 그려 항상 정렬된다.
                              이미지는 좌상단 고정(가운데 정렬 안 함) → 이미지가 바뀌어도 원점(0,0)이 안 움직인다. -->
                         <vis:ImageScaleRuler Source="{Binding CurrentFrame}"
                                              MicronsPerPixel="{Binding MicronsPerPixel}"
-                                             IsHitTestVisible="False"
-                                             Visibility="{Binding HasImage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                             IsHitTestVisible="False"/>
 
                         <!-- 처리 중 오버레이 -->
                         <Border HorizontalAlignment="Center" VerticalAlignment="Center"
                                 Background="#CC1C1A00" CornerRadius="10" Padding="24,12"
                                 Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock Text="⏳  측정 중..." Foreground="#FCD34D"
-                                       FontSize="14" FontWeight="Bold"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IcoDroplet}" Fill="#FCD34D" Width="13" Height="14"
+                                      Stretch="Uniform" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="측정 중..." Foreground="#FCD34D"
+                                           FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </Border>
+                    </Grid>
+                </Border>
+
+                <!-- 이미지 아래 남는 세로 공간 — 빈 검은 칸으로 두지 않고 결과 지표를 채운다.
+                     이미지가 없을 때는 이 자리 전체가 플레이스홀더가 된다. -->
+                <Border Grid.Row="3" Background="#0D1117" Margin="2,0">
+                    <Grid>
+                        <!-- 플레이스홀더 (이미지 없을 때) -->
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    Visibility="{Binding HasNoImage, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Path Data="{StaticResource IcoDroplet}" Fill="#3B82F6" Opacity="0.15"
+                                  Width="46" Height="50" Stretch="Uniform" HorizontalAlignment="Center"/>
+                            <TextBlock Text="DROP WATCHER" Foreground="#1E3A5F"
+                                       FontSize="13" FontWeight="Bold" FontFamily="Consolas"
+                                       HorizontalAlignment="Center" Margin="0,10,0,0"/>
+                            <TextBlock Text="MEASURE VELOCITY 또는 TIME INTERVAL MEASURE 를 누르세요"
+                                       Foreground="#1E293B" FontSize="11"
+                                       HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <!-- 결과 지표 카드 — 측정 전에는 "-" 로 자리를 지킨다(빈 칸 방지). -->
+                        <UniformGrid Columns="5" VerticalAlignment="Center" Margin="14,10"
+                                     Visibility="{Binding HasImage, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding ResultNozzles}" Style="{StaticResource DwMetricValue}"/>
+                                    <TextBlock Text="개" Style="{StaticResource DwMetricUnit}"/>
+                                </StackPanel>
+                                <TextBlock Text="검출 노즐" Style="{StaticResource DwMetricLabel}"/>
+                            </StackPanel>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding ResultDiameter}" Style="{StaticResource DwMetricValue}"/>
+                                    <TextBlock Text="µm" Style="{StaticResource DwMetricUnit}"/>
+                                </StackPanel>
+                                <TextBlock Text="평균 직경" Style="{StaticResource DwMetricLabel}"/>
+                            </StackPanel>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding ResultVolume}" Style="{StaticResource DwMetricValue}"/>
+                                    <TextBlock Text="pL" Style="{StaticResource DwMetricUnit}"/>
+                                </StackPanel>
+                                <TextBlock Text="평균 부피" Style="{StaticResource DwMetricLabel}"/>
+                            </StackPanel>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding ResultVelocity}" Style="{StaticResource DwMetricValue}"/>
+                                    <TextBlock Text="m/s" Style="{StaticResource DwMetricUnit}"/>
+                                </StackPanel>
+                                <TextBlock Text="평균 속도" Style="{StaticResource DwMetricLabel}"/>
+                            </StackPanel>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding ResultSpread}" Style="{StaticResource DwMetricValue}"/>
+                                    <TextBlock Text="m/s" Style="{StaticResource DwMetricUnit}"/>
+                                </StackPanel>
+                                <TextBlock Text="속도 편차" Style="{StaticResource DwMetricLabel}"/>
+                            </StackPanel>
+                        </UniformGrid>
                     </Grid>
                 </Border>
 
                 <!-- 하단 상태바: 위(분석 결과) / 아래(오버레이 범례).
                      결과 문자열이 길어(노즐/직경/부피/속도/편차) 범례와 한 줄에 두면 잘리므로
                      행을 나눠 결과가 항상 전체 폭을 쓰게 한다. -->
-                <Border Grid.Row="3" Background="#1E293B" CornerRadius="0,0,12,12" Padding="16,7">
+                <Border Grid.Row="4" Background="#1E293B" CornerRadius="0,0,12,12" Padding="16,7">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -233,13 +329,32 @@
                             <Run Text="LAST : " Foreground="#475569"/>
                             <Run Text="{Binding CaptureTimeText, Mode=OneWay}" Foreground="#94A3B8" FontWeight="Bold"/>
                             <Run Text="  ▶  " Foreground="#475569"/>
-                            <Run Text="{Binding LastResultText, Mode=OneWay}" Foreground="#FCD34D" FontWeight="Bold"/>
+                            <!-- "측정 전"·실패 문구까지 노란 강조로 두면 아무 일도 없는 상태가 경고처럼 보인다.
+                                 실제 측정 결과가 있을 때만 강조색을 쓴다. -->
+                            <Run Text="{Binding LastResultText, Mode=OneWay}" FontWeight="Bold">
+                                <Run.Style>
+                                    <Style TargetType="Run">
+                                        <Setter Property="Foreground" Value="#64748B"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasResult}" Value="True">
+                                                <Setter Property="Foreground" Value="#FCD34D"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Run.Style>
+                            </Run>
                         </TextBlock>
 
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,3,0,0">
-                            <TextBlock Text="Green = Velocity" Foreground="#22C55E" FontSize="10" FontWeight="Bold"/>
-                            <TextBlock Text="  Cyan = Measure Area" Foreground="#22D3EE" FontSize="10" FontWeight="Bold"/>
-                            <TextBlock Text="  Magenta = Column" Foreground="#E879F9" FontSize="10" FontWeight="Bold"/>
+                        <!-- 오버레이 범례 — 오버레이가 그려진 뒤에만 의미가 있으므로 결과가 있을 때만 표시.
+                             원색 텍스트 대신 작은 점 + 회색 라벨로 낮춘다. -->
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,4,0,0"
+                                    Visibility="{Binding HasResult, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Ellipse Width="6" Height="6" Fill="#22C55E" VerticalAlignment="Center"/>
+                            <TextBlock Text="Velocity" Foreground="#64748B" FontSize="10" Margin="5,0,14,0"/>
+                            <Ellipse Width="6" Height="6" Fill="#22D3EE" VerticalAlignment="Center"/>
+                            <TextBlock Text="Measure Area" Foreground="#64748B" FontSize="10" Margin="5,0,14,0"/>
+                            <Ellipse Width="6" Height="6" Fill="#E879F9" VerticalAlignment="Center"/>
+                            <TextBlock Text="Column" Foreground="#64748B" FontSize="10" Margin="5,0,0,0"/>
                         </StackPanel>
                     </Grid>
                 </Border>

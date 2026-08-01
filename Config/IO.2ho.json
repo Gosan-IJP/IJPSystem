@@ -1,5 +1,5 @@
 {
-  "_comment": "★2호기(6축) 전용 IO 맵 — 10 DI(X000~X009) + 12 DO(Y000~Y011). 실배선 IO 리스트 기준(2026-07-30). 이 파일을 2호기 PC 에서 IO.json 으로 교체(rename)해 사용한다. ★1호기 IO.json(8DI/8DO, X007=SPARE·타워램프/부저/도어/온도 없음)을 이 내용으로 덮어쓰지 말 것. Index 이름은 코드 참조와 반드시 일치해야 한다. (파일명 ASCII 고정: 한글 파일명은 일부 도구 경로에서 깨질 수 있음)",
+  "_comment": "★9호기(6축) 전용 IO 맵 — 10 DI(X000~X009) + 12 DO(Y000~Y011). IO 카드=FASTECH EZI-IO-EC-I16O16N-E(EtherCAT 16DI/16DO). Comizoa 모션과 같은 EtherCAT 마스터에 슬레이브로 물림 → ComizoaIODriver(ecdi/ecdo 전역채널) 그대로 사용, 코드 변경 불필요. ★실장 검증: (1) Comizoa 마스터가 FASTECH 슬레이브를 enum 하도록 ESI 등록, (2) IO 모니터로 각 점 토글해 실제 전역채널이 아래 Address(X→DI채널, Y→DO채널 번호)와 일치하는지 확인. 어긋나면 이 파일 Address만 조정(또는 ComizoaIODriver.TryMapChannel 한 곳). FASTECH는 16/16이라 X010~X015·Y012~Y015 여유 있음. 이 파일을 9호기 PC 에서 IO.json 으로 rename 해 사용. ★0호기 IO.json(ETS-D08MN 8DI/8DO, X007=SPARE·타워램프/부저/도어/온도 없음) 덮어쓰기 금지. Index 이름은 코드 참조와 일치해야 함. (파일명 ASCII 고정)",
   "Digital_IO_List": [
     {
       "Address": "X000",

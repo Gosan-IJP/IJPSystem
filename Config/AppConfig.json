@@ -12,6 +12,7 @@
   "DriverMode": {
     "IO": "Virtual",
     "Motion": "Virtual",
-    "Vision": "Virtual"
+    "Vision": "Virtual",
+    "Head": "None"
   }
 }

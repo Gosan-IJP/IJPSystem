@@ -19,6 +19,10 @@ namespace IJPSystem.Platform.Domain.Interfaces
         bool GetInput(int bitNo);
         bool GetInput(string indexName);
 
+        // 진단용: DI 전역 채널 0~31 을 비트마스크로 한 번에 읽기(하드웨어 채널 오프셋 확인용).
+        // 미지원/가상 드라이버는 0 반환.
+        uint GetInputBits();
+
         // 출력(Output) 읽기
         bool GetOutput(int bitNo);
         bool GetOutput(string indexName); 

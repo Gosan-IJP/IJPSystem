@@ -16,6 +16,10 @@ namespace IJPSystem.Drivers.IO.Comizoa
 
         /// <summary>입력 전체를 비트마스크로 읽기.</summary>
         uint GetInputBits();
+        /// <summary>입력 전체 비트마스크 + SDK errCode(진단용).</summary>
+        uint GetInputBits(out int errCode);
+        /// <summary>iniChannel 부터 32채널 블록을 읽기(진단용 — 채널 오프셋 탐색).</summary>
+        uint GetInputBits(uint iniChannel, out int errCode);
         /// <summary>출력 전체를 비트마스크로 쓰기.</summary>
         void SetOutputBits(uint bits);
 

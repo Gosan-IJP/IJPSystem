@@ -81,6 +81,35 @@ namespace IJPSystem.Platform.HMI.ViewModels
             private set => SetProperty(ref _lastResultText, value);
         }
 
+        // ── 결과 카드(이미지 아래) 표시용 지표 ────────────────────────────────
+        // LastResultText 한 줄로만 두면 값이 길어 잘리고 눈에 안 들어와서, 측정이 성공했을 때만
+        // 카드로 펼쳐 보여준다. HasResult=false 면 카드와 오버레이 범례를 모두 숨긴다.
+        private bool _hasResult;
+        public bool HasResult
+        {
+            get => _hasResult;
+            private set => SetProperty(ref _hasResult, value);
+        }
+
+        private string _resultNozzles = "-";
+        public string ResultNozzles { get => _resultNozzles; private set => SetProperty(ref _resultNozzles, value); }
+
+        private string _resultDiameter = "-";
+        public string ResultDiameter { get => _resultDiameter; private set => SetProperty(ref _resultDiameter, value); }
+
+        private string _resultVolume = "-";
+        public string ResultVolume { get => _resultVolume; private set => SetProperty(ref _resultVolume, value); }
+
+        private string _resultVelocity = "-";
+        public string ResultVelocity { get => _resultVelocity; private set => SetProperty(ref _resultVelocity, value); }
+
+        private string _resultSpread = "-";
+        public string ResultSpread { get => _resultSpread; private set => SetProperty(ref _resultSpread, value); }
+
+        /// <summary>선택된 Vision 드라이버 표기(VIRTUAL/IMAQDX/EBUS). 가상인데 CONNECTED 로만 보이는 혼동 방지.</summary>
+        public string DriverModeText =>
+            (AppSettingsService.Current?.DriverMode?.Vision ?? "Virtual").Trim().ToUpperInvariant();
+
         // 드랍와처 검사용 Raw 샘플 이미지 — 이 파일이 있으면 캡쳐 대신 사용한다.
         // 실제 카메라 연동 전, 실측 Raw 이미지로 화면/검사 로직을 확인하기 위함.
         // 파일 위치: Config/Samples/DropWatcher_Raw.png  (Config/Samples/README.md 참고)
@@ -429,7 +458,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 if (SetProperty(ref _isStrobeOn, value)) OnPropertyChanged(nameof(StrobeLabel));
             }
         }
-        public string StrobeLabel => IsStrobeOn ? "💡 ON" : "💡 OFF";
+        // 아이콘은 XAML 의 벡터 Path 가 그린다(이모지는 제어PC 글꼴에 따라 렌더가 달라짐).
+        public string StrobeLabel => IsStrobeOn ? "ON" : "OFF";
 
         private void ExecuteToggleStrobe()
         {
@@ -620,6 +650,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             // 개별 사유는 StopSpitAsync 가 이미 로그로 남겼다. 여기선 화면 요약만.
             LastResultText = idle ? "중단됨" : "중단 실패 — 토출 정지 미확인";
+            ClearResultCard();
         }
 
         // Measure Velocity / Time Interval Measure — OpenCV(DropWatcherProcessor)로 액적 분석.
@@ -734,6 +765,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             if (drops == null || drops.Count == 0)
             {
                 LastResultText = "액적 미검출";
+                ClearResultCard();
                 _mainVM.AddLog($"[VISION] DropWatcher: {action}({src}) — 액적 미검출", LogLevel.Warning);
                 return;
             }
@@ -746,9 +778,27 @@ namespace IJPSystem.Platform.HMI.ViewModels
             LastResultText = okVel.Length > 0
                 ? $"노즐 {drops.Count}개 · 직경 {avgDia:F1}µm · 부피 {avgVol:F1}pL · 속도 {okVel.Average():F2}m/s (편차 {okVel.Max() - okVel.Min():F2})"
                 : $"노즐 {drops.Count}개 · 직경 {avgDia:F1}µm · 부피 {avgVol:F1}pL";
+
+            ResultNozzles  = drops.Count.ToString();
+            ResultDiameter = $"{avgDia:F1}";
+            ResultVolume   = $"{avgVol:F1}";
+            ResultVelocity = okVel.Length > 0 ? $"{okVel.Average():F2}" : "-";
+            ResultSpread   = okVel.Length > 0 ? $"{okVel.Max() - okVel.Min():F2}" : "-";
+            HasResult      = true;
             _mainVM.AddLog($"[VISION] DropWatcher: {action}({src}) — {LastResultText}", LogLevel.Info);
 
             BuildDropletCharts(drops, vel);
+        }
+
+        /// <summary>결과 카드를 비운다 — 실패/중단 후 직전 성공값이 남아 오해를 주지 않게.</summary>
+        private void ClearResultCard()
+        {
+            HasResult      = false;
+            ResultNozzles  = "-";
+            ResultDiameter = "-";
+            ResultVolume   = "-";
+            ResultVelocity = "-";
+            ResultSpread   = "-";
         }
 
         // 다중노즐 프레임 그래프 — 오버레이와 동일한 데이터/컬럼 순서(노즐 번호 축).
@@ -811,6 +861,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             if (Math.Abs(Delay2Us - Delay1Us) < 1e-6)
             {
                 LastResultText = "Delay 1 과 Delay 2 가 같습니다";
+                ClearResultCard();
                 _mainVM.AddLog($"[VISION] DropWatcher: {action} — Delay 1/2 를 서로 다르게 설정하세요.", LogLevel.Warning);
                 return;
             }
@@ -818,6 +869,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             if (!EnsureStrobe())
             {
                 LastResultText = "스트로브 미연결 — 2점 측정 불가";
+                ClearResultCard();
                 _mainVM.AddLog($"[VISION] DropWatcher: {action} — 스트로브 컨트롤러에 연결할 수 없어 측정을 건너뜁니다. " +
                                "단일 프레임 측정은 Measure Velocity 를 쓰세요.", LogLevel.Warning);
                 return;
@@ -840,6 +892,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 if (!r.Success)
                 {
                     LastResultText = r.Message;
+                    ClearResultCard();
                     _mainVM.AddLog($"[VISION] DropWatcher: {action} 실패 — {r.Message}", LogLevel.Warning);
                     return;
                 }

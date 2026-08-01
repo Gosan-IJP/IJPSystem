@@ -256,7 +256,36 @@
             <!-- 제어 버튼 -->
             <Border Grid.Row="1" Background="#111827" CornerRadius="12" Padding="16"
                     BorderBrush="#334155" BorderThickness="1" Margin="0,0,0,10">
-                <Grid>
+                <StackPanel>
+                    <!-- ── 드라이브 준비 표시등 (MOTOR POSITION 패널에서 이 자리로 이동) ──
+                         🔴 Fault=폴트(초기화 금지) / 🟡 Connecting=연결·리셋중 / 🟢 Ready=초기화 가능.
+                         INIT 을 누르기 직전 여기서 go/no-go 를 확인한다. 상세는 툴팁.
+                         값은 상시 구동되는 대시보드 VM(Dashboard.MotorReady*)을 바인딩. -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                                Margin="0,0,0,12" ToolTip="{Binding Dashboard.MotorReadyDetail}">
+                        <Ellipse Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="#F59E0B"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Dashboard.MotorReadyState}" Value="Fault">
+                                            <Setter Property="Fill" Value="#EF4444"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Dashboard.MotorReadyState}" Value="Ready">
+                                            <Setter Property="Fill" Value="#22C55E"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                            <Ellipse.Effect>
+                                <DropShadowEffect Color="#000000" BlurRadius="4" ShadowDepth="1" Opacity="0.5"/>
+                            </Ellipse.Effect>
+                        </Ellipse>
+                        <TextBlock Text="{Binding Dashboard.MotorReadyText}" Foreground="#CBD5E1"
+                                   FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="8"/>
@@ -284,7 +313,8 @@
                                        HorizontalAlignment="Center" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Button>
-                </Grid>
+                    </Grid>
+                </StackPanel>
             </Border>
 
             <!-- 실행 로그 -->

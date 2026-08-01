@@ -11,6 +11,14 @@ namespace IJPSystem.Drivers.Motion.ACS
     // SDK: ACS.SPiiPlusNET.dll 의 Api 클래스.
     // 모든 메서드 본문은 placeholder — 실제 SDK 호출은 TODO 표시 지점에 채운다.
     //
+    // ── SDK 활성화 절차 (DLL 은 저장소에 두지 않는다) ───────────────────────────
+    // 1) ACS-Tools(MMI 패키지) 설치 후 아래 3개를 확보:
+    //      ACS.SPiiPlusNET.dll (관리형 래퍼) / ACSCInterop.dll (브리지) / ACSC.dll (네이티브)
+    //      경로 예: C:\Program Files (x86)\ACS Motion Control\ACS-Tools\Bin\...
+    // 2) IJPSystem.Drivers.Motion.csproj 에 Reference(HintPath) + None(CopyToOutputDirectory) 추가.
+    // 3) ★ACSC.dll 은 x86/x64 별도 빌드 — 앱이 x86 이므로 x86 판을 써야 한다.
+    //    (Comizoa ComiEcatSdk.dll 이 32비트라 전체가 x86 고정)
+    //
     // 참고 — SPiiPlus 일반 호출 예 (실제 API 명은 SDK 문서 기준):
     //   _api.OpenCommEthernet("10.0.0.100", 701);
     //   _api.Enable(axisIndex);

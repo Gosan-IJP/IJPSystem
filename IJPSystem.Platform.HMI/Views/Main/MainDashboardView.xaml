@@ -44,16 +44,6 @@
             <ColumnDefinition Width="380"/>
         </Grid.ColumnDefinitions>
 
-        <!-- 테스트용 알람 트리거 (구석에 작게 배치) -->
-        <Button Grid.Column="0" Click="OpenAlarm_Click"
-                HorizontalAlignment="Left" VerticalAlignment="Bottom"
-                Width="28" Height="28" Margin="6,0,0,6"
-                Background="Transparent" BorderThickness="0"
-                ToolTip="테스트 알람 트리거 (개발용)" Cursor="Hand"
-                Panel.ZIndex="99">
-            <TextBlock Text="🚨" FontSize="14" Opacity="0.45"/>
-        </Button>
-
         <Grid Grid.Column="0" Margin="0,0,25,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -320,33 +310,10 @@
                         </ItemsControl>
                         </StackPanel>
 
-                        <!-- ── 드라이브(서보) 준비 표시등 (3색) ──────────────────
-                             🔴 Fault=폴트(초기화 금지) / 🟡 Connecting=연결·리셋중 / 🟢 Ready=초기화 가능.
-                             냉부팅 직후 서보 폴트 구간을 작업자가 눈으로 확인하도록. 상세는 툴팁. -->
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right"
-                                    Margin="12,0,4,0" ToolTip="{Binding MotorReadyDetail}">
-                            <TextBlock Text="{Binding MotorReadyText}" Foreground="#94A3B8" FontSize="11"
-                                       HorizontalAlignment="Center" Margin="0,0,0,6"/>
-                            <Ellipse Width="15" Height="15" HorizontalAlignment="Center">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <!-- 기본: Connecting = 앰버 -->
-                                        <Setter Property="Fill" Value="#F59E0B"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding MotorReadyState}" Value="Fault">
-                                                <Setter Property="Fill" Value="#EF4444"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding MotorReadyState}" Value="Ready">
-                                                <Setter Property="Fill" Value="#22C55E"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                                <Ellipse.Effect>
-                                    <DropShadowEffect Color="#000000" BlurRadius="4" ShadowDepth="1" Opacity="0.5"/>
-                                </Ellipse.Effect>
-                            </Ellipse>
-                        </StackPanel>
+                        <!-- 드라이브 준비 표시등(3색)은 INITIALIZE 화면 INIT 버튼 위로 이동함(2026-07-31).
+                             MotorReadyState/Text/Detail 속성은 유지(대시보드 VM 상시 갱신 + INIT 화면이 바인딩). -->
+                        <!-- Grid.Column="1" 비워둠 -->
+                        <StackPanel Grid.Column="1"/>
                     </Grid>
                 </Border>
                 <!-- 연속 운전 — 모드 토글 스위치(액션 아님). 상단 상태 띠로 이동. -->

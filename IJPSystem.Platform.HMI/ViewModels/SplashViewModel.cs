@@ -21,10 +21,24 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
 
         // 단계 실행: 작업을 수행하면서 step 상태를 갱신. minMs 미만으로 끝나면 잠시 대기 (시각 피드백 보장)
+        public Task<T> RunStepAsync<T>(
+            string name,
+            string description,
+            Func<T> action,
+            bool background = true,
+            int minMs = 200) =>
+            RunStepAsync(name, description, action, report: null, background, minMs);
+
+        /// <summary>
+        /// 결과를 화면에 되돌려 표시하는 단계 — 조회형 작업(예: Meteor 헤드 PCC 상태)에 사용.
+        /// <paramref name="report"/> 가 완료 상태와 표시 문구를 결정하므로, "연결 안 됐지만 기동은 정상"
+        /// 같은 경우를 실패(✗)가 아니라 경고(!)로 남길 수 있다.
+        /// </summary>
         public async Task<T> RunStepAsync<T>(
             string name,
             string description,
             Func<T> action,
+            Func<T, (InitStepStatus Status, string Description)>? report,
             bool background = true,
             int minMs = 200)
         {
@@ -55,7 +69,16 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 int elapsed = (int)sw.ElapsedMilliseconds;
                 if (elapsed < minMs) await Task.Delay(minMs - elapsed);
 
-                step.Status = InitStepStatus.Done;
+                if (report != null)
+                {
+                    var (status, desc) = report(result);
+                    step.Description = desc;
+                    step.Status      = status;
+                }
+                else
+                {
+                    step.Status = InitStepStatus.Done;
+                }
                 return result;
             }
             catch (Exception ex)

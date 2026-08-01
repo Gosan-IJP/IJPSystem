@@ -96,3 +96,7 @@ Config/*.db
 
 # Claude local settings (개인 설정 — 공유 안함)
 .claude/settings.local.json
+
+# 핫픽스 배포용 DLL 묶음 — 빌드 산출물이라 커밋하지 않는다(빌드마다 diff 발생).
+# 폴더는 로컬에 남겨 두고 필요할 때 현장 PC 로 복사한다.
+_hotfix/

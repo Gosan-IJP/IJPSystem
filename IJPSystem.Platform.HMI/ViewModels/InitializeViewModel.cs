@@ -30,6 +30,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 12축 motor status / position 표시용 (MainViewModel의 SharedAxisList 노출)
         public ObservableCollection<AxisViewModel> Axes => _mainVM.SharedAxisList;
 
+        // 드라이브 준비상태(🔴/🟡/🟢) — 상시 구동되는 대시보드 VM 것을 그대로 노출.
+        // INIT 버튼 옆 표시등이 이 값을 바인딩한다(별도 폴링 불필요).
+        public MainDashboardViewModel Dashboard => _mainVM.DashboardVM;
+
         private bool _isRunning;
         public bool IsRunning
         {

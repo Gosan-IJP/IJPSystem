@@ -51,26 +51,39 @@
       "Type": "N.O",
       "IoCategory": "Digital Input"
     },
-
-  { 
+   {
       "Address": "X007",
-      "Index": "DI_SPARE_7",
-      "Description": "SPARE",
+      "Index": "DI_DOOR_FRONT",
+      "Description": "정면 DOOR SW",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X008",
+      "Index": "DI_TEMP_LOW_ALARM",
+      "Description": "TEMP LOW ALARM",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X009",
+      "Index": "DI_TEMP_HIGH_ALARM",
+      "Description": "TEMP HIGH ALARM",
       "Type": "N.O",
       "IoCategory": "Digital Input"
     },
 
-    {
+   {
       "Address": "Y000",
       "Index": "DO_SOL_VV_CHUCK_VAC",
-      "Description": "Chcuk Table Vacuum Sol' V/V",
+      "Description": "Chuck Table Vacuum Sol' V/V",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     },
     {
       "Address": "Y001",
       "Index": "DO_SOL_VV_DMPC_VAC",
-      "Description": "DMPC Vacuum Sol' V/V",
+      "Description": "DMD Vacuum Sol' V/V",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     },
@@ -84,40 +97,66 @@
     {
       "Address": "Y003",
       "Index": "DO_SOL_VV_INK_1",
-      "Description": "Ink 1 Sol' V/V",
+      "Description": "Ink Supply 1 Sol' V/V",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     },
     {
       "Address": "Y004",
       "Index": "DO_SOL_VV_INK_2",
-      "Description": "Ink 2 Sol' V/V",
+      "Description": "Ink Supply 2 Sol' V/V",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     },
-   
-   {
+    {
       "Address": "Y005",
       "Index": "DO_SOL_VV_EXHAUST",
       "Description": "배기 Sol V/V",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     },
-
-   {
+    {
       "Address": "Y006",
-      "Index": "DO_SPARE_6",
-      "Description": "SPARE",
+      "Index": "DO_MIST_COLLECTOR",
+      "Description": "MIST COLLECTOR",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     },
-
     {
       "Address": "Y007",
-      "Index": "DO_SPARE_7",
-      "Description": "SPARE",
+      "Index": "DO_BUZZER",
+      "Description": "BUZZER",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y008",
+      "Index": "DO_TOWER_LAMP_RED",
+      "Description": "LED R (Tower Lamp Red)",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y009",
+      "Index": "DO_TOWER_LAMP_GREEN",
+      "Description": "LED G (Tower Lamp Green)",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y010",
+      "Index": "DO_TOWER_LAMP_BLUE",
+      "Description": "LED B (Tower Lamp Blue)",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y011",
+      "Index": "DO_DRAIN_SV",
+      "Description": "DRAIN S/V",
       "Type": "N.O",
       "IoCategory": "Digital Output"
     }
+
   ]
 }

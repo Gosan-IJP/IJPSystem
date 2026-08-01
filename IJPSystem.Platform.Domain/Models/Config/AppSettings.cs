@@ -33,12 +33,17 @@ namespace IJPSystem.Platform.Domain.Models.Config
     /// 디바이스별 드라이버 선택.
     ///   IO     : Virtual | Comizoa | EtherCat
     ///   Motion : Virtual | Comizoa | Acs
-    ///   Vision : Virtual | Imaqdx
+    ///   Vision : Virtual | Imaqdx | Ebus
+    ///   Head   : None | Meteor
     /// </summary>
     public class DriverModeSettings
     {
         public string IO     { get; set; } = "Virtual";
         public string Motion { get; set; } = "Virtual";
         public string Vision { get; set; } = "Virtual";
+
+        // 프린트 헤드(Meteor PCC). "None" 이면 스플래시 확인·상태바 폴링을 아예 하지 않는다
+        // — 헤드가 없는 장비에서 불필요한 PiOpenPrinter 점유/지연을 막기 위함.
+        public string Head   { get; set; } = "None";
     }
 }

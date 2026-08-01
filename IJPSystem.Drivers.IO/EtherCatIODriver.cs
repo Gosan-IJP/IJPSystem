@@ -101,6 +101,7 @@ namespace IJPSystem.Drivers.IO
 
         // --- 인터페이스 규격을 위한 int 기반 메서드 (Stub) ---
         public bool GetInput(int bitNo) => false;
+        public uint GetInputBits() => 0;
         public bool GetOutput(int bitNo) => false;
         public void SetOutput(int bitNo, bool on) { }
         public double GetAnalogInput(int channel) => 0.0;
