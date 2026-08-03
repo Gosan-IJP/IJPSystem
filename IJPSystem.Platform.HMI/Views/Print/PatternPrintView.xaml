@@ -807,7 +807,7 @@
                     <Grid Grid.Column="0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>     <!-- Motion 카드 -->
-                        <RowDefinition Height="Auto"/>  <!-- Ready / Purge -->
+                        <RowDefinition Height="Auto"/>  <!-- 티칭 포인트 바로가기(Ready/PrintStart/PrintEnd/Purge) -->
                     </Grid.RowDefinitions>
                     <Border Grid.Row="0" Style="{StaticResource CardBorder}" Padding="12">
                         <StackPanel>
@@ -860,13 +860,22 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- 티칭 포인트 바로가기 — 활성 레시피의 READY / PURGE 좌표로 전축 이동 -->
+                    <!-- 티칭 포인트 바로가기 — 활성 레시피의 티칭 좌표로 전축 이동.
+                         순서는 인쇄 흐름(READY → PRINT START → PRINT END) 다음에 정비용 PURGE. -->
                     <Border Grid.Row="1" Style="{StaticResource CardBorder}" Padding="8" Margin="0,10,0,0">
                         <StackPanel>
                             <Button Style="{StaticResource ActionBtn}" Height="34" Margin="0,0,0,6"
                                     Background="#1E293B" BorderBrush="#475569" Content="Ready Position"
                                     ToolTip="활성 레시피의 READY 티칭 포인트로 이동"
                                     Command="{Binding MoveReadyCommand}"/>
+                            <Button Style="{StaticResource ActionBtn}" Height="34" Margin="0,0,0,6"
+                                    Background="#1E293B" BorderBrush="#475569" Content="Print Start Position"
+                                    ToolTip="활성 레시피의 PRINT START 티칭 포인트로 이동"
+                                    Command="{Binding MovePrintStartCommand}"/>
+                            <Button Style="{StaticResource ActionBtn}" Height="34" Margin="0,0,0,6"
+                                    Background="#1E293B" BorderBrush="#475569" Content="Print End Position"
+                                    ToolTip="활성 레시피의 PRINT END 티칭 포인트로 이동"
+                                    Command="{Binding MovePrintEndCommand}"/>
                             <Button Style="{StaticResource ActionBtn}" Height="34"
                                     Background="#1E293B" BorderBrush="#475569" Content="Purge Position"
                                     ToolTip="활성 레시피의 PURGE 티칭 포인트로 이동"

@@ -77,6 +77,18 @@ namespace IJPSystem.Platform.HMI.Views
         private const int    HeadDownStepNo = 6;    // Z 하강 시작 스텝(HeadDown)
         private const int    HeadUpStepNo   = 10;   // Z 상승 시작 스텝(HeadUp) = Y 복귀 동시 시작
 
+        // ── 헤드 크로스스캔(X, 갠트리 스텝오버) ──────────────────────────
+        // 화면은 헤드를 글라스 위쪽에 두고 아래로 분사하는 구성이라, X 를 밴드에 픽셀 단위로
+        // 정렬시키면 헤드가 글라스를 덮어버린다(헤드 하단 220 + Z 34 = 254, 글라스 상단 258).
+        // 그래서 방향만 맞추고(밴드가 위로 쌓이므로 헤드도 위로) 이동량은 압축해 표시한다.
+        // 실제 X 값은 헤드 옆 라벨에 mm 로 같이 띄워 과장 표현이 되지 않게 한다.
+        private const double HeadCrossSpanPx = 36;   // 전체 스텝오버에 대응하는 헤드 화면 이동량
+
+        // ※ 정렬축(T)은 이 애니메이션에서 다루지 않는다.
+        //    실제 보정각(±0.1°)은 화면에서 식별되지 않는 반면, 글라스를 회전시키면 그 안의
+        //    인쇄영역·스캔선·그리드가 함께 돌아 정상 동작하던 인쇄 표시가 깨진다.
+        //    T 값은 하단 MOTOR POSITION 패널에서 숫자로 확인한다.
+
         // ── Phase 시간표 (초) ────────────────────────────────────────
         // Glass 반입/반출은 elapsed 기반 (시작/종료 이벤트가 별도로 없음)
         // Head 관련 phase는 step 진입 시각을 기점으로 한 duration만 사용
@@ -270,7 +282,9 @@ namespace IJPSystem.Platform.HMI.Views
             bool bidi          = _vm?.IsBidirectional ?? true;
             int stepsPerPass   = bidi ? 4 : 6;
             int headUpStep     = stepsPerPass * swath + 6;   // 양방향 S=1→10,2→14,3→18 / 단방향 S=1→12,2→18,3→24
-            int moveReadyStep  = headUpStep + 3;       // HeadUp, HeadUpDone, VacuumOff, [MoveReady]
+            // 헤드 UP 과 READY 복귀가 한 스텝에서 동시에 시작한다(AutoPrintSequence 참조).
+            // 꼬리 구성: [HeadUpAndMoveReady] → Done → VacuumOff.
+            int moveReadyStep  = headUpStep;
             bool inPassRegion  = _currentStepNo >= PrintScanStepNo && _currentStepNo < headUpStep;
             int within         = inPassRegion ? (_currentStepNo - PrintScanStepNo) % stepsPerPass : -1;
             bool isPrintStep   = inPassRegion && within == 0;   // 잉크 토출(스캔) 진행
@@ -295,15 +309,22 @@ namespace IJPSystem.Platform.HMI.Views
                     : 0.0;
             }
 
-            // ── 헤드 수평(X): 고정 (실장 구조 — 스캔축은 스테이지가 담당) ──
+            // ── 헤드 수평(X 갠트리는 화면 세로가 크로스스캔이므로 수평은 고정) ──
             HeadXTransform.X     = HeadFixedX;
             HeadLabelTransform.X = HeadFixedX;
             SyncNozzleX(HeadFixedX);
 
-            // ── 헤드 수직(Z): HeadDown(step6) 하강 → 모든 패스 동안 유지 → HeadUp(동적) 상승 ──
-            //   멀티 스와스여도 헤드는 마지막 패스까지 내린 채 유지, headUpStep 에서 1회 상승.
+            // ── 헤드 승강(Z) ──
+            // 티칭(PRINT HEAD UP/DOWN)이 있으면 실측 Z 에 동기, 없으면 기존 스크립트로 폴백.
+            //   Z 실측 ∈ [Up, Down] → 화면 [HeadZUp, HeadZDown]
             double headZ;
-            if (_currentStepNo < HeadDownStepNo)
+            if (_vm != null && _vm.HasLiftMapping)
+            {
+                double span = _vm.HeadDownLiftMm - _vm.HeadUpLiftMm;
+                double p = Math.Clamp((_vm.GetLiveLiftMm() - _vm.HeadUpLiftMm) / span, 0.0, 1.0);
+                headZ = Lerp(HeadZUp, HeadZDown, p);
+            }
+            else if (_currentStepNo < HeadDownStepNo)
             {
                 headZ = HeadZUp;                                     // 하강 전 — 상승 파킹
             }
@@ -319,9 +340,26 @@ namespace IJPSystem.Platform.HMI.Views
                     ? EaseInOutCubic(PhaseT(elapsed, tUp, T_HeadPosDur)) : 1.0;
                 headZ = Lerp(HeadZDown, HeadZUp, tu2);               // 상승(마지막 패스 후)
             }
-            HeadXTransform.Y     = headZ;
-            HeadLabelTransform.Y = headZ;
-            SyncNozzleY(headZ);
+
+            // ── 헤드 크로스스캔(X 스텝오버) ──
+            // 실측 X 가 있으면 (현재−시작)/전체이동량, 없으면 패스 인덱스로 폴백.
+            // 밴드가 아래→위로 쌓이므로 헤드도 위(−Y)로 이동시켜 방향을 일치시킨다.
+            int passIdx = inPassRegion ? (_currentStepNo - PrintScanStepNo) / stepsPerPass : 0;
+            double crossP;
+            if (_vm != null && _vm.HasStepMapping)
+                crossP = Math.Clamp((_vm.GetLiveStepMm() - _vm.StepOriginMm) / _vm.StepSpanMm, 0.0, 1.0);
+            else
+                crossP = swath > 1 ? (double)Math.Min(passIdx, swath - 1) / (swath - 1) : 0.0;
+
+            double headCross = -HeadCrossSpanPx * crossP;
+
+            // Z(하강)와 X(크로스스캔)를 같은 화면 세로축에 더한다 — 서로 범위가 달라 상쇄되지 않는다.
+            double headScreenY   = headZ + headCross;
+            HeadXTransform.Y     = headScreenY;
+            HeadLabelTransform.Y = headScreenY;
+            SyncNozzleY(headScreenY);
+
+            UpdateStepDisplayMm(_vm?.GetLiveStepMm() ?? 0.0);
 
             // ── 스테이지(글라스) X — 실제 Y모터에 동기 ──
             //  1~3: 우측 Ready 파킹 대기 / 4~7: Ready→PrintStart 반입(Y 동기) /
@@ -387,7 +425,7 @@ namespace IJPSystem.Platform.HMI.Views
             // 스와스마다 글라스 폭(화면 세로)의 1/swath 씩 아래에서 위로 쌓인다.
             //   완료 밴드(PrintedDoneArea): 전폭 × (완료 패스수/swath) — 바닥 고정, 위로 성장
             //   현재 밴드(PrintedArea)    : 1/swath 높이 × 스캔 진행률 — 해당 밴드 위치로 이동
-            int passIndex = inPassRegion ? (_currentStepNo - PrintScanStepNo) / stepsPerPass : 0;   // 0-based
+            int passIndex = passIdx;   // 0-based (헤드 크로스스캔 계산에서 이미 구함)
             if (passIndex != _currentPassIndex)
             {
                 _currentPassIndex = passIndex;
@@ -494,6 +532,13 @@ namespace IJPSystem.Platform.HMI.Views
             YPosText.Text = $"GY : {motorMm,8:F3} mm";
         }
 
+        // 크로스스캔(X) 실측 표기. 헤드의 화면 이동량은 압축 표기라, 실제 값을 숫자로
+        // 함께 보여야 상태를 오해 없이 읽을 수 있다.
+        private void UpdateStepDisplayMm(double stepMm)
+        {
+            AxisReadoutText.Text = $"GX : {stepMm,8:F3} mm";
+        }
+
         private void SetStatus(string text, string hexColor)
         {
             StatusText.Text = text;
@@ -534,6 +579,7 @@ namespace IJPSystem.Platform.HMI.Views
                 ResetTransforms();
                 SetStatus("▶  STARTING ...", "#38BDF8");
                 YPosText.Text = "GY :    0.000 mm";
+                UpdateStepDisplayMm(0);
 
                 _animStart    = DateTime.Now;
                 _lastFrameAt  = default;

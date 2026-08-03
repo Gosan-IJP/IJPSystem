@@ -200,7 +200,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     AddExecLog($"Step {step.Number}  {step.Name}");
 
                     var sw = Stopwatch.StartNew();
-                    await step.Action(_cts.Token);
+                    await SequenceStepLogger.RunAsync(
+                        step.Number, step.NameKey, step.Action, "Initialize", _cts.Token, _mainVM.AddLog);
                     sw.Stop();
                     step.Elapsed = $"{sw.Elapsed.TotalSeconds:F1}s";
                     step.Status = StepStatus.Done;

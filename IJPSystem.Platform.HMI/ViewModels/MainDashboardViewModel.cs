@@ -33,9 +33,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly Func<double>? _getHeadLength;
         private readonly Func<int>? _getPrintDirection;   // 0=단방향, 1=양방향
 
-        // 프린팅 스캔(스테이지 이송) 축. 실장 구조: 헤드(X축)는 고정, 스테이지(Y축)가 이동하며 인쇄한다.
-        // 메인 대시보드 애니메이션은 이 축의 모터 위치·티칭 좌표로 스테이지 이동/인쇄 진행을 구동한다.
-        private const string ScanAxis = "Y";
+        // 실장 구조 — 헤드: X(갠트리, 크로스스캔) + Z(승강) / 스테이지: Y(스캔 이송) + T(정렬 회전).
+        // 메인 대시보드 애니메이션은 이 축들의 실측 위치·티칭 좌표로 구동한다.
+        private const string ScanAxis  = "Y";   // 스캔(스테이지 이송)
+        private const string StepAxis  = "X";   // 스와스 스텝오버(갠트리 크로스스캔)
+        private const string LiftAxis  = "Z";   // 헤드 승강
+        // 정렬축(T)은 대시보드 애니메이션에서 다루지 않는다 — 보정각이 화면에서 식별되지 않는 반면
+        // 글라스를 회전시키면 인쇄 표시가 깨진다. T 는 MOTOR POSITION 패널의 숫자로 확인.
 
         private readonly IMachine _machine;
         private readonly IMotionService _motion;
@@ -61,23 +65,73 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                       && !double.IsNaN(PrintStartScanMm)
                                       && Math.Abs(PrintStartScanMm - ReadyScanMm) > 0.001;
 
+        // ── 헤드 승강(Z) 티칭 좌표 ─────────────────────────────────────────
+        // PRINT HEAD UP / DOWN 포인트의 Z 값. 있으면 애니메이션이 실측 Z 에 동기되고,
+        // 없으면 View 가 기존 스크립트(스텝 진입 후 0.7초 Lerp)로 폴백한다.
+        public double HeadUpLiftMm   { get; private set; } = double.NaN;
+        public double HeadDownLiftMm { get; private set; } = double.NaN;
+        public bool   HasLiftMapping => !double.IsNaN(HeadUpLiftMm)
+                                     && !double.IsNaN(HeadDownLiftMm)
+                                     && Math.Abs(HeadDownLiftMm - HeadUpLiftMm) > 0.001;
+
+        // ── 스와스 스텝오버(X) 매핑 ────────────────────────────────────────
+        // X 는 절대 티칭 좌표가 없고 패스 사이 상대이동(MoveAxisRelative headLength)이라,
+        // 시퀀스 시작 시점의 X 를 원점으로 잡아 (현재X − 시작X) / 전체이동량 으로 진행률을 만든다.
+        //   전체이동량 = headLength × (swath − 1)
+        // ※ headLength 는 지금 레시피 화면에서 수동 입력. 향후 노즐/헤드 정보로 산출하게 되면
+        //   StepSpanMm 계산 한 곳만 바꾸면 된다.
+        public double StepOriginMm { get; private set; } = double.NaN;
+        public double StepSpanMm   { get; private set; } = double.NaN;
+        public bool   HasStepMapping => !double.IsNaN(StepOriginMm)
+                                     && !double.IsNaN(StepSpanMm)
+                                     && Math.Abs(StepSpanMm) > 0.001;
+
         // View 60fps 프레임 콜백이 매 프레임 호출. 예전엔 매 호출마다 GetActualPosition(=EtherCAT 상태읽기)을
         // 수행해, 프린팅(Y 이송) 중 모션제어와 버스 경합으로 프레임 스파이크(버벅임)가 발생했다.
         // → 하드웨어 실측을 스로틀(≈25Hz)해 캐시로 반환한다. 60fps 애니메이션엔 충분히 매끄럽고
         //   하드웨어 부하는 1/2 이하로 줄어든다.
-        private double _liveScanCache;
-        private long _liveScanReadTick;
-        private const long LiveScanThrottleMs = 40;   // 스캔축 실측 최대 ~25Hz
-        public double GetLiveScanMm()
+        // 읽기 주기를 둘로 나눈다 — GetAllStatus()/GetActualPosition 은 모두 하드웨어를 실제로
+        // 읽으므로(EtherCAT), 4축을 전부 25Hz 로 읽으면 스캔 중 버스 경합이 4배가 된다.
+        //   · 스캔축(Y) : 40ms(≈25Hz) — 애니메이션이 매 프레임 따라가야 하는 유일한 축
+        //   · X/Z/T     : 200ms(5Hz)  — 스텝오버·승강·정렬은 이산적이고 느려 5Hz 로 충분
+        // 결과: 초당 읽기 25 → 40 회. 예전(25)보다 늘지만 4배(100)는 피한다.
+        private readonly Dictionary<string, double> _livePos = new();
+        private long _scanReadTick;
+        private long _slowReadTick;
+        private const long LiveScanThrottleMs = 40;    // 스캔축 ≈25Hz
+        private const long SlowAxisThrottleMs = 200;   // 그 외 축 5Hz
+
+        private static readonly string[] SlowAxes = { StepAxis, LiftAxis };
+
+        private void RefreshLivePositions()
         {
+            var motion = _machine.Motion;
+            if (motion == null) return;
             long now = Environment.TickCount64;
-            if (now - _liveScanReadTick >= LiveScanThrottleMs || _liveScanReadTick == 0)
+
+            if (now - _scanReadTick >= LiveScanThrottleMs || _scanReadTick == 0)
             {
-                _liveScanCache = _machine.Motion?.GetActualPosition(ScanAxis) ?? 0.0;
-                _liveScanReadTick = now;
+                _scanReadTick = now;
+                _livePos[ScanAxis] = motion.GetActualPosition(ScanAxis);
             }
-            return _liveScanCache;
+
+            if (now - _slowReadTick >= SlowAxisThrottleMs || _slowReadTick == 0)
+            {
+                _slowReadTick = now;
+                foreach (var ax in SlowAxes) _livePos[ax] = motion.GetActualPosition(ax);
+            }
         }
+
+        /// <summary>축 실측 위치[mm 또는 deg]. View 프레임 콜백에서 매 프레임 호출해도 안전(스로틀 캐시).</summary>
+        public double GetLiveAxisPos(string axisNo)
+        {
+            RefreshLivePositions();
+            return _livePos.TryGetValue(axisNo, out var v) ? v : 0.0;
+        }
+
+        public double GetLiveScanMm()   => GetLiveAxisPos(ScanAxis);
+        public double GetLiveStepMm()   => GetLiveAxisPos(StepAxis);
+        public double GetLiveLiftMm()   => GetLiveAxisPos(LiftAxis);
 
         private void CachePrintRange()
         {
@@ -89,6 +143,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
             OnPropertyChanged(nameof(PrintEndScanMm));
             OnPropertyChanged(nameof(HasPrintRange));
             OnPropertyChanged(nameof(HasReadyMapping));
+
+            // 헤드 승강(Z) — 티칭 포인트에서 직접.
+            HeadUpLiftMm   = _getPointAxisMm?.Invoke(PointNames.PrintHeadUp,   LiftAxis) ?? double.NaN;
+            HeadDownLiftMm = _getPointAxisMm?.Invoke(PointNames.PrintHeadDown, LiftAxis) ?? double.NaN;
+            OnPropertyChanged(nameof(HeadUpLiftMm));
+            OnPropertyChanged(nameof(HeadDownLiftMm));
+            OnPropertyChanged(nameof(HasLiftMapping));
+
+            // 스와스 스텝오버(X) — 현재 X 를 원점으로, 전체 이동량은 headLength × (swath−1).
+            int    swath  = Math.Max(1, _getSwathCount?.Invoke() ?? 1);
+            double headLen = _getHeadLength?.Invoke() ?? 0.0;
+            StepOriginMm = _machine.Motion != null ? GetLiveAxisPos(StepAxis) : double.NaN;
+            StepSpanMm   = (swath > 1 && headLen > 0) ? headLen * (swath - 1) : double.NaN;
+            OnPropertyChanged(nameof(StepOriginMm));
+            OnPropertyChanged(nameof(StepSpanMm));
+            OnPropertyChanged(nameof(HasStepMapping));
         }
 
         // 일시정지 게이트 — OCE 없이 폴링으로 대기. 알람과 STOP 의미가 다르다:
@@ -471,6 +541,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
+        // 사이클 시작 파라미터 1줄 — 재현에 필요한 값(레시피·프린팅수·헤드길이·방향·드라이버)을
+        // 한 줄로 남긴다. 이게 없으면 로그만 받아서는 어떤 조건으로 돌았는지 알 수 없다.
+        private void LogCycleParameters(int cycle, int totalSteps)
+        {
+            var dm = AppSettingsService.Current?.DriverMode;
+            _logAction(
+                $"[SEQ] AutoPrint 사이클 {cycle} 시작 — 레시피 '{ActiveRecipeName}', " +
+                $"프린팅수 {SwathCount}, 헤드길이 {(_getHeadLength?.Invoke() ?? 0):F1}mm, " +
+                $"{(IsBidirectional ? "양방향" : "단방향")}, 연속운전 {(IsContinuousMode ? "ON" : "OFF")}, " +
+                $"스텝 {totalSteps}개, 드라이버 IO={dm?.IO}/Motion={dm?.Motion}/Vision={dm?.Vision}",
+                LogLevel.Info);
+        }
+
         /// <summary>언어 변경 시 호출 — 진행 중이어도 표시명만 갱신</summary>
         public void RefreshStepNames()
         {
@@ -516,6 +599,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 BuildSteps();
                 int total = Steps.Count;
 
+                LogCycleParameters(cycle, total);
+
                 for (int i = 0; i < Steps.Count; i++)
                 {
                     _cts.Token.ThrowIfCancellationRequested();
@@ -548,7 +633,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         var sw = Stopwatch.StartNew();
                         try
                         {
-                            await step.Action(_stepCts.Token);
+                            await SequenceStepLogger.RunAsync(
+                                step.Number, step.NameKey, step.Action,
+                                "AutoPrint", _stepCts.Token, _logAction);
                             sw.Stop();
                             step.Elapsed = $"{sw.Elapsed.TotalSeconds:F1}s";
                             step.Status  = StepStatus.Done;

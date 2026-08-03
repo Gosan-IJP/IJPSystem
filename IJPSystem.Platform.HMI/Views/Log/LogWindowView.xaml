@@ -24,7 +24,22 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="12"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="8"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
+
+            <Grid.Resources>
+                <!-- 카테고리(Quick-Filter) 토글 버튼 — 활성 카테고리만 색이 들어온다 -->
+                <Style x:Key="CategoryToggleButton" TargetType="Button" BasedOn="{StaticResource ModernActionButton}">
+                    <Setter Property="Width"       Value="104"/>
+                    <Setter Property="Height"      Value="34"/>
+                    <Setter Property="Margin"      Value="0,3,6,3"/>
+                    <Setter Property="FontSize"    Value="12"/>
+                    <Setter Property="Background"  Value="#0F172A"/>
+                    <Setter Property="BorderBrush" Value="#334155"/>
+                    <Setter Property="Foreground"  Value="#94A3B8"/>
+                </Style>
+            </Grid.Resources>
 
             <Grid Grid.Row="0">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -97,6 +112,176 @@
                             Style="{StaticResource ModernActionButton}"
                             Background="#0F766E" BorderBrush="#14B8A6"/>
                 </StackPanel>
+            </Border>
+
+            <!-- ── 카테고리 Quick-Filter ─────────────────────────────────────
+                 로그 prefix([MOTION]/[IO]/…)를 그대로 매칭하는 필터 버튼.
+                 폭이 좁아지면 WrapPanel 이 두 줄로 접는다. -->
+            <Border Grid.Row="4" Background="#1E293B" CornerRadius="10" Padding="12,7"
+                    BorderBrush="#334155" BorderThickness="1">
+                <WrapPanel Orientation="Horizontal">
+
+                    <Button Content="ALL"
+                            Command="{Binding SetCategoryCommand}" CommandParameter="ALL"
+                            ToolTip="전체 로그">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
+                                <Setter Property="Width" Value="72"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveCategory}" Value="ALL">
+                                        <Setter Property="Background"  Value="#0F766E"/>
+                                        <Setter Property="BorderBrush" Value="#14B8A6"/>
+                                        <Setter Property="Foreground"  Value="White"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <Button Content="LOGIN/NAV"
+                            Command="{Binding SetCategoryCommand}" CommandParameter="LOGIN_NAV"
+                            ToolTip="로그인/권한/화면 전환 — [AUTH] [NAV]">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveCategory}" Value="LOGIN_NAV">
+                                        <Setter Property="Background"  Value="#1D4ED8"/>
+                                        <Setter Property="BorderBrush" Value="#3B82F6"/>
+                                        <Setter Property="Foreground"  Value="White"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <Button Content="SEQUENCE"
+                            Command="{Binding SetCategoryCommand}" CommandParameter="SEQ"
+                            ToolTip="시퀀스 실행 — [SEQ] [INITIALIZE] [PRINT]&#x0a;스텝 시작/완료/실패 추적">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveCategory}" Value="SEQ">
+                                        <Setter Property="Background"  Value="#7C3AED"/>
+                                        <Setter Property="BorderBrush" Value="#A78BFA"/>
+                                        <Setter Property="Foreground"  Value="White"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <Button Content="MOTION"
+                            Command="{Binding SetCategoryCommand}" CommandParameter="MOTION"
+                            ToolTip="모터 — [MOTION]&#x0a;조그/티칭/포인트 이동, 도달 오차·InPos 미달">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveCategory}" Value="MOTION">
+                                        <Setter Property="Background"  Value="#B45309"/>
+                                        <Setter Property="BorderBrush" Value="#F59E0B"/>
+                                        <Setter Property="Foreground"  Value="White"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <Button Content="IO / 유체"
+                            Command="{Binding SetCategoryCommand}" CommandParameter="IO"
+                            ToolTip="IO·유체 계통 — [IO] [PNID] [VALVE] [PRESSURE] [MENISCUS] [VV]&#x0a;DI/DO 신호 변화, 밸브 조작, 압력/메니스커스">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveCategory}" Value="IO">
+                                        <Setter Property="Background"  Value="#0E7490"/>
+                                        <Setter Property="BorderBrush" Value="#22D3EE"/>
+                                        <Setter Property="Foreground"  Value="White"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <Button Content="VISION"
+                            Command="{Binding SetCategoryCommand}" CommandParameter="VISION"
+                            ToolTip="비전 — [VISION] [DW]&#x0a;카메라 조작, 드랍와처 측정">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveCategory}" Value="VISION">
+                                        <Setter Property="Background"  Value="#4D7C0F"/>
+                                        <Setter Property="BorderBrush" Value="#A3E635"/>
+                                        <Setter Property="Foreground"  Value="White"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <Button Content="RECIPE"
+                            Command="{Binding SetCategoryCommand}" CommandParameter="RECIPE"
+                            ToolTip="인쇄 조건 변경 — [RECIPE] [WAVEFORM] [PATTERN]">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveCategory}" Value="RECIPE">
+                                        <Setter Property="Background"  Value="#BE185D"/>
+                                        <Setter Property="BorderBrush" Value="#F472B6"/>
+                                        <Setter Property="Foreground"  Value="White"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <Button Content="ALARM"
+                            Command="{Binding SetCategoryCommand}" CommandParameter="ALARM"
+                            ToolTip="알람 발생/해제 — [ALARM]&#x0a;발생 시점의 장비 스냅샷 포함">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveCategory}" Value="ALARM">
+                                        <Setter Property="Background"  Value="#C2410C"/>
+                                        <Setter Property="BorderBrush" Value="#FB923C"/>
+                                        <Setter Property="Foreground"  Value="White"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <Button Content="SYSTEM"
+                            Command="{Binding SetCategoryCommand}" CommandParameter="SYSTEM"
+                            ToolTip="시스템 — [BOOT] [CONFIG] [LOG] [LINK] [HEAD] [ComiEcat] [DASH]&#x0a;기동/설정 로드, 드라이버 링크 끊김·복구">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveCategory}" Value="SYSTEM">
+                                        <Setter Property="Background"  Value="#475569"/>
+                                        <Setter Property="BorderBrush" Value="#94A3B8"/>
+                                        <Setter Property="Foreground"  Value="White"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <Button Content="ERROR"
+                            Command="{Binding SetCategoryCommand}" CommandParameter="ERROR"
+                            ToolTip="Error / Fatal 레벨만 표시 — 장애 빠른 진단&#x0a;(이때 LEVEL 콤보는 무시됨)">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveCategory}" Value="ERROR">
+                                        <Setter Property="Background"  Value="#991B1B"/>
+                                        <Setter Property="BorderBrush" Value="#EF4444"/>
+                                        <Setter Property="Foreground"  Value="White"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </WrapPanel>
             </Border>
         </Grid>
 
@@ -181,104 +366,12 @@
 
         <!-- ── 하단 액션 버튼 ─────────────────────────────────────────── -->
         <Grid Grid.Row="2" Margin="0,20,0,0">
-            <Grid.Resources>
-                <!-- 카테고리(Quick-Filter) 토글 버튼 — IsActive=True 면 진한 색으로 하이라이트 -->
-                <Style x:Key="CategoryToggleButton" TargetType="Button" BasedOn="{StaticResource ModernActionButton}">
-                    <Setter Property="Width" Value="120"/>
-                    <Setter Property="Height" Value="38"/>
-                    <Setter Property="Margin" Value="6,0,0,0"/>
-                    <Setter Property="Background"  Value="#1E293B"/>
-                    <Setter Property="BorderBrush" Value="#334155"/>
-                    <Setter Property="Foreground"  Value="#94A3B8"/>
-                </Style>
-            </Grid.Resources>
-
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                 <Button Content="EXPORT CSV" Command="{Binding ExportCsvCommand}"
                         Width="130" Height="38"
                         Style="{StaticResource ModernActionButton}"
-                        Background="#334155" BorderBrush="#475569"/>
-
-                <!-- 카테고리 필터 버튼들 — 활성 상태는 IsCat* 트리거로 표시 -->
-                <Button Content="ALL"
-                        Command="{Binding SetCategoryCommand}" CommandParameter="ALL">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
-                            <Setter Property="Width" Value="80"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsCatAll}" Value="True">
-                                    <Setter Property="Background"  Value="#0F766E"/>
-                                    <Setter Property="BorderBrush" Value="#14B8A6"/>
-                                    <Setter Property="Foreground"  Value="White"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-
-                <Button Content="LOGIN/NAV"
-                        Command="{Binding SetCategoryCommand}" CommandParameter="LOGIN_NAV"
-                        ToolTip="로그인/권한/화면 전환 이력만 표시">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsCatLoginNav}" Value="True">
-                                    <Setter Property="Background"  Value="#1D4ED8"/>
-                                    <Setter Property="BorderBrush" Value="#3B82F6"/>
-                                    <Setter Property="Foreground"  Value="White"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-
-                <Button Content="SEQUENCE"
-                        Command="{Binding SetCategoryCommand}" CommandParameter="SEQ"
-                        ToolTip="시퀀스(AutoPrint/Initialize) 실행 이력만 표시">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsCatSeq}" Value="True">
-                                    <Setter Property="Background"  Value="#7C3AED"/>
-                                    <Setter Property="BorderBrush" Value="#A78BFA"/>
-                                    <Setter Property="Foreground"  Value="White"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-
-                <Button Content="MANUAL"
-                        Command="{Binding SetCategoryCommand}" CommandParameter="MANUAL"
-                        ToolTip="수동 조작 이력 — Waveform/Glass/DropWatcher/모터 수동 제어">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsCatManual}" Value="True">
-                                    <Setter Property="Background"  Value="#B45309"/>
-                                    <Setter Property="BorderBrush" Value="#F59E0B"/>
-                                    <Setter Property="Foreground"  Value="White"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-
-                <Button Content="ERROR"
-                        Command="{Binding SetCategoryCommand}" CommandParameter="ERROR"
-                        ToolTip="Error / Fatal 레벨 이벤트만 표시 — 장애 빠른 진단">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource CategoryToggleButton}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsCatError}" Value="True">
-                                    <Setter Property="Background"  Value="#991B1B"/>
-                                    <Setter Property="BorderBrush" Value="#EF4444"/>
-                                    <Setter Property="Foreground"  Value="White"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
+                        Background="#334155" BorderBrush="#475569"
+                        ToolTip="현재 필터로 조회된 로그를 CSV 로 저장"/>
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

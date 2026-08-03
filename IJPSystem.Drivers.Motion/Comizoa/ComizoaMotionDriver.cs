@@ -20,6 +20,10 @@ namespace IJPSystem.Drivers.Motion.Comizoa
 
         private readonly Dictionary<string, AxisStatus> _axisStates = new();
         private readonly Dictionary<string, AxisId> _axisMap = new();
+
+        // 축별 방향 부호(+1 정상 / -1 반전). MotorConfig.json 의 InvertDirection 에서 채운다.
+        // 지령과 피드백에 같은 부호를 곱해 좌표계 전체를 미러링한다(한쪽만 뒤집으면 절대이동이 발산).
+        private readonly Dictionary<string, double> _signMap = new();
         private List<AxisDeviceInfo> _configs = new();
 
         // 원점복귀 완료를 소프트웨어로 래치한다.
@@ -144,6 +148,7 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             if (axisConfigs == null) return;
             _axisStates.Clear();
             _axisMap.Clear();
+            _signMap.Clear();
             _configs = axisConfigs;
 
             int idx = 0;
@@ -160,8 +165,10 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 // 배선상 X↔Y가 뒤바뀐 경우 MotorConfig.json 의 HwAxis 로 교정.
                 int hw = cfg.HwAxis ?? idx;
                 _axisMap[cfg.AxisNo] = (AxisId)hw;
+                _signMap[cfg.AxisNo] = cfg.InvertDirection ? -1.0 : +1.0;
                 LoggerService.WriteToFile("INFO",
-                    $"[Comizoa Motion] 축 매핑: {cfg.AxisNo}({cfg.Name}) → HwAxis {hw}");
+                    $"[Comizoa Motion] 축 매핑: {cfg.AxisNo}({cfg.Name}) → HwAxis {hw}" +
+                    (cfg.InvertDirection ? " · 방향 반전(InvertDirection=true)" : ""));
                 idx++;
             }
         }
@@ -190,7 +197,7 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             try
             {
                 var st = _comi.GetState(ax);
-                s.CurrentPos   = st.Position;
+                s.CurrentPos   = st.Position * Sign(axisNo);   // 반전축이면 지령과 같은 부호로 보여야 한다
                 s.IsMoving     = st.IsMoving;
                 s.IsServoOn    = st.ServoOn;
 
@@ -301,11 +308,20 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             }
         }
 
+        /// <summary>축 방향 부호(+1/-1). 미설정 축은 +1(정상).</summary>
+        private double Sign(string axisNo) => _signMap.TryGetValue(axisNo, out var s) ? s : +1.0;
+
         public Task<bool> MoveAbs(string axisNo, double pos, double vel, double acc, double dec)
-            => RunMove(axisNo, vel, acc, dec, ax => _comi!.MoveAbsolute(ax, pos));
+        {
+            double p = pos * Sign(axisNo);
+            return RunMove(axisNo, vel, acc, dec, ax => _comi!.MoveAbsolute(ax, p));
+        }
 
         public Task<bool> MoveRel(string axisNo, double distance, double vel, double acc, double dec)
-            => RunMove(axisNo, vel, acc, dec, ax => _comi!.MoveRelative(ax, distance));
+        {
+            double d = distance * Sign(axisNo);
+            return RunMove(axisNo, vel, acc, dec, ax => _comi!.MoveRelative(ax, d));
+        }
 
         private Task<bool> RunMove(string axisNo, double vel, double acc, double dec, Action<AxisId> move)
         {
@@ -356,7 +372,7 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             try
             {
                 _comi!.SetVelocity(ax, new VelocityProfile { Velocity = vel, Acceleration = acc, Deceleration = dec });
-                _comi.Jog(ax, isForward ? +1 : -1);   // 종료는 Stop 으로
+                _comi.Jog(ax, (isForward ? +1 : -1) * (int)Sign(axisNo));   // 종료는 Stop 으로
                 return Task.FromResult(true);
             }
             catch { return Task.FromResult(false); }

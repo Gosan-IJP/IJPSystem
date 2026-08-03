@@ -125,7 +125,7 @@
                                 </TextBlock.RenderTransform>
                             </TextBlock>
 
-                            <!-- ── X 컨베이어 스테이지 ─────────────────────────── -->
+                            <!-- ── 스테이지 이송 레일 (Y 스캔축) ───────────────── -->
                             <Rectangle Canvas.Left="40" Canvas.Top="462" Width="720" Height="7"
                                        Fill="#1B2E4A" RadiusX="3" RadiusY="3"/>
                             <Rectangle Canvas.Left="40" Canvas.Top="478" Width="720" Height="7"
@@ -140,14 +140,17 @@
                             <Ellipse Canvas.Left="550" Canvas.Top="458" Width="14" Height="14" Fill="#243146" Stroke="#334155" StrokeThickness="1.5"/>
                             <Ellipse Canvas.Left="630" Canvas.Top="458" Width="14" Height="14" Fill="#243146" Stroke="#334155" StrokeThickness="1.5"/>
                             <Ellipse Canvas.Left="710" Canvas.Top="458" Width="14" Height="14" Fill="#243146" Stroke="#334155" StrokeThickness="1.5"/>
-                            <TextBlock Canvas.Left="320" Canvas.Top="493"
-                                       Text="← ·  X — CONVEYOR  STAGE  · →"
+                            <TextBlock Canvas.Left="310" Canvas.Top="493"
+                                       Text="← ·  Y — STAGE  SCAN  (X = GANTRY ↕)  · →"
                                        Foreground="#1B2E4A" FontSize="9" FontFamily="Consolas" FontWeight="Bold"/>
 
                             <!-- ── 유리 기판 그룹 (컨베이어 좌→우, GlassCanvas로 묶음) ── -->
                             <Canvas x:Name="GlassCanvas" Canvas.Left="0" Canvas.Top="0">
                                 <Canvas.RenderTransform>
-                                    <!-- 초기 위치: 우측 파킹(GlassParkedR=620). step 4에서 인쇄 시작 위치로 반입 -->
+                                    <!-- 초기 위치: 우측 파킹(GlassParkedR=620). step 4에서 인쇄 시작 위치로 반입.
+                                         ※ 정렬축(T) 회전은 넣지 않는다 — 실제 보정각(±0.1°)은 화면에서 보이지 않는데,
+                                            글라스를 돌리면 그 안의 인쇄영역·스캔선·그리드가 함께 돌아 인쇄 표시가 깨진다.
+                                            T 값은 하단 MOTOR POSITION 패널에서 숫자로 확인한다. -->
                                     <TranslateTransform x:Name="GlassTransform" X="620"/>
                                 </Canvas.RenderTransform>
 
@@ -262,13 +265,25 @@
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
 
-                            <!-- X 위치 표시 -->
+                            <!-- 스캔축(Y) 실측 위치 -->
                             <Border Canvas.Left="568" Canvas.Top="516" Width="152" Height="28"
                                     Background="#0B1929" CornerRadius="6"
                                     BorderBrush="#1B2E4A" BorderThickness="1">
                                 <TextBlock x:Name="YPosText"
                                            Text="GX :    0.000 mm"
                                            Foreground="#2563EB" FontSize="10"
+                                           FontFamily="Consolas" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+
+                            <!-- 크로스스캔(X) / 정렬(T) 실측 — 화면 이동량은 압축 표기이므로
+                                 실제 값은 숫자로 같이 보여 과장 표현이 되지 않게 한다. -->
+                            <Border Canvas.Left="568" Canvas.Top="550" Width="152" Height="28"
+                                    Background="#0B1929" CornerRadius="6"
+                                    BorderBrush="#1B2E4A" BorderThickness="1">
+                                <TextBlock x:Name="AxisReadoutText"
+                                           Text="X 0.000  T 0.000°"
+                                           Foreground="#7C3AED" FontSize="10"
                                            FontFamily="Consolas" FontWeight="Bold"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
@@ -290,7 +305,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                        <TextBlock Text="MOTOR POSITION (mm)" Foreground="#64748B" FontSize="11" FontWeight="Bold" Margin="0,0,0,6"/>
+                        <TextBlock Text="MOTOR POSITION (mm, deg)" Foreground="#64748B" FontSize="11" FontWeight="Bold" Margin="0,0,0,6"/>
                         <!-- 설정(MotionAxisList) 기반 — 3축/6축을 같은 바이너리로 표시. 2열 배치. -->
                         <ItemsControl ItemsSource="{Binding MotorPositions}">
                             <ItemsControl.ItemsPanel>

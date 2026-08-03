@@ -10,6 +10,8 @@ namespace IJPSystem.Platform.HMI.Common.Models
         Failed,
         /// <summary>동작은 계속하지만 정상 상태는 아님(예: Meteor 헤드 미부착). 기동을 막지 않는다.</summary>
         Warning,
+        /// <summary>구성상 사용하지 않아 확인을 건너뜀(예: DriverMode.Head=None). 정상이며 항목은 계속 표시한다.</summary>
+        Skipped,
     }
 
     // 초기 로딩 화면의 한 단계 — 이름/설명/상태/에러
@@ -61,6 +63,7 @@ namespace IJPSystem.Platform.HMI.Common.Models
             InitStepStatus.Done    => "✓",
             InitStepStatus.Failed  => "✗",
             InitStepStatus.Warning => "!",
+            InitStepStatus.Skipped => "–",
             _ => "?",
         };
 
@@ -71,6 +74,7 @@ namespace IJPSystem.Platform.HMI.Common.Models
             InitStepStatus.Done    => "#22C55E",
             InitStepStatus.Failed  => "#EF4444",
             InitStepStatus.Warning => "#F59E0B",
+            InitStepStatus.Skipped => "#475569",
             _ => "#94A3B8",
         };
     }

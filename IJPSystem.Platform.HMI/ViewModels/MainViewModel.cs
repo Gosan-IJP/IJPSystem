@@ -318,6 +318,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // _alarmVM 을 먼저 생성 — RecipeVM/MainDashboardVM 의 raiseAlarm 람다가
             // 생성자 내에서 호출돼도 알람이 유실되지 않도록 의존성 순서 보장
             _alarmVM = new AlarmViewModel(this.AddLog);
+            _alarmVM.SnapshotProvider = BuildAlarmSnapshot;
             _alarmVM.PropertyChanged += OnAlarmViewModelPropertyChanged;
 
             // AlarmVM ctor 내 LoadHistoryFromDatabase 가 PropertyChanged 를 발화했지만
@@ -511,7 +512,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
 
         // 진단용: 직전 DI raw 비트(변화 시에만 로그). 0xFFFFFFFF = 첫 폴링에서 1회 강제 로그.
-        private uint _lastDiDiagBits = 0xFFFFFFFF;
+        // IO 엣지 로그는 첫 폴링(전 채널이 false→실제값으로 전이) 이후부터 기록한다.
+        private bool _ioEdgeLogReady;
+
+        // 드라이버 링크 상태 — 변화(끊김/복구) 시에만 로그. 간헐 장애는 이 기록이 없으면
+        // 사후 분석이 불가능하다.
+        private bool? _lastIoConnected;
+        private bool? _lastMotionConnected;
+        private bool? _lastVisionConnected;
 
         private void UpdateIOStates()
         {
@@ -533,9 +541,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     }
                     else
                     {
-                        vm.HardwareSignal = vm.Address!.StartsWith("Y")
-                            ? ioDriver.GetOutput(vm.Index!)
-                            : ioDriver.GetInput(vm.Index!);
+                        bool isOutput = vm.Address!.StartsWith("Y");
+                        bool prev = vm.HardwareSignal;
+                        bool now  = isOutput ? ioDriver.GetOutput(vm.Index!)
+                                             : ioDriver.GetInput(vm.Index!);
+                        vm.HardwareSignal = now;
+
+                        // 변화한 신호만 남긴다(폴링 전량 아님). 어떤 센서가 언제 바뀌었는지가
+                        // 현장 분석의 출발점인데 지금까지는 이 기록이 아예 없었다.
+                        if (prev != now && _ioEdgeLogReady)
+                            AddLog($"[IO] {(isOutput ? "DO" : "DI")} {vm.Index} " +
+                                   $"{(prev ? "ON" : "OFF")}→{(now ? "ON" : "OFF")}" +
+                                   (string.IsNullOrEmpty(vm.Description) ? "" : $"  ({vm.Description})"),
+                                   LogLevel.Info);
                     }
                 }
             }
@@ -545,20 +563,32 @@ namespace IJPSystem.Platform.HMI.ViewModels
             UpdateList(agInputList);
             UpdateList(agOutputList);
 
-            // ── 진단(2026-07-31): 실 DI 채널 확인용 ──
-            // DI 전역 32비트가 바뀔 때만 로그. 물리 입력(예: X000)을 토글했을 때
-            //  · 어떤 비트가 바뀌면 → 그 비트번호가 실제 채널(IO.json Address 를 그 채널에 맞추면 됨).
-            //  · 아무 비트도 안 바뀌면 → 마스터가 FASTECH DI 를 ecdi 이미지에 안 올린 것(마스터 구성/ESI 문제).
-            try
-            {
-                uint di = ioDriver.GetInputBits();
-                if (di != _lastDiDiagBits)
-                {
-                    _lastDiDiagBits = di;
-                    AddLog($"[IO-DIAG] DI raw = 0x{di:X8}  (bit0=ch0=X000 … bit9=ch9=X009)", LogLevel.Info);
-                }
-            }
-            catch { /* 진단 로그 실패는 무시 */ }
+            // 첫 폴링은 "미초기화(false) → 실제값" 전이라 전 채널이 엣지로 잡힌다.
+            // 기동 로그가 수백 줄로 오염되므로 1회차는 건너뛰고 그 다음부터 기록한다.
+            _ioEdgeLogReady = true;
+        }
+
+        // 알람 발생 순간의 장비 상태 한 줄. AlarmViewModel 이 코드/이름만 남기므로
+        // "그때 축이 어디였고 서보는 켜져 있었나"를 사후에 복원하려면 이게 필요하다.
+        private string BuildAlarmSnapshot()
+        {
+            var machine = _controller?.GetMachine();
+            var motion  = machine?.Motion;
+            if (motion == null) return "모션 드라이버 없음";
+
+            var all = motion.GetAllStatus();
+            if (all == null || all.Count == 0) return "축 상태 없음";
+
+            string axes = string.Join(" ", all.Select(s =>
+                $"{s.AxisNo}={s.CurrentPos:F2}" + (s.IsMoving ? "(이동중)" : "") +
+                (s.IsAlarm ? $"(ALM {s.AlarmCode})" : "")));
+
+            int servoOn = all.Count(s => s.IsServoOn);
+            string io = machine?.IO != null
+                ? $", IO연결={machine.IO.IsConnected}"
+                : "";
+
+            return $"축 {axes}, 서보ON {servoOn}/{all.Count}{io}";
         }
 
         private void UpdateDriverConnections()
@@ -568,6 +598,23 @@ namespace IJPSystem.Platform.HMI.ViewModels
             IOConnected     = machine.IO?.IsConnected     ?? false;
             MotionConnected = machine.Motion?.IsConnected ?? false;
             VisionConnected = machine.Vision?.IsConnected ?? false;
+
+            LogLinkChange("IO",     IOConnected,     ref _lastIoConnected);
+            LogLinkChange("Motion", MotionConnected, ref _lastMotionConnected);
+            LogLinkChange("Vision", VisionConnected, ref _lastVisionConnected);
+        }
+
+        // 드라이버 링크 끊김/복구를 변화 시점에만 기록. 첫 관측은 기준값만 잡고 로그하지 않는다
+        // (기동 시 연결 로그는 [BOOT]/스플래시가 이미 남긴다).
+        private void LogLinkChange(string name, bool connected, ref bool? last)
+        {
+            if (last == connected) return;
+            bool first = last == null;
+            last = connected;
+            if (first) return;
+
+            AddLog($"[LINK] {name} 드라이버 {(connected ? "복구 — 연결됨" : "끊김 — 연결 해제 감지")}",
+                   connected ? LogLevel.Success : LogLevel.Error);
         }
 
         // 헤드(Meteor PCC) 연결 상태 폴링 — 백그라운드에서 attach·조회 후 UI 스레드로 반영.

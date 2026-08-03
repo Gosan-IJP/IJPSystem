@@ -25,56 +25,51 @@ namespace IJPSystem.Platform.HMI.ViewModels
             { "ALL", "Info", "Success", "Warning", "Error", "Fatal" };
 
         // ── 카테고리(Quick-Filter) 패턴 ─────────────────────────────────────
-        // 모든 AddLog 메시지는 "[CAT] ..." 언어-중립 prefix 로 시작 (taxonomy:
-        //   [NAV] [AUTH] [SEQ] [RECIPE] [ALARM] [MOTION] [IO] [VISION]
-        //   [WAVEFORM] [PNID] [SYS]).
-        // 카테고리 버튼은 그 prefix 들을 그대로 매칭하므로 다국어 영향 없음.
+        // 모든 로그 메시지는 "[CAT] ..." 언어-중립 prefix 로 시작하며, 버튼은 그 prefix 를
+        // 그대로 LIKE 매칭한다(다국어 영향 없음). 아래 목록은 실제 코드에서 쓰이는 prefix 전수:
+        //   [AUTH] [NAV] [SEQ] [INITIALIZE] [PRINT] [MOTION] [IO] [PNID] [VALVE] [PRESSURE]
+        //   [MENISCUS] [VV] [VISION] [DW] [RECIPE] [WAVEFORM] [PATTERN] [ALARM]
+        //   [BOOT] [CONFIG] [LOG] [LINK] [HEAD] [ComiEcat] [DASH]
+        // 새 prefix 를 만들면 반드시 여기 어느 카테고리엔가 넣어야 한다. 안 그러면 ALL 에서만 보인다.
         private static readonly Dictionary<string, string[]> CategoryPatterns =
             new(StringComparer.OrdinalIgnoreCase)
         {
             // 로그인/권한 + 화면 전환
             ["LOGIN_NAV"] = new[] { "[AUTH]", "[NAV]" },
 
-            // 시퀀스 (AutoPrint / Initialize / SequenceVM / PnidVM 자동 시퀀스)
-            ["SEQ"]       = new[] { "[SEQ]" },
+            // 시퀀스 (AutoPrint / Initialize / 프린트 실행)
+            ["SEQ"]       = new[] { "[SEQ]", "[INITIALIZE]", "[PRINT]" },
 
-            // 수동 조작 (모터/IO/비전/웨이브폼/P&ID 수동 제어 모두)
-            ["MANUAL"]    = new[] { "[MOTION]", "[IO]", "[VISION]", "[WAVEFORM]", "[PNID]" },
+            // 모터 — 조그/티칭/포인트 이동/도달 오차
+            ["MOTION"]    = new[] { "[MOTION]" },
+
+            // 유체·IO 계통 — DI/DO, P&ID 밸브, 압력, 메니스커스/VV 패널
+            ["IO"]        = new[] { "[IO]", "[PNID]", "[VALVE]", "[PRESSURE]", "[MENISCUS]", "[VV]" },
+
+            // 비전 — 카메라 조작 + 드랍와처 측정
+            ["VISION"]    = new[] { "[VISION]", "[DW]" },
+
+            // 레시피/파형/패턴 — 인쇄 조건 변경 이력
+            ["RECIPE"]    = new[] { "[RECIPE]", "[WAVEFORM]", "[PATTERN]" },
 
             // 알람 발생/해제
             ["ALARM"]     = new[] { "[ALARM]" },
+
+            // 시스템 — 기동/설정/드라이버 링크/헤드/SDK/대시보드
+            ["SYSTEM"]    = new[] { "[BOOT]", "[CONFIG]", "[LOG]", "[LINK]", "[HEAD]", "[ComiEcat]", "[DASH]" },
 
             // ERROR 카테고리는 Level 기반(Error + Fatal) — patterns 사용 안 함
             ["ERROR"]     = Array.Empty<string>(),
         };
 
+        // 버튼 하이라이트는 XAML 에서 ActiveCategory 를 DataTrigger 로 직접 비교한다
+        // (카테고리마다 IsCat* 속성을 두면 버튼을 추가할 때마다 속성+알림을 같이 늘려야 한다).
         private string _activeCategory = "ALL";
         public string ActiveCategory
         {
             get => _activeCategory;
-            private set
-            {
-                if (SetProperty(ref _activeCategory, value))
-                {
-                    // 활성 카테고리 토글 표시 — 모든 IsCat* binding 을 갱신해야
-                    // 비활성으로 전환되는 버튼의 트리거도 풀린다
-                    OnPropertyChanged(nameof(IsCatAll));
-                    OnPropertyChanged(nameof(IsCatLoginNav));
-                    OnPropertyChanged(nameof(IsCatSeq));
-                    OnPropertyChanged(nameof(IsCatManual));
-                    OnPropertyChanged(nameof(IsCatAlarm));
-                    OnPropertyChanged(nameof(IsCatError));
-                }
-            }
+            private set => SetProperty(ref _activeCategory, value);
         }
-
-        // 활성 카테고리 표시용 (버튼 하이라이트)
-        public bool IsCatAll       => ActiveCategory == "ALL";
-        public bool IsCatLoginNav  => ActiveCategory == "LOGIN_NAV";
-        public bool IsCatSeq       => ActiveCategory == "SEQ";
-        public bool IsCatManual    => ActiveCategory == "MANUAL";
-        public bool IsCatAlarm     => ActiveCategory == "ALARM";
-        public bool IsCatError     => ActiveCategory == "ERROR";
 
         private DateTime? _filterStartDate;
         public DateTime? FilterStartDate

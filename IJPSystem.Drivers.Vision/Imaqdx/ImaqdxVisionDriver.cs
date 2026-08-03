@@ -262,7 +262,7 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
                 string folder = Path.Combine(ImageSavePath, cfg.CameraId, ts.ToString("yyyy-MM-dd"));
                 Directory.CreateDirectory(folder);
                 string file = Path.Combine(folder, $"{ts:HHmmss_fff}.bmp");
-                SaveMono8Bmp(file, buffer, w, h);
+                Mono8Bmp.Save(file, buffer, w, h);
                 path = file;
             }
             catch (Exception ex)
@@ -598,41 +598,6 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
         public double GetGain(string cameraId) =>
             _statusMap.TryGetValue(cameraId, out var s) ? s.Gain : 0.0;
 
-        // ── 7. 8-bit 그레이스케일 BMP 저장 (Mono8 버퍼) ─────────────
-        private static void SaveMono8Bmp(string path, byte[] mono, int w, int h)
-        {
-            int rowStride   = ((w + 3) / 4) * 4;    // 4바이트 정렬
-            int pixelBytes  = rowStride * h;
-            int paletteBytes = 256 * 4;
-            int offset      = 14 + 40 + paletteBytes;
-            int fileSize    = offset + pixelBytes;
-
-            using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
-            using var bw = new BinaryWriter(fs);
-
-            // File Header
-            bw.Write((byte)'B'); bw.Write((byte)'M');
-            bw.Write(fileSize); bw.Write(0); bw.Write(offset);
-
-            // DIB Header (BITMAPINFOHEADER)
-            bw.Write(40); bw.Write(w); bw.Write(-h);   // 음수 높이 = top-down
-            bw.Write((short)1); bw.Write((short)8);    // 8bpp
-            bw.Write(0); bw.Write(pixelBytes);
-            bw.Write(2835); bw.Write(2835);            // 72 DPI
-            bw.Write(256); bw.Write(0);                // 팔레트 256색
-
-            // Grayscale 팔레트
-            for (int i = 0; i < 256; i++) { bw.Write((byte)i); bw.Write((byte)i); bw.Write((byte)i); bw.Write((byte)0); }
-
-            // Pixel Data
-            var row = new byte[rowStride];
-            for (int y = 0; y < h; y++)
-            {
-                int src = y * w;
-                for (int x = 0; x < w; x++) row[x] = (src + x < mono.Length) ? mono[src + x] : (byte)0;
-                for (int x = w; x < rowStride; x++) row[x] = 0;
-                bw.Write(row);
-            }
-        }
+        // 8-bit 그레이스케일 BMP 저장은 eBUS 드라이버와 공유 → Mono8Bmp 로 이동.
     }
 }

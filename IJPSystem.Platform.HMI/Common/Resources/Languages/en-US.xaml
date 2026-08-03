@@ -352,6 +352,8 @@
     <system:String x:Key="Step_AutoPrint_HeadDownDone">PRINT HEAD DOWN InPosition check</system:String>
     <system:String x:Key="Step_AutoPrint_HeadUp">Move PRINT HEAD UP</system:String>
     <system:String x:Key="Step_AutoPrint_HeadUpDone">PRINT HEAD UP InPosition check</system:String>
+    <system:String x:Key="Step_AutoPrint_HeadUpAndMoveReady">PRINT HEAD UP + Move to READY (simultaneous)</system:String>
+    <system:String x:Key="Step_AutoPrint_HeadUpAndMoveReadyDone">HEAD UP / READY InPosition check</system:String>
     <system:String x:Key="Step_Purge_HeadDown">Move PRINT HEAD DOWN</system:String>
     <system:String x:Key="Step_Purge_HeadDownDone">PRINT HEAD DOWN InPosition check</system:String>
     <system:String x:Key="Step_Purge_HeadUp">Move PRINT HEAD UP</system:String>

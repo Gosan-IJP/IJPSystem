@@ -90,11 +90,17 @@ namespace IJPSystem.Platform.HMI
                     () => loader.LoadAppSettings(GetConfigPath("AppConfig.json")));
                 IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Initialize(appSettings);
 
+                // 로그 보존 정리 — 기동 시 1회. 파일 수가 많으면 수 초 걸릴 수 있어 백그라운드로 돌린다
+                // (스플래시 진행을 막지 않는다). 실패해도 기동에 영향 없음.
+                int keepDays = appSettings.LogSaveDays;
+                _ = Task.Run(() => LogRetentionService.Cleanup(keepDays));
+
                 // 실장 진단: 실제로 읽은 설정 파일 경로와 파싱된 DriverMode 값을 기록.
                 // 스플래시/화면이 Virtual 로 뜨는 원인(잘못된 파일/파싱 실패)을 이 로그로 즉시 확인.
                 LoggerService.WriteToFile("INFO",
                     $"[Config] AppConfig 로드: {GetConfigPath("AppConfig.json")} → " +
-                    $"DriverMode IO={appSettings.DriverMode.IO}, Motion={appSettings.DriverMode.Motion}, Vision={appSettings.DriverMode.Vision}");
+                    $"DriverMode IO={appSettings.DriverMode.IO}, Motion={appSettings.DriverMode.Motion}, " +
+                    $"Vision={appSettings.DriverMode.Vision}, Head={appSettings.DriverMode.Head}");
 
                 var ioDriver = await splashVM.RunStepAsync(
                     "I/O Driver", $"{appSettings.DriverMode.IO} I/O 드라이버 연결",
@@ -108,15 +114,25 @@ namespace IJPSystem.Platform.HMI
                     "Vision Driver", $"{appSettings.DriverMode.Vision} Vision 드라이버 연결",
                     InitializeVisionDriver);
 
-                // 헤드(Meteor PCC) 연결 확인 — 읽기 전용 1회 조회. 미부착은 실패가 아니라 경고(!)로
-                // 표시하고 기동은 계속한다(약액/엔진 없이도 HMI 는 떠야 함).
-                if (DriverMode(d => d.Head) == "meteor")
-                {
-                    await splashVM.RunStepAsync(
-                        "Print Head", "Meteor 헤드 PCC 부착 상태 확인",
-                        ProbeMeteorHead,
-                        r => (r.Connected ? InitStepStatus.Done : InitStepStatus.Warning, r.Detail));
-                }
+                // 헤드(Meteor PCC) 연결 확인 — Vision 다음 단계. 읽기 전용 1회 조회.
+                // 미부착은 실패가 아니라 경고(!)로 표시하고 기동은 계속한다(엔진 없이도 HMI 는 떠야 함).
+                // Head=None(미사용 구성)이어도 항목 자체는 항상 표시한다 — 단계가 통째로 사라지면
+                // "확인을 못 한 건지, 안 쓰는 구성인지" 화면에서 구분할 수 없다.
+                bool headEnabled = DriverMode(d => d.Head) == "meteor";
+                await splashVM.RunStepAsync(
+                    "Print Head",
+                    headEnabled ? "Meteor 헤드 PCC 부착 상태 확인" : "미사용 — DriverMode.Head=None",
+                    () =>
+                    {
+                        if (!headEnabled)
+                            return (Enabled: false, Connected: false, Detail: "미사용 — DriverMode.Head=None");
+                        var s = ProbeMeteorHead();
+                        return (Enabled: true, Connected: s.Connected, Detail: s.Detail);
+                    },
+                    r => (!r.Enabled  ? InitStepStatus.Skipped
+                          : r.Connected ? InitStepStatus.Done
+                                        : InitStepStatus.Warning,
+                          r.Detail));
 
                 _machine = await splashVM.RunStepAsync(
                     "Machine Setup", "PulseMachine 초기화 + Motor Config 로드",

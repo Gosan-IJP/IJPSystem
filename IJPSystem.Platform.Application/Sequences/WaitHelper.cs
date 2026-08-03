@@ -1,4 +1,5 @@
 using IJPSystem.Platform.Domain.Interfaces;
+using IJPSystem.Platform.Domain.Models.Motion;
 using IJPSystem.Platform.Domain.Models.Vision;
 using System;
 using System.Linq;
@@ -26,20 +27,38 @@ namespace IJPSystem.Platform.Application.Sequences
         /// condition이 true가 될 때까지 pollMs 간격으로 폴링합니다.
         /// timeoutMs 이내에 만족되지 않으면 TimeoutException을 던집니다.
         /// </summary>
+        /// <param name="describeFailure">
+        /// 타임아웃 순간의 실제 상태를 한 줄로 만들어 예외 메시지에 붙인다.
+        /// "타임아웃" 한 줄만 남으면 어느 축/신호 때문인지 알 수 없어 현장 분석이 막힌다.
+        /// </param>
         public static async Task ForCondition(
             Func<bool> condition,
             int timeoutMs,
             CancellationToken ct,
-            int pollMs = 20)
+            int pollMs = 20,
+            Func<string>? describeFailure = null)
         {
             var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
             while (!condition())
             {
                 ct.ThrowIfCancellationRequested();
                 if (DateTime.UtcNow >= deadline)
-                    throw new TimeoutException($"조건 미충족 — 제한 시간 {timeoutMs}ms 초과");
+                {
+                    string detail = SafeDescribe(describeFailure);
+                    throw new TimeoutException(
+                        $"조건 미충족 — 제한 시간 {timeoutMs}ms 초과" +
+                        (string.IsNullOrEmpty(detail) ? "" : $" · {detail}"));
+                }
                 await Task.Delay(pollMs, ct);
             }
+        }
+
+        // 진단 문자열을 만들다 실패해도 원래 타임아웃 예외를 잃지 않게 감싼다.
+        private static string SafeDescribe(Func<string>? describe)
+        {
+            if (describe == null) return "";
+            try { return describe(); }
+            catch (Exception ex) { return $"(상태 수집 실패: {ex.GetType().Name})"; }
         }
 
         // ────────────────────────────────────────────────
@@ -57,7 +76,10 @@ namespace IJPSystem.Platform.Application.Sequences
             int timeoutMs,
             CancellationToken ct,
             int pollMs = 20)
-            => ForCondition(() => io.GetInput(indexName) == expected, timeoutMs, ct, pollMs);
+            => ForCondition(
+                () => io.GetInput(indexName) == expected,
+                timeoutMs, ct, pollMs,
+                () => $"IO '{indexName}' 기대={OnOff(expected)} 현재={OnOff(io.GetInput(indexName))}");
 
         // ────────────────────────────────────────────────
         // 3. 모션 완료 대기
@@ -70,7 +92,10 @@ namespace IJPSystem.Platform.Application.Sequences
             int timeoutMs,
             CancellationToken ct,
             int pollMs = 50)
-            => ForCondition(() => !motion.GetStatus(axisNo).IsMoving, timeoutMs, ct, pollMs);
+            => ForCondition(
+                () => !motion.GetStatus(axisNo).IsMoving,
+                timeoutMs, ct, pollMs,
+                () => "정지하지 않은 축: " + Describe(motion.GetStatus(axisNo)));
 
         /// <summary>모든 축의 IsMoving == false 대기</summary>
         public static Task ForAllMotionDone(
@@ -78,7 +103,16 @@ namespace IJPSystem.Platform.Application.Sequences
             int timeoutMs,
             CancellationToken ct,
             int pollMs = 50)
-            => ForCondition(() => motion.GetAllStatus().All(s => !s.IsMoving), timeoutMs, ct, pollMs);
+            => ForCondition(
+                () => motion.GetAllStatus().All(s => !s.IsMoving),
+                timeoutMs, ct, pollMs,
+                () =>
+                {
+                    var busy = motion.GetAllStatus().Where(s => s.IsMoving).ToList();
+                    return busy.Count == 0
+                        ? "정지하지 않은 축 없음(조건 재평가 시 해소 — 폴링 경합 의심)"
+                        : "정지하지 않은 축: " + string.Join(", ", busy.Select(Describe));
+                });
 
         /// <summary>단일 축의 IsInPosition == true 대기</summary>
         public static Task ForInPosition(
@@ -87,7 +121,18 @@ namespace IJPSystem.Platform.Application.Sequences
             int timeoutMs,
             CancellationToken ct,
             int pollMs = 50)
-            => ForCondition(() => motion.GetStatus(axisNo).IsInPosition, timeoutMs, ct, pollMs);
+            => ForCondition(
+                () => motion.GetStatus(axisNo).IsInPosition,
+                timeoutMs, ct, pollMs,
+                () => "InPosition 미도달: " + Describe(motion.GetStatus(axisNo)));
+
+        // 타임아웃 진단용 축 상태 한 줄. 원인 판별에 필요한 최소 항목만 담는다.
+        private static string Describe(AxisStatus s) =>
+            $"{s.AxisNo}(pos={s.CurrentPos:F3} target={s.TargetPos:F3} moving={s.IsMoving} " +
+            $"inPos={s.IsInPosition} servo={s.IsServoOn} err={s.FollowingError:F3}" +
+            (s.IsAlarm ? $" ALARM={s.AlarmCode}:{s.AlarmMessage}" : "") + ")";
+
+        private static string OnOff(bool v) => v ? "ON" : "OFF";
 
         // ────────────────────────────────────────────────
         // 4. 비전 검사 완료 대기

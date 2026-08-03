@@ -112,9 +112,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand MotionStepUpCommand   { get; private set; } = null!;
         public ICommand MotionStepDownCommand { get; private set; } = null!;
 
-        // 티칭 포인트 바로가기 — 활성 레시피의 READY / PURGE 좌표로 이동
-        public ICommand MoveReadyCommand { get; private set; } = null!;
-        public ICommand MovePurgeCommand { get; private set; } = null!;
+        // 티칭 포인트 바로가기 — 활성 레시피의 READY / PRINT START / PRINT END / PURGE 좌표로 이동
+        public ICommand MoveReadyCommand      { get; private set; } = null!;
+        public ICommand MovePrintStartCommand { get; private set; } = null!;
+        public ICommand MovePrintEndCommand   { get; private set; } = null!;
+        public ICommand MovePurgeCommand      { get; private set; } = null!;
 
         // 포인트 이동 중 중복 클릭 차단
         private bool _isPointMoving;
@@ -124,8 +126,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             private set
             {
                 if (!SetProperty(ref _isPointMoving, value)) return;
-                (MoveReadyCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                (MovePurgeCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (MoveReadyCommand      as RelayCommand)?.RaiseCanExecuteChanged();
+                (MovePrintStartCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (MovePrintEndCommand   as RelayCommand)?.RaiseCanExecuteChanged();
+                (MovePurgeCommand      as RelayCommand)?.RaiseCanExecuteChanged();
             }
         }
 
@@ -523,10 +527,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             MotionStepUpCommand   = new RelayCommand(_ => MotionTarget = Math.Round(MotionTarget + MotionStep, 3));
             MotionStepDownCommand = new RelayCommand(_ => MotionTarget = Math.Round(MotionTarget - MotionStep, 3));
 
-            MoveReadyCommand = new RelayCommand(async _ => await MoveToPointAsync(PointNames.Ready),
-                                                _ => !IsPointMoving && !IsPrinting);
-            MovePurgeCommand = new RelayCommand(async _ => await MoveToPointAsync(PointNames.Purge),
-                                                _ => !IsPointMoving && !IsPrinting);
+            MoveReadyCommand      = new RelayCommand(async _ => await MoveToPointAsync(PointNames.Ready),
+                                                     _ => !IsPointMoving && !IsPrinting);
+            MovePrintStartCommand = new RelayCommand(async _ => await MoveToPointAsync(PointNames.PrintStart),
+                                                     _ => !IsPointMoving && !IsPrinting);
+            MovePrintEndCommand   = new RelayCommand(async _ => await MoveToPointAsync(PointNames.PrintEnd),
+                                                     _ => !IsPointMoving && !IsPrinting);
+            MovePurgeCommand      = new RelayCommand(async _ => await MoveToPointAsync(PointNames.Purge),
+                                                     _ => !IsPointMoving && !IsPrinting);
 
             SpitCommand = new RelayCommand(_ => ToggleSpit());
 
@@ -749,7 +757,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
 
         /// <summary>
-        /// 활성 레시피에 티칭된 포인트(READY/PURGE) 좌표로 이동한다.
+        /// 활성 레시피에 티칭된 포인트(READY/PRINT START/PRINT END/PURGE) 좌표로 이동한다.
         /// 좌표는 RecipeVM 의 활성 스냅샷에서 오므로, 레시피를 APPLY 하지 않았으면 이동할 축이 없다
         /// (MotionServiceAdapter 가 그 상황을 경고 로그로 남긴다).
         /// </summary>
@@ -936,8 +944,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     StatusMessage = IJPSystem.Platform.HMI.Common.Loc.T(step.Name);
                     OnPropertyChanged(nameof(ProgressPercent));
 
-                    _mainVM.AddLog($"[SEQ] PATTERN PRINT — step {i + 1}/{steps.Count} {step.Name}", LogLevel.Info);
-                    await step.Action(token);
+                    await SequenceStepLogger.RunAsync(step, "PatternPrint", token, _mainVM.AddLog);
                 }
                 CurrentStep   = steps.Count;
                 OnPropertyChanged(nameof(ProgressPercent));

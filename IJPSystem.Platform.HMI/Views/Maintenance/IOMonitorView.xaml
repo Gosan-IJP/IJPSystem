@@ -108,7 +108,9 @@
                     </DataGrid>
                 </TabItem>
 
-                <TabItem Header="ANALOG INPUT (AI)">
+                <!-- 아날로그 채널이 없는 장비에서는 탭을 숨긴다(빈 표를 보여주지 않는다) -->
+                <TabItem Header="ANALOG INPUT (AI)"
+                         Visibility="{Binding HasAnalogInput, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <DataGrid x:Name="agInput" ItemsSource="{Binding AnalogInputList}" 
                             Style="{StaticResource CommonDataGridStyle}" 
                             ColumnHeaderStyle="{StaticResource CommonColumnHeaderStyle}"
@@ -139,7 +141,8 @@
                     </DataGrid>
                 </TabItem>
 
-                <TabItem Header="ANALOG OUTPUT (AO)">
+                <TabItem Header="ANALOG OUTPUT (AO)"
+                         Visibility="{Binding HasAnalogOutput, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <DataGrid x:Name="agOutput" ItemsSource="{Binding AnalogOutputList}"
                                 Style="{StaticResource CommonDataGridStyle}" Margin="0,10,0,0">
                         <DataGrid.Columns>

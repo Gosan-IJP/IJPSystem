@@ -30,6 +30,14 @@ namespace IJPSystem.Platform.Domain.Models.Motion
         // 엔코더 분해능(논리단위 1 이동에 필요한 펄스 수 = SetUnitDist). null/0 이면 드라이브 기본값 사용.
         public double? EncoderPulsePerUnit { get; set; }
 
+        // 이동 방향 반전. 기구/결선상 물리 이동 방향이 HMI 의 +/- 와 반대인 축을 소프트웨어에서 미러링한다.
+        // true 면 지령(MoveAbs/MoveRel/Jog)과 읽어온 현재위치에 <b>모두</b> -1 을 곱한다.
+        //   ※ 한쪽만 뒤집으면 절대이동이 목표에서 멀어지며 발산한다 — 반드시 쌍으로 처리할 것.
+        //   ※ 원점복귀는 마스터/드라이브가 수행하므로 이 값의 영향을 받지 않는다(홈 방향 그대로).
+        //   ※ 부호가 뒤집히므로 해당 축의 기존 티칭 좌표는 재티칭 필요.
+        // 드라이브 파라미터(회전방향/Polarity)로 잡을 수 있으면 그쪽이 더 깔끔하다(피드백까지 드라이브에서 함께 반전).
+        public bool InvertDirection { get; set; }
+
         // 원점복귀 속도 패턴. null이면 드라이브 기본값 사용(현행 동작).
         // 설정하면 Connect 시 드라이브에 다운로드(ecmHomeCfg_SetSpeedPatt) → 콜드부팅 후 첫 실행에도 정상.
         // LabVIEW Set Home Parameters.vi 와 동일하게 '속도 패턴만' 설정(모드/방향/오프셋은 미변경 → 안전).

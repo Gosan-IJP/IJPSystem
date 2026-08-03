@@ -25,6 +25,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly AlarmRepository _alarmRepo = new AlarmRepository();
         // SystemLog 적재용 콜백 — MainViewModel.AddLog 주입. null 이면 SystemLog 기록 생략.
         private readonly Action<string, LogLevel>? _addLog;
+
+        /// <summary>
+        /// 알람 발생 순간의 장비 상태 한 줄(축 위치·서보·진행 스텝 등)을 만들어 주는 콜백.
+        /// 알람 코드만 남기면 "그때 무슨 상황이었나"를 사후에 복원할 수 없다.
+        /// MainViewModel 이 주입한다(모션/IO 접근은 여기 계층에 없으므로).
+        /// </summary>
+        public Func<string>? SnapshotProvider { get; set; }
         public ObservableCollection<AlarmModel> AlarmHistory { get; set; } = new ObservableCollection<AlarmModel>();
         public ICollectionView FilteredAlarmHistory { get; }
 
@@ -194,6 +201,18 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 HasActiveAlarm = true;
 
                 _addLog?.Invoke($"[ALARM] {code} — 발생: {title}", mappedLevel);
+
+                // 발생 시점 스냅샷 — 스냅샷 수집이 실패해도 알람 처리는 계속되어야 한다.
+                try
+                {
+                    string snap = SnapshotProvider?.Invoke() ?? "";
+                    if (!string.IsNullOrEmpty(snap))
+                        _addLog?.Invoke($"[ALARM] {code} — 상태: {snap}", mappedLevel);
+                }
+                catch (Exception ex)
+                {
+                    _addLog?.Invoke($"[ALARM] {code} — 상태 수집 실패: {ex.GetType().Name}", LogLevel.Warning);
+                }
 
                 // 4. 자동 해제 예약 (AutoResetDelayMs 보유 시)
                 RestartAutoResetTimer(newAlarm, autoMs);

@@ -57,7 +57,8 @@
       "Name": "DW-X AXIS",
       "Unit": "mm",
       "HwAxis": 3,
-      "EncoderPulsePerUnit": 2000,
+      "_comment": "실측 2026-08-03: 1rev = 5mm, 16000 pulse/rev → 16000/5 = 3200 pulse/mm",
+      "EncoderPulsePerUnit": 3200,
       "Home": {
         "Velocity": 10,
         "Acceleration": 100,
@@ -70,7 +71,8 @@
       "Name": "DW-Y AXIS",
       "Unit": "mm",
       "HwAxis": 0,
-      "EncoderPulsePerUnit": 2000,
+      "_comment": "실측 2026-08-03: 1rev = 1mm, 16000 pulse/rev → 16000/1 = 16000 pulse/mm",
+      "EncoderPulsePerUnit": 16000,
       "Home": {
         "Velocity": 10,
         "Acceleration": 100,

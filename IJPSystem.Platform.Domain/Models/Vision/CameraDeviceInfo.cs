@@ -28,6 +28,22 @@ namespace IJPSystem.Platform.Domain.Models.Vision
 
         public string IpAddress { get; set; } = string.Empty;
         public string SerialNumber { get; set; } = string.Empty;
+
+        /// <summary>
+        /// GigE 카메라 MAC 주소(구분자 무관: <c>00:0c:df:01:1d:b4</c> / <c>000cdf011db4</c>).
+        /// eBUS 드라이버가 카메라를 찾을 때 <b>가장 먼저</b> 쓰는 식별자다.
+        /// IP 는 DHCP/링크로컬(169.254.x.x)이면 전원마다 바뀌므로 MAC 이 유일하게 안정적이다.
+        /// 비워두면 SerialNumber → IpAddress → Name 순으로 찾는다.
+        /// </summary>
+        public string MacAddress { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 노출/게인 GenICam 노드명 강제 지정. 비우면 드라이버가 후보를 순서대로 탐색한다
+        /// (노출: ExposureTime → ExposureTimeAbs → ExposureTimeRaw / 게인: Gain → GainAbs → GainRaw).
+        /// 카메라 기종마다 노드명이 달라, 실장에서 이름만 다를 때 재빌드 없이 맞추기 위한 탈출구.
+        /// </summary>
+        public string ExposureNode { get; set; } = string.Empty;
+        public string GainNode { get; set; } = string.Empty;
         public int PixelWidth { get; set; } = 1920;
         public int PixelHeight { get; set; } = 1080;
         public double DefaultExposureMs { get; set; } = 10.0;

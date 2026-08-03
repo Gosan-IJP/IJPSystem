@@ -99,12 +99,20 @@ namespace IJPSystem.Platform.Application.Sequences
                 }
             }
 
-            // ── 프린트 헤드 UP (글래스에서 떼기) ──
-            steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_HeadUp",
-                ct => motion.MoveToPointAsync(PointNames.PrintHeadUp, ct)));
+            // ── 프린트 헤드 UP + READY 복귀 (동시) ──
+            // 헤드 상승(Z)과 스테이지 복귀(Y)는 서로 다른 축이라 순차로 기다릴 이유가 없다.
+            // 두 포인트 이동을 같이 걸고 한 번에 대기해 사이클 타임을 줄인다.
+            // ※ 진공 해제(VacuumOff)는 복귀 이후로 옮겼다 — 이동 중에도 글래스를 척에 붙들고 있어
+            //   가감속에 밀릴 여지가 없다(기존에는 해제 후 이동).
+            // ※ 전제: READY 포인트에 Z 가 사용축으로 포함되어 있지 않을 것.
+            //   포함되면 Z 에 두 이동 명령이 겹친다(레시피 티칭에서 확인).
+            steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_HeadUpAndMoveReady",
+                async ct => await Task.WhenAll(
+                    motion.MoveToPointAsync(PointNames.PrintHeadUp, ct),
+                    motion.MoveToPointAsync(PointNames.Ready, ct))));
 
-            steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_HeadUpDone",
-                ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 10_000, ct)));
+            steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_HeadUpAndMoveReadyDone",
+                ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct)));
 
             steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_VacuumOff",
                 ct =>
@@ -116,12 +124,6 @@ namespace IJPSystem.Platform.Application.Sequences
                     return WaitHelper.ForIOSignal(machine.IO, "DI_PRESS_SW_CHUCK_VAC",
                                                  expected: false, timeoutMs: 10_000, ct);
                 }));
-
-            steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_MoveReady",
-                ct => motion.MoveToPointAsync(PointNames.Ready, ct)));
-
-            steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_MoveReadyDone",
-                ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct)));
 
             return steps;
         }

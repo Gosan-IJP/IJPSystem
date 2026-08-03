@@ -79,14 +79,19 @@ namespace IJPSystem.Platform.HMI.Services
 
                         // InPosition 대기 (최대 20초) — driver 직접 폴링으로 ViewModel 캐시 우회
                         // (캐시는 100ms 주기 갱신이라 첫 iteration이 직전 step의 stale 값으로 즉시 break됨)
+                        bool inPos = false;
                         for (int i = 0; i < 200; i++)
                         {
                             ct.ThrowIfCancellationRequested();
 
                             // 2. 상태 체크 지점
-                            if (ax.IsDriverInPosition()) break;
+                            if (ax.IsDriverInPosition()) { inPos = true; break; }
                             await Task.Delay(100, ct);
                         }
+
+                        // 도달 결과 — 지시만 남기고 결과를 안 남기면 티칭 오차/InPosition 미달을 추적할 수 없다.
+                        double target = usedAxes[ax.Info.Name];
+                        return (Axis: ax.Info.AxisNo, Target: target, Actual: ax.CurrentPos, InPos: inPos);
                     }
                     catch (Exception ex)
                     {
@@ -96,7 +101,21 @@ namespace IJPSystem.Platform.HMI.Services
                 }).ToList(); // 중요: 여기서 바로 실행 예약됨
 
             // 3. 전체 완료 대기 (이곳에 브레이크를 걸어 전체 종료를 확인하세요)
-            await Task.WhenAll(tasks);
+            var sw = Stopwatch.StartNew();
+            var results = await Task.WhenAll(tasks);
+            sw.Stop();
+
+            if (results.Length > 0)
+            {
+                bool allInPos = results.All(r => r.InPos);
+                string detail = string.Join(", ", results.Select(r =>
+                    $"{r.Axis}={r.Actual:F3}(목표 {r.Target:F3}, 오차 {r.Actual - r.Target:+0.000;-0.000;0.000})" +
+                    (r.InPos ? "" : " ★InPos미달")));
+
+                _mainVM.AddLog(
+                    $"[MOTION] {pointName} 도달 — {detail} · 소요 {sw.Elapsed.TotalSeconds:F2}s",
+                    allInPos ? LogLevel.Info : LogLevel.Warning);
+            }
         }
 
         // 단일 축을 특정 포인트의 해당 축 좌표로 이동(다른 축은 유지). 멀티 스와스 프린트 스캔용.

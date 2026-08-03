@@ -5,7 +5,7 @@
         AllowsTransparency="True"
         Background="Transparent"
         ResizeMode="NoResize"
-        WindowStartupLocation="CenterScreen"
+        WindowStartupLocation="Manual"
         ShowInTaskbar="False"
         Topmost="True"
         SizeToContent="WidthAndHeight">

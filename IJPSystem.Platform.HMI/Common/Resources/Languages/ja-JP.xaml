@@ -352,6 +352,8 @@
     <system:String x:Key="Step_AutoPrint_HeadDownDone">プリントヘッド DOWN InPosition 確認</system:String>
     <system:String x:Key="Step_AutoPrint_HeadUp">プリントヘッド UP 移動</system:String>
     <system:String x:Key="Step_AutoPrint_HeadUpDone">プリントヘッド UP InPosition 確認</system:String>
+    <system:String x:Key="Step_AutoPrint_HeadUpAndMoveReady">プリントヘッド UP + 待機位置(READY)へ移動 (同時)</system:String>
+    <system:String x:Key="Step_AutoPrint_HeadUpAndMoveReadyDone">ヘッド UP / READY InPosition 確認</system:String>
     <system:String x:Key="Step_Purge_HeadDown">プリントヘッド DOWN 移動</system:String>
     <system:String x:Key="Step_Purge_HeadDownDone">プリントヘッド DOWN InPosition 確認</system:String>
     <system:String x:Key="Step_Purge_HeadUp">プリントヘッド UP 移動</system:String>

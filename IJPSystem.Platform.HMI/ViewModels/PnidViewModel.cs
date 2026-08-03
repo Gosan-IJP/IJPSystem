@@ -185,10 +185,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     // 퍼지 동작 애니메이션 동기화 — 양압 인가 후 토출 완료 직전까지 IsPurging=true
                     UpdatePurgingAnimation(step.Name);
 
-                    _mainVM.AddLog(
-                        $"[SEQ] {name} — step {i + 1}/{steps.Count} {step.Name}",
-                        LogLevel.Info);
-                    await step.Action(token).ConfigureAwait(false);
+                    await SequenceStepLogger.RunAsync(step, name, token, _mainVM.AddLog)
+                                            .ConfigureAwait(false);
                 }
 
                 sw.Stop();
