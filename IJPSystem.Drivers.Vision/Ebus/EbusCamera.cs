@@ -175,8 +175,16 @@ namespace IJPSystem.Drivers.Vision.Ebus
                 }
                 catch (Exception ex)
                 {
+                    // GigE Vision 은 제어권이 단독이다. 다른 프로세스가 잡고 있으면 "Access denied" 가 온다.
+                    // 원문만 남기면 현장에서 네트워크 문제로 오인하기 쉬워 조치를 함께 적는다.
+                    bool inUse = ex.Message.IndexOf("Access denied", StringComparison.OrdinalIgnoreCase) >= 0
+                              || ex.Message.IndexOf("already in use", StringComparison.OrdinalIgnoreCase) >= 0;
+                    string hint = inUse
+                        ? " — 다른 프로그램이 카메라를 점유 중입니다. eBUS Player 를 닫거나 Disconnect 하세요" +
+                          "(비정상 종료 직후라면 카메라 하트비트가 끊길 때까지 최대 30초 기다렸다 재시도)."
+                        : "";
                     LoggerService.WriteToFile("ERROR",
-                        $"[eBUS Vision] {CameraId} 연결 실패: {ex.GetType().Name}: {ex.Message}");
+                        $"[eBUS Vision] {CameraId} 연결 실패: {ex.GetType().Name}: {ex.Message}{hint}");
                     CloseCore();
                     return false;
                 }

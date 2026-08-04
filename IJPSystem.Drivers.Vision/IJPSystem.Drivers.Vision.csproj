@@ -8,6 +8,13 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- 앱이 32비트이므로 eBUS 도 x86 런타임을 쓴다(Comizoa ComiEcatSdk.dll 이 32비트라 앱 전체가 x86). -->
     <EbusSdkDir>$(MSBuildProgramFiles32)\Common Files\Pleora\eBUS SDK</EbusSdkDir>
+    <!-- MVS 관리 래퍼는 순수 P/Invoke(netstandard2.0)라 .NET 8 과 바로 맞는다. -->
+    <MvsSdkDll>$(MSBuildProgramFiles32)\MVS\Development\DotNet\win32\netstandard2.0\MvCameraControl.Net.dll</MvsSdkDll>
+    <!-- MSB3270: 이 프로젝트는 AnyCPU 인데 PvDotNet 참조는 x86 이라는 경고.
+         앱은 항상 x86 으로 배포되므로(Comizoa ComiEcatSdk.dll 이 32비트) 실제 문제가 아니다.
+         이 프로젝트를 x86 으로 못 박으면 Visual Studio 의 AnyCPU 디버그 실행이 깨지므로
+         AnyCPU 를 유지하고 경고만 메시지로 낮춘다. -->
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3270</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
   <!-- Pleora eBUS SDK (JAI) — 9호기 GigE Vision.
@@ -20,6 +27,22 @@
       <Private>false</Private>
     </Reference>
   </ItemGroup>
+
+  <!-- Hikrobot MVS SDK — 9호기 글라스뷰.
+       eBUS 와 같은 이유로 Private=false: 런타임에 HikrobotSdk 가 설치 폴더에서 로드해
+       관리 어셈블리와 네이티브 MvCameraControl.dll 의 버전을 일치시킨다.
+       (버전이 어긋나면 P/Invoke 구조체 레이아웃이 달라져 조용히 메모리가 깨진다.) -->
+  <ItemGroup Condition="Exists('$(MvsSdkDll)')">
+    <Reference Include="MvCameraControl.Net">
+      <HintPath>$(MvsSdkDll)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="WarnMissingMvsSdk" BeforeTargets="CoreCompile"
+          Condition="!Exists('$(MvsSdkDll)')">
+    <Error Text="Hikrobot MVS SDK 를 찾지 못했습니다: $(MvsSdkDll) — MVS(Machine Vision Software)를 설치하세요." />
+  </Target>
 
   <Target Name="WarnMissingEbusSdk" BeforeTargets="CoreCompile"
           Condition="!Exists('$(EbusSdkDir)\PvDotNet.dll')">

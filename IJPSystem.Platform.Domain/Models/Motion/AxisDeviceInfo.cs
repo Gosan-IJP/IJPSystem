@@ -53,6 +53,13 @@ namespace IJPSystem.Platform.Domain.Models.Motion
         public double Acceleration { get; set; }   // 가속 — Acc
         public double Deceleration { get; set; }   // 감속 — Dec
         public double SpecVelocity { get; set; }   // 저속(크립/근접) 속도 — HomeSpecVel
+
+        // 원점복귀 탐색 방향. +1 = (+)방향, -1 = (-)방향. null 이면 미지정 = 종전대로 (-)방향.
+        // 코미조아 유틸리티(Home Return 탭)의 Dir 버튼과 같은 값이며, ecmHomeMot_MoveStart 인자로 들어간다.
+        //   ※ 축이 원점센서 반대편으로 달려 리밋을 때리므로 축마다 실물 확인 후 넣을 것.
+        //   ※ InvertDirection(지령 미러링)의 영향을 받지 않는다 — 원점복귀는 드라이브가 수행하므로
+        //      여기 값이 드라이브 기준 물리 방향 그대로 전달된다.
+        public int? Direction { get; set; }
     }
 
     // 3. 축별 상세 구동 설정 (계층 구조의 핵심)

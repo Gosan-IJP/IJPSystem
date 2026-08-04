@@ -18,6 +18,8 @@
     <cvts:IntToInverseVisibilityConverter   x:Key="IntToInverseVisibilityConverter"/>
     <!-- 서브메뉴 선택 상태 판별: SelectedSubMenu == CommandParameter -->
     <cvts:IsSelectedConverter               x:Key="IsSelectedConverter"/>
+    <!-- 축 이름 → 색상(fg/bg/bd). 위치 티칭 화면의 축 카드·조그 버튼이 축 수에 무관하게 그려지도록. -->
+    <cvts:AxisAccentConverter               x:Key="AxisAccent"/>
 
     <!-- P&ID — 탱크/밸브/센서 컨버터 -->
     <cvts:LevelStatusToBrushConverter       x:Key="LevelStatusToBrush"/>

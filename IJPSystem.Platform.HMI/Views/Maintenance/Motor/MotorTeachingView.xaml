@@ -5,10 +5,51 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignHeight="750" d:DesignWidth="1150"
              Background="#0B0F1A">
-    
+
+    <UserControl.Resources>
+        <!-- 조그 버튼 — 공용 JogControlStyle(모서리 4, 진한 단색)보다 부드럽게.
+             축 버튼은 배경을 중립 회색으로 두고 축 색은 테두리·라벨에만 쓴다.
+             8개 버튼이 전부 진한 단색이면 화면에서 제일 강한 요소가 조그 버튼이 되는데,
+             이 화면의 주인공은 티칭 값이다. XY 패드만 파랑으로 남겨 주 조작부로 구분한다.
+             ※ 눌린 상태(IsPressed)는 조그가 dead-man 조작이라 분명히 보여야 한다 — 테두리를 굵힌다. -->
+        <Style x:Key="AxisJogButton" TargetType="Button">
+            <Setter Property="Foreground"      Value="White"/>
+            <Setter Property="Background"      Value="#1E293B"/>
+            <Setter Property="BorderBrush"     Value="#334155"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin"          Value="3"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background"      Value="#334155"/>
+                                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+
     <Grid Margin="20">
+        <!-- 좌: 티칭 매트릭스(넓게) / 우: 축 조작(좁고 길게).
+             오른쪽은 세로로 쌓아 남는 높이를 쓰므로 폭이 덜 필요하다. -->
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="780"/>
+            <ColumnDefinition Width="900"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
@@ -27,9 +68,10 @@
                                VerticalAlignment="Center" Margin="0,0,5,0" DockPanel.Dock="Right"/>
                 </DockPanel>
 
+                <!-- MaxHeight 제거 — 화면 높이를 그대로 쓴다. 650 고정이면 아래가 비고,
+                     레시피 포인트가 늘면 세로 스크롤이 먼저 생겼다. -->
                 <DataGrid x:Name="PointGrid"
                           Grid.Row="1"
-                          MaxHeight="650"
                           SelectedItem="{Binding SelectedTeachingPoint}"
                           PreviewMouseLeftButtonDown="PointGrid_PreviewMouseLeftButtonDown"
                           AutoGenerateColumns="False" 
@@ -58,14 +100,12 @@
             </Grid>
         </Border>
 
-        <ScrollViewer Grid.Column="1" Margin="10,0,0,0"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled">
-        <Grid>
+        <!-- 스크롤뷰어 제거 — AXIS CONTROL 이 남는 높이를 먹고 늘어나야 좌/우 아래끝이 맞는다.
+             (스크롤뷰어 안에서는 높이가 무한대로 측정돼 * 행이 Auto 처럼 동작한다) -->
+        <Grid Grid.Column="1" Margin="10,0,0,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             <Border Grid.Row="0" Background="#1E293B" CornerRadius="12" Padding="15,12" Margin="0,0,0,15" BorderBrush="#334155" BorderThickness="1">
@@ -115,205 +155,91 @@
                             VerticalAlignment="Center" Height="66"/>
                 </Grid>
             </Border>
-            <Grid Grid.Row="1" Margin="0,0,0,15">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="1.1*"/>
-                    <ColumnDefinition Width="0.9*"/>
-                </Grid.ColumnDefinitions>
-
-                <Border Grid.Column="0" Background="#1A2234" CornerRadius="12" Padding="20" 
-                        BorderBrush="#3B82F6" BorderThickness="2,0,0,0" Margin="0,0,8,0">
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="ACTUAL POSITION" Foreground="#94A3B8" FontSize="11" FontWeight="Bold" Margin="0,0,0,5"/>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
-                            <TextBlock Text="{Binding ActualPosition, StringFormat={}{0:F3}}" 
-                                       Foreground="#22C55E" FontSize="42" FontWeight="ExtraBold" FontFamily="Consolas"/>
-                            <TextBlock Text="mm" Foreground="#64748B" FontSize="14" Margin="8,0,0,8" VerticalAlignment="Bottom"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <Border Grid.Column="1" Background="#161E2E" CornerRadius="12" Padding="15" BorderBrush="#2D3748" BorderThickness="1">
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="SELECT AXIS" Foreground="#94A3B8" FontSize="10" FontWeight="Bold" Margin="0,0,0,8"/>
-                        <ComboBox Style="{StaticResource ModernComboBoxStyle}"
-                                  ItemsSource="{Binding AxisList}"
-                                  SelectedItem="{Binding SelectedAxis}"
-                                  Width="170"
-                                  Height="35" FontSize="14" FontWeight="Bold" Foreground="Black">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Info.Name}"/>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                        
-                        <UniformGrid Columns="2" Margin="0,15,0,0">
-                            <Button Style="{StaticResource ModernAxisButtonStyle}" Margin="0,0,5,0"
-                                    PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="Jog_MouseUp">
-                                <Grid HorizontalAlignment="Stretch" Width="140">
-                                    <TextBlock Grid.Column="0"
-                                               Text="◀"
-                                               VerticalAlignment="Center"
-                                               FontSize="11"
-                                               Foreground="#94A3B8"
-                                               Margin="0,0,5,0"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="JOG MINUS"
-                                               VerticalAlignment="Center"
-                                               HorizontalAlignment="Left"
-                                               FontWeight="Bold"
-                                               FontSize="11"
-                                               Margin="15,0,5,0"
-                                               Foreground="White"/>
-                                </Grid>
-                            </Button>
-                            <Button Style="{StaticResource ModernAxisButtonStyle}" Margin="5,0,0,0"
-                                    PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="Jog_MouseUp">
-                                <Grid HorizontalAlignment="Stretch" Width="140">
-                                    <TextBlock Grid.Column="0"
-                                               Text="JOG PLUS"
-                                               VerticalAlignment="Center"
-                                               FontSize="11"
-                                               FontWeight="Bold"
-                                               Foreground="#94A3B8"
-                                               Margin="8,0,5,0"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="▶"
-                                               VerticalAlignment="Center"
-                                               HorizontalAlignment="Center"
-                                               FontWeight="Bold"
-                                               FontSize="11"
-                                               Foreground="White"/>
-                                </Grid>
-                            </Button>
-                        </UniformGrid>
-                    </StackPanel>
-                </Border>
-            </Grid>
-            <Border Grid.Row="2" Background="#1E293B" CornerRadius="12" Padding="14" Margin="0,0,0,15" BorderBrush="#334155" BorderThickness="1">
+            <!-- ACTUAL POSITION / SELECT AXIS 행은 제거(2026-08-04).
+                 위치는 아래 축 카드가 전부 보여주고, 조그도 축별 버튼으로 직접 지목하므로 '선택 축' 자체가
+                 필요 없어졌다. GET ACTUAL POSITION·MOVE 는 원래부터 AxisList 전체를 대상으로 동작한다.
+                 세로 공간을 비워 스크롤 없이 버튼이 다 들어오게 하는 것이 목적. -->
+            <Border Grid.Row="1" Background="#1E293B" CornerRadius="12" Padding="14" Margin="0,0,0,15" BorderBrush="#334155" BorderThickness="1">
                 <DockPanel>
 
                     <!-- Header: Title + Jog Mode -->
                     <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="🕹️" Margin="0,0,8,0" VerticalAlignment="Center" FontSize="14"/>
-                            <TextBlock Text="XYZQ AXIS CONTROL" Foreground="#94A3B8" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+                            <TextBlock Text="AXIS CONTROL" Foreground="#94A3B8" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
                         </StackPanel>
+                        <!-- 스텝 모드는 축이 아니라 이 화면이 들고 있다(MotorTeachingViewModel.JogStepFor).
+                             한 버튼이 직선축·회전축 값을 함께 뜻한다 — 누른 축의 단위에 맞는 쪽이 적용된다. -->
+                        <!-- 공용 ModernModeButtonStyle 은 Width=65 고정이라 '10µm / 0.1°' 가 잘린다.
+                             다른 화면도 쓰는 스타일이라 건드리지 않고, 여기서만 Auto 폭 + 여백으로 푼다. -->
+                        <!-- ※ 템플릿 Border 가 Padding 을 쓰지 않으므로 Content 를 TextBlock 으로 주고
+                             거기에 여백을 준다(Padding 설정만으로는 글자가 테두리에 붙는다). -->
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <RadioButton Content="Conti." IsChecked="{Binding IsJogContinuity}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}"/>
-                            <RadioButton Content="10µm"   IsChecked="{Binding IsUnit10um}"      GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}" Margin="6,0"/>
-                            <RadioButton Content="100µm"  IsChecked="{Binding IsUnit100um}"     GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}"/>
+                            <RadioButton IsChecked="{Binding IsJogContinuity}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}"
+                                         Width="Auto" Height="30" ToolTip="누르고 있는 동안 연속 이동">
+                                <TextBlock Text="Conti." Margin="18,0"/>
+                            </RadioButton>
+                            <RadioButton IsChecked="{Binding IsStepFine}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}" Margin="6,0,0,0"
+                                         Width="Auto" Height="30" ToolTip="직선축 0.01mm · 회전축(T) 0.1도씩 이동">
+                                <TextBlock Text="10µm / 0.1°" Margin="18,0"/>
+                            </RadioButton>
+                            <RadioButton IsChecked="{Binding IsStepCoarse}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}" Margin="6,0,0,0"
+                                         Width="Auto" Height="30" ToolTip="직선축 0.1mm · 회전축(T) 1도씩 이동">
+                                <TextBlock Text="100µm / 1°" Margin="18,0"/>
+                            </RadioButton>
                         </StackPanel>
                     </Grid>
 
-                    <!-- Position Strip: 4 color-coded horizontal cards -->
-                    <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="5"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="5"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="5"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+                    <!-- 위치 카드 — AxisList 를 그대로 그린다(축 하드코딩 제거, 2026-08-04).
+                         3축 장비면 3장, 9호기(6축)면 6장이 자동으로 나오고, 단위도 축의 Unit 을 따라간다(T=deg).
+                         색은 AxisAccent 컨버터가 축 이름으로 정하며 모르는 축은 회색으로 떨어진다. -->
+                    <ItemsControl DockPanel.Dock="Top" Margin="0,0,0,10" ItemsSource="{Binding AxisList}">
+                        <!-- 한 줄에 다 놓는다 — 두 줄로 접으면 그만큼 조그 영역 높이를 뺏겨 버튼이 잘린다. -->
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Rows="1"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="10" Padding="10,7" Margin="0,0,6,0" BorderThickness="1"
+                                        Background="{Binding Info.AxisNo, Converter={StaticResource AxisAccent}, ConverterParameter=bg}"
+                                        BorderBrush="{Binding Info.AxisNo, Converter={StaticResource AxisAccent}, ConverterParameter=bd}">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Info.AxisNo}" FontSize="9" FontWeight="Bold" Opacity="0.75"
+                                                   Foreground="{Binding Info.AxisNo, Converter={StaticResource AxisAccent}}"/>
+                                        <!-- 값과 단위는 한 줄로 — 단위가 카드 오른쪽 아래에 따로 떠 있으면 시선이 흩어진다. -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
+                                            <TextBlock Text="{Binding CurrentPos, StringFormat={}{0:F3}}"
+                                                       FontSize="17" FontWeight="Bold" FontFamily="Consolas"
+                                                       Foreground="{Binding Info.AxisNo, Converter={StaticResource AxisAccent}}"/>
+                                            <TextBlock Text="{Binding Info.Unit}" FontSize="9" Opacity="0.55" Margin="4,0,0,2"
+                                                       VerticalAlignment="Bottom"
+                                                       Foreground="{Binding Info.AxisNo, Converter={StaticResource AxisAccent}}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
-                        <Border Grid.Column="0" Background="#0B2818" CornerRadius="8" Padding="10,7" BorderBrush="#166534" BorderThickness="1">
-                            <StackPanel>
-                                <TextBlock Text="X AXIS" Foreground="#22C55E" FontSize="8" FontWeight="Bold" Opacity="0.7"/>
-                                <TextBlock Text="{Binding XActualPosition, StringFormat={}{0:F3}}"
-                                           Foreground="#22C55E" FontSize="16" FontWeight="Bold" FontFamily="Consolas"/>
-                                <TextBlock Text="mm" Foreground="#22C55E" FontSize="7" Opacity="0.5" HorizontalAlignment="Right"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Grid.Column="2" Background="#0C1F2E" CornerRadius="8" Padding="10,7" BorderBrush="#1D4ED8" BorderThickness="1">
-                            <StackPanel>
-                                <TextBlock Text="Y AXIS" Foreground="#38BDF8" FontSize="8" FontWeight="Bold" Opacity="0.7"/>
-                                <TextBlock Text="{Binding YActualPosition, StringFormat={}{0:F3}}"
-                                           Foreground="#38BDF8" FontSize="16" FontWeight="Bold" FontFamily="Consolas"/>
-                                <TextBlock Text="mm" Foreground="#38BDF8" FontSize="7" Opacity="0.5" HorizontalAlignment="Right"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Grid.Column="4" Background="#1C1200" CornerRadius="8" Padding="10,7" BorderBrush="#92400E" BorderThickness="1">
-                            <StackPanel>
-                                <TextBlock Text="Z AXIS" Foreground="#F59E0B" FontSize="8" FontWeight="Bold" Opacity="0.7"/>
-                                <TextBlock Text="{Binding ZActualPosition, StringFormat={}{0:F3}}"
-                                           Foreground="#F59E0B" FontSize="16" FontWeight="Bold" FontFamily="Consolas"/>
-                                <TextBlock Text="mm" Foreground="#F59E0B" FontSize="7" Opacity="0.5" HorizontalAlignment="Right"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Grid.Column="6" Background="#1A0C2E" CornerRadius="8" Padding="10,7" BorderBrush="#6D28D9" BorderThickness="1">
-                            <StackPanel>
-                                <TextBlock Text="T AXIS" Foreground="#C084FC" FontSize="8" FontWeight="Bold" Opacity="0.7"/>
-                                <TextBlock Text="{Binding TActualPosition, StringFormat={}{0:F3}}"
-                                           Foreground="#C084FC" FontSize="16" FontWeight="Bold" FontFamily="Consolas"/>
-                                <TextBlock Text="mm" Foreground="#C084FC" FontSize="7" Opacity="0.5" HorizontalAlignment="Right"/>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
-
-                    <!-- Z / T buttons row: 4 buttons full-width at bottom -->
-                    <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="5"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="5"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="5"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <!-- Z 축은 위(▲)=마이너스, 아래(▼)=플러스 (설비 기계방향에 맞춤) -->
-                        <Button Grid.Column="0" Tag="Z" Width="Auto" Height="52"
-                                Style="{StaticResource JogControlStyle}"
-                                Background="#78350F" BorderBrush="#F59E0B"
-                                PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="Jog_MouseUp">
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="Z" Foreground="#F59E0B" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="▲" Foreground="White" FontSize="17" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
-                            </StackPanel>
-                        </Button>
-
-                        <Button Grid.Column="2" Tag="Z" Width="Auto" Height="52"
-                                Style="{StaticResource JogControlStyle}"
-                                Background="#78350F" BorderBrush="#F59E0B"
-                                PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="Jog_MouseUp">
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="Z" Foreground="#F59E0B" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="▼" Foreground="White" FontSize="17" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
-                            </StackPanel>
-                        </Button>
-
-                        <Button Grid.Column="4" Tag="T" Width="Auto" Height="52"
-                                Style="{StaticResource JogControlStyle}"
-                                Background="#3B0764" BorderBrush="#C084FC"
-                                PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="Jog_MouseUp">
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="T" Foreground="#C084FC" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="▼" Foreground="White" FontSize="17" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
-                            </StackPanel>
-                        </Button>
-
-                        <Button Grid.Column="6" Tag="T" Width="Auto" Height="52"
-                                Style="{StaticResource JogControlStyle}"
-                                Background="#3B0764" BorderBrush="#C084FC"
-                                PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="Jog_MouseUp">
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="T" Foreground="#C084FC" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="▲" Foreground="White" FontSize="17" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
-                            </StackPanel>
-                        </Button>
-                    </Grid>
-
-                    <!-- XY Jog Pad: fills remaining space, centered -->
-                        <Border Background="#0F172A" CornerRadius="12" Padding="8"
+                    <!-- XY 조그패드(좌) + 나머지 축 버튼(우).
+                         XY 만 패드로 고정한 이유: X/Y 는 어느 장비에나 있고, 평면 이동이라 십자 배치가 직관적이다.
+                         나머지는 축 수가 장비마다 달라 AxisList 로 생성한다. -->
+                    <Border Background="#0F172A" CornerRadius="12" Padding="8"
                             BorderBrush="#334155" BorderThickness="1">
-                            <Grid VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <Grid VerticalAlignment="Center">
+                            <!-- XY 패드(좌) + Z/T/DW 버튼(우) — 위아래로 쌓으면 세로가 모자라 버튼이 잘린다.
+                                 ※ 반씩(*/*) 나누면 안 된다. XY 패드는 폭이 고정인데 축 버튼은 축 수에 비례해서,
+                                   반씩 주면 오른쪽이 잘린다(6축에서 실제로 잘렸다).
+                                   패드는 Auto 로 제 폭만 쓰고 남는 폭을 전부 축 버튼에 준다. -->
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- XY Jog Pad -->
+                            <Grid Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,0,10,0">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
@@ -325,33 +251,139 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
+                                <!-- 화살표만으로는 어느 쪽이 지령 +/− 인지 알 수 없어 부호를 함께 적는다.
+                                     티칭 좌표·리밋 부호가 이 부호 기준이다. -->
                                 <Button Grid.Row="0" Grid.Column="1"
-                                    Content="▲" Tag="Y" Width="80" Height="60" FontSize="20"
-                                    Style="{StaticResource JogControlStyle}"
-                                    PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="Jog_MouseUp"/>
+                                    Tag="Y" Width="86" Height="66"
+                                    Background="#1D4ED8" BorderBrush="#3B82F6"
+                                    Style="{StaticResource AxisJogButton}"
+                                    PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="Jog_MouseUp">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Y  +" Foreground="#94A3B8" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="▲" Foreground="White" FontSize="20" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
+                                    </StackPanel>
+                                </Button>
                                 <Button Grid.Row="1" Grid.Column="0"
-                                    Content="◀" Tag="X" Width="80" Height="60" FontSize="20"
-                                    Style="{StaticResource JogControlStyle}"
-                                    PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="Jog_MouseUp"/>
+                                    Tag="X" Width="86" Height="66"
+                                    Background="#1D4ED8" BorderBrush="#3B82F6"
+                                    Style="{StaticResource AxisJogButton}"
+                                    PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="Jog_MouseUp">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="X  −" Foreground="#94A3B8" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="◀" Foreground="White" FontSize="20" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
+                                    </StackPanel>
+                                </Button>
                                 <Border Grid.Row="1" Grid.Column="1" Width="54" Height="54"
                                     Background="#1E293B" CornerRadius="27" Margin="4">
                                     <TextBlock Text="XY" Foreground="#3B82F6" FontSize="13" FontWeight="Bold"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
                                 <Button Grid.Row="1" Grid.Column="2"
-                                    Content="▶" Tag="X" Width="80" Height="60" FontSize="20"
-                                    Style="{StaticResource JogControlStyle}"
-                                    PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="Jog_MouseUp"/>
+                                    Tag="X" Width="86" Height="66"
+                                    Background="#1D4ED8" BorderBrush="#3B82F6"
+                                    Style="{StaticResource AxisJogButton}"
+                                    PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="Jog_MouseUp">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="X  +" Foreground="#94A3B8" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="▶" Foreground="White" FontSize="20" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
+                                    </StackPanel>
+                                </Button>
                                 <Button Grid.Row="2" Grid.Column="1"
-                                    Content="▼" Tag="Y" Width="80" Height="60" FontSize="20"
-                                    Style="{StaticResource JogControlStyle}"
-                                    PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="Jog_MouseUp"/>
+                                    Tag="Y" Width="86" Height="66"
+                                    Background="#1D4ED8" BorderBrush="#3B82F6"
+                                    Style="{StaticResource AxisJogButton}"
+                                    PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="Jog_MouseUp">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Y  −" Foreground="#94A3B8" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="▼" Foreground="White" FontSize="20" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
+                                    </StackPanel>
+                                </Button>
                             </Grid>
-                        </Border>
+
+                            <!-- X/Y 를 뺀 나머지 축(Z/T/DW-X/DW-Y…)을 축 수만큼 자동 생성한다.
+                                 예전엔 Z/T 만 하드코딩돼 있어 DW 축은 이 화면에서 아예 움직일 수 없었다.
+                                 기호는 축 성격에 따라 바뀐다 — 기본 ◀/▶, 회전축(Unit=deg)은 ↺/↻,
+                                 Z 는 설비 기계방향대로 ▲(−)/▼(+). 지령 부호는 라벨의 +/− 가 기준이다. -->
+                            <ItemsControl Grid.Column="1" VerticalAlignment="Center" ItemsSource="{Binding JogAxisList}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="2"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="5,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="6"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- (−) -->
+                                            <Button Grid.Column="0" Height="72" MinWidth="76"
+                                                    Tag="{Binding Info.AxisNo}"
+                                                    Style="{StaticResource AxisJogButton}"
+                                                    BorderBrush="{Binding Info.AxisNo, Converter={StaticResource AxisAccent}}"
+                                                    PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="Jog_MouseUp">
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"
+                                                               Foreground="{Binding Info.AxisNo, Converter={StaticResource AxisAccent}}"
+                                                               Text="{Binding Info.AxisNo, StringFormat={}{0}  −}"/>
+                                                    <TextBlock Foreground="White" FontSize="20" HorizontalAlignment="Center" Margin="0,-2,0,0">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="◀"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Info.Unit}" Value="deg">
+                                                                        <Setter Property="Text" Value="↺"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Info.AxisNo}" Value="Z">
+                                                                        <Setter Property="Text" Value="▲"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </Button>
+
+                                            <!-- (+) -->
+                                            <Button Grid.Column="2" Height="72" MinWidth="76"
+                                                    Tag="{Binding Info.AxisNo}"
+                                                    Style="{StaticResource AxisJogButton}"
+                                                    BorderBrush="{Binding Info.AxisNo, Converter={StaticResource AxisAccent}}"
+                                                    PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="Jog_MouseUp">
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock FontSize="9" FontWeight="Bold" HorizontalAlignment="Center"
+                                                               Foreground="{Binding Info.AxisNo, Converter={StaticResource AxisAccent}}"
+                                                               Text="{Binding Info.AxisNo, StringFormat={}{0}  +}"/>
+                                                    <TextBlock Foreground="White" FontSize="20" HorizontalAlignment="Center" Margin="0,-2,0,0">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="▶"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Info.Unit}" Value="deg">
+                                                                        <Setter Property="Text" Value="↻"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Info.AxisNo}" Value="Z">
+                                                                        <Setter Property="Text" Value="▼"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </Button>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </Border>
                     </DockPanel>
             </Border>
 
-            <Border Grid.Row="3" Background="#161E2E" CornerRadius="12" Padding="15" BorderBrush="#2D3748" BorderThickness="1">
+            <Border Grid.Row="2" Background="#161E2E" CornerRadius="12" Padding="15" BorderBrush="#2D3748" BorderThickness="1">
                 <StackPanel>
 
                     <!-- GET/MOVE 대상 티칭 위치 (미선택 시 '미선택' 표시) -->
@@ -385,18 +417,33 @@
                         </StackPanel>
                     </Button>
 
+                    <!-- 대상 포인트를 버튼 안에도 적는다 — 이 화면에서 제일 사고나기 쉬운 곳이
+                         '어느 행에 적용되는지 모른 채 MOVE 를 누르는' 상황이라, 누르는 지점에서 보이게 한다.
+                         미선택이면 Command 의 CanExecute 가 false 라 버튼 자체가 비활성이다. -->
                     <Button Grid.Column="1" Height="65" Command="{Binding MoveToPointCommand}" Background="Transparent" BorderThickness="0">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
-                                <Border Background="#3B82F6" CornerRadius="10" SnapsToDevicePixels="True">
+                                <Border x:Name="moveBorder" Background="#3B82F6" CornerRadius="10" SnapsToDevicePixels="True">
                                     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter TargetName="moveBorder" Property="Background" Value="#1E293B"/>
+                                        <Setter TargetName="moveBorder" Property="Opacity"    Value="0.6"/>
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="moveBorder" Property="Background" Value="#2563EB"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
                             </ControlTemplate>
                         </Button.Template>
                         <Button.Content>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="▶" Margin="0,0,15,0" VerticalAlignment="Center" FontSize="22" Foreground="White"/>
                                 <TextBlock Text="MOVE" FontSize="24" FontWeight="Black" Foreground="White" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding SelectedTeachingPoint.PointName, StringFormat={}→ {0}}"
+                                           FontSize="14" FontWeight="Bold" Foreground="#DBEAFE" Opacity="0.9"
+                                           VerticalAlignment="Center" Margin="14,3,0,0"/>
                             </StackPanel>
                         </Button.Content>
                     </Button>
@@ -404,6 +451,5 @@
                 </StackPanel>
             </Border>
         </Grid>
-        </ScrollViewer>
     </Grid>
 </UserControl>

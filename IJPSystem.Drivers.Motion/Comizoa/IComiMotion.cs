@@ -41,6 +41,8 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         void SetHomeParameters(AxisId axis, HomeParameters home);
         /// <summary>원점 복귀 '속도 패턴만' 설정(ecmHomeCfg_SetSpeedPatt). LabVIEW Set Home Parameters.vi 와 동일 — 모드/방향/오프셋 미변경.</summary>
         void SetHomeSpeedPattern(AxisId axis, double velocity, double acceleration, double deceleration, double specVelocity);
+        /// <summary>원점 복귀 '탐색 방향만' 설정. dir=+1/-1. 다음 <see cref="Home"/> 호출부터 적용(드라이브 설정은 건드리지 않음).</summary>
+        void SetHomeDirection(AxisId axis, int dir);
         /// <summary>Set SW_Limite.vi : 소프트웨어 리밋.</summary>
         void SetSoftLimit(AxisId axis, SoftLimit limit);
         /// <summary>Set AlState.vi : 알람 상태 설정/리셋(clear).</summary>

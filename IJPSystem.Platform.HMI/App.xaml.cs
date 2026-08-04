@@ -6,6 +6,7 @@ using IJPSystem.Drivers.Motion.Comizoa;
 using IJPSystem.Drivers.Vision;
 using IJPSystem.Drivers.Vision.Imaqdx;
 using IJPSystem.Drivers.Vision.Ebus;
+using IJPSystem.Drivers.Vision.Hikrobot;
 using IJPSystem.Machines.Pulse;
 using IJPSystem.Platform.Common.Constants;
 using IJPSystem.Platform.Common.Utilities;
@@ -274,16 +275,32 @@ namespace IJPSystem.Platform.HMI
             var loader = new ConfigLoader();
             var root = loader.LoadVisionConfig(path);
 
-            IVisionDriver visionDriver = DriverMode(d => d.Vision) switch
-            {
-                "imaqdx" => new ImaqdxVisionDriver(),   // 0호기 — NI-IMAQdx(niimaqdx.dll)
-                "ebus"   => new EbusVisionDriver(),     // 9호기 — Pleora eBUS SDK(JAI+하이크로봇 혼합)
-                _        => new VirtualVisionDriver(),
-            };
-            visionDriver.Initialize(root.VisionCameraList);
+            // 카메라별 Driver 지정(VisionConfig)이 우선, 없으면 전역 DriverMode.Vision.
+            // 9호기처럼 벤더가 섞이면(JAI=eBUS / 하이크로봇=별도) 카메라마다 달라진다.
+            string global = DriverMode(d => d.Vision);
+            var keys = root.VisionCameraList
+                           .Select(c => CompositeVisionDriver.ResolveKey(c, global))
+                           .Distinct(StringComparer.OrdinalIgnoreCase)
+                           .ToList();
 
+            // 드라이버가 한 종류뿐이면 다중화 계층을 끼우지 않는다 — 0호기 같은 단일 벤더
+            // 장비의 동작 경로를 그대로 둔다.
+            IVisionDriver visionDriver = keys.Count > 1
+                ? new CompositeVisionDriver(global, CreateVisionDriver)
+                : CreateVisionDriver(keys.Count == 1 ? keys[0] : global);
+
+            visionDriver.Initialize(root.VisionCameraList);
             return visionDriver;
         }
+
+        /// <summary>드라이버 키 → 인스턴스. 미인식 키는 Virtual 로 떨어져 앱이 뜨는 것을 막지 않는다.</summary>
+        private static IVisionDriver CreateVisionDriver(string key) => key switch
+        {
+            "imaqdx"   => new ImaqdxVisionDriver(),      // 0호기 — NI-IMAQdx(niimaqdx.dll)
+            "ebus"     => new EbusVisionDriver(),        // 9호기 드랍와처 — Pleora eBUS SDK(JAI)
+            "hikrobot" => new HikrobotVisionDriver(),    // 9호기 글라스뷰 — Hikrobot MVS SDK
+            _          => new VirtualVisionDriver(),
+        };
         private static string GetConfigPath(string fileName) => PathUtils.GetConfigPath(fileName);
 
         /// <summary>시작 배너: 앱 버전·프로세스 비트수·관리자권한·런타임·OS 를 1회 기록.</summary>

@@ -20,6 +20,7 @@
     <ProjectReference Include="..\IJPSystem.Platform.Infrastructure\IJPSystem.Platform.Infrastructure.csproj" />
     <ProjectReference Include="..\IJPSystem.Platform.Application\IJPSystem.Platform.Application.csproj" />
     <ProjectReference Include="..\IJPSystem.Platform.Domain\IJPSystem.Platform.Domain.csproj" />
+    <ProjectReference Include="..\IJPSystem.Drivers.Vision\IJPSystem.Drivers.Vision.csproj" />
   </ItemGroup>
 
 </Project>

@@ -23,6 +23,16 @@ namespace IJPSystem.Platform.Domain.Models.Vision
         /// <summary>화면 표시명(예: "Glass View"). 비어 있으면 <see cref="Name"/> 을 사용.</summary>
         public string DisplayName { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 이 카메라만 다른 드라이버로 붙일 때 지정한다(Ebus / Imaqdx / Hikrobot / Virtual).
+        /// 비우면 AppConfig 의 <c>DriverMode.Vision</c> 을 따른다.
+        ///
+        /// <para>9호기처럼 벤더가 섞인 구성 때문에 필요하다 — 드랍와처(JAI)는 eBUS 로 정상이지만
+        /// 글라스뷰(하이크로봇)는 eBUS for JAI 라이선스 대상이 아니라 워터마크가 찍힌다.
+        /// 카메라마다 맞는 드라이버를 붙일 수 있어야 한다.</para>
+        /// </summary>
+        public string Driver { get; set; } = string.Empty;
+
         /// <summary>Visual Monitor 소스 목록 노출 여부. 전용 화면만 쓰는 카메라는 false.</summary>
         public bool ShowInMonitor { get; set; } = true;
 

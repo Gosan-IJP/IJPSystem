@@ -91,8 +91,16 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                     //    LabVIEW Set Home Parameters.vi 와 동일하게 '속도 패턴만' 설정(모드/방향/오프셋 미변경 → 안전).
                     //    없으면 미설정(현행 = 드라이브 기본값 유지).
                     if (c.Home is Platform.Domain.Models.Motion.HomeConfig h)
+                    {
                         TrySetup(() => comi.SetHomeSpeedPattern(ax, h.Velocity, h.Acceleration, h.Deceleration, h.SpecVelocity),
                             c.AxisNo, $"원점 속도패턴(vel={h.Velocity}, acc={h.Acceleration}, dec={h.Deceleration}, spec={h.SpecVelocity})");
+
+                        // 4) 원점복귀 탐색 방향 — 코미조아 유틸의 Dir(+/-) 과 동일. config 에 있을 때만.
+                        //    없으면 종전대로 (-)방향. 드라이브 설정이 아니라 Home 호출 인자라 재연결마다 다시 넣어준다.
+                        if (h.Direction is int hd)
+                            TrySetup(() => comi.SetHomeDirection(ax, hd), c.AxisNo,
+                                $"원점 방향({(hd >= 0 ? "+" : "-")})");
+                    }
                 }
 
                 // 전원투입 시 드라이브가 래치된 폴트 상태로 부팅되는 경우가 있다(실장: Y축 raw=0x8038, bit3 ServoFault).

@@ -442,20 +442,45 @@
                         </Ellipse.Style>
                     </Ellipse>
                     <TextBlock Text="MOTION" Foreground="#94A3B8" FontSize="10" FontFamily="Consolas" Margin="0,0,8,0"/>
-                    <!-- VISION -->
-                    <Ellipse Width="7" Height="7" Margin="0,0,3,0">
+                    <!-- 카메라는 기종별로 드라이버가 달라(DWC=eBUS/JAI, GVC=Hikrobot/MVS)
+                         한쪽만 끊기는 일이 있다. VISION 점 하나로는 어느 쪽인지 알 수 없어 분리했다.
+                         회색=설정에 없음 / 빨강=설정됐으나 미연결 / 초록=연결. -->
+                    <!-- DWC (Drop Watcher) -->
+                    <Ellipse Width="7" Height="7" Margin="0,0,3,0" ToolTip="Drop Watcher 카메라">
                         <Ellipse.Style>
                             <Style TargetType="Ellipse">
-                                <Setter Property="Fill" Value="#EF4444"/>
+                                <Setter Property="Fill" Value="#64748B"/>
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding VisionConnected}" Value="True">
+                                    <DataTrigger Binding="{Binding DwcPresent}" Value="True">
+                                        <Setter Property="Fill" Value="#EF4444"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding DwcConnected}" Value="True">
                                         <Setter Property="Fill" Value="#22C55E"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Ellipse.Style>
                     </Ellipse>
-                    <TextBlock Text="VISION" Foreground="#94A3B8" FontSize="10" FontFamily="Consolas" Margin="0,0,8,0"/>
+                    <TextBlock Text="DWC" Foreground="#94A3B8" FontSize="10" FontFamily="Consolas"
+                               Margin="0,0,8,0" ToolTip="Drop Watcher 카메라"/>
+                    <!-- GVC (Glass View) -->
+                    <Ellipse Width="7" Height="7" Margin="0,0,3,0" ToolTip="Glass View 카메라">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="#64748B"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding GvcPresent}" Value="True">
+                                        <Setter Property="Fill" Value="#EF4444"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding GvcConnected}" Value="True">
+                                        <Setter Property="Fill" Value="#22C55E"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock Text="GVC" Foreground="#94A3B8" FontSize="10" FontFamily="Consolas"
+                               Margin="0,0,8,0" ToolTip="Glass View 카메라"/>
                     <!-- HEAD (Meteor PCC) — 미연결/미구성=회색, PCC 부착 시 초록. 툴팁에 상세 상태 -->
                     <Ellipse Width="7" Height="7" Margin="0,0,3,0" ToolTip="{Binding HeadStatusText}">
                         <Ellipse.Style>

@@ -50,37 +50,37 @@ namespace IJPSystem.Platform.HMI.Views
 
         private void JogForward_MouseDown(object sender, MouseButtonEventArgs e) => ExecuteJog(sender, true);
 
-        // 단위 라디오(Conti/10µm/100µm)는 SelectedAxis 의 JogUnit 만 갱신하므로
-        // Tag(X/Y/Z/T)로 다른 축을 지목한 경우 그 축의 JogUnit 은 기본값(=0, Conti)에 머무름.
-        // → 모드 라디오 의도가 반영되도록 SelectedAxis.JogUnit 을 대상 축에 복사한 뒤 실행.
+        // 스텝은 축이 아니라 화면(VM)이 들고 있다 — 버튼이 누른 축에 맞는 스텝을 VM 에서 받아 넘긴다.
+        // 축 단위가 다르면(T=deg) VM 이 그 단위의 값으로 환산해 준다(JogStepFor).
         private void ExecuteJog(object sender, bool isForward)
         {
             if (DataContext is not MotorTeachingViewModel vm) return;
             var axis = ResolveAxis(sender);
             if (axis == null) return;   // 구성에 없는 축(예: 3축 구성의 T) 버튼은 무동작
 
-            if (vm.SelectedAxis != null)
-                axis.JogUnit = vm.SelectedAxis.JogUnit;
-
-            _ = axis.JogMoveAsync(isForward);
+            _ = axis.JogMoveAsync(isForward, stepOverride: vm.JogStepFor(axis));
         }
 
+        // 연속(Conti) 모드에서만 손을 떼면 정지한다(dead-man).
+        // 스텝 모드에서 정지시키면 짧게 클릭했을 때 이동이 도중에 잘려 '눌렀는데 안 움직인다'가 된다
+        // — 특히 T 1° 처럼 시간이 걸리는 스텝에서 두드러진다. 스텝 이동은 스스로 끝나므로 건드리지 않는다.
         private void Jog_MouseUp(object sender, MouseButtonEventArgs e)
         {
+            if (DataContext is not MotorTeachingViewModel vm) return;
             var axis = ResolveAxis(sender);
-            if (axis != null) _ = axis.StopAsync();
+            if (axis == null) return;
+            if (vm.JogStepFor(axis) <= 0) _ = axis.StopAsync();
         }
 
         // 조그 대상 축 해석:
-        //   Tag 없음      → SelectedAxis (SELECT AXIS 패널 조그)
-        //   Tag=X/Y/Z/T   → AxisNo 일치 축. 일치하는 축이 없으면 null 반환
-        //                   → 구성에 없는 축(예: 3축 구성의 T) 버튼은 아무 동작도 하지 않음.
-        //                     (이전엔 SelectedAxis 로 폴백되어 T 버튼이 선택 축을 움직이는 버그가 있었음)
+        //   Tag = AxisNo — XY 패드는 고정값(X/Y), 나머지 축 버튼은 {Binding Info.AxisNo} 로 채운다.
+        //   일치하는 축이 없거나 Tag 가 비면 null → 아무 동작도 하지 않는다
+        //   (구성에 없는 축 버튼이 엉뚱한 축을 움직이는 사고 방지).
         private AxisViewModel? ResolveAxis(object sender)
         {
             if (DataContext is not MotorTeachingViewModel vm) return null;
             string? tag = (sender as Button)?.Tag?.ToString();
-            if (string.IsNullOrEmpty(tag)) return vm.SelectedAxis;
+            if (string.IsNullOrEmpty(tag)) return null;
             return vm.AxisList.FirstOrDefault(a => a.Info.AxisNo == tag);
         }
 
@@ -155,7 +155,10 @@ namespace IJPSystem.Platform.HMI.Views
                     Header = "TEACHING POS.",
                     Binding = new Binding("PointName"),
                     IsReadOnly = true,
-                    Width = 160,
+                    // 폭은 6축(9호기)이 가로 스크롤 없이 들어가도록 잡았다:
+                    // 150 + 6×120 = 870 ≤ 좌측 컬럼 안쪽 폭 870(=900 − Border Padding 15×2).
+                    // 축이 더 늘면 스크롤이 다시 생긴다 — 그때는 좌측 컬럼 폭을 같이 키울 것.
+                    Width = 150,
                     ElementStyle = new Style(typeof(TextBlock))
                     {
                         Setters =
@@ -216,7 +219,7 @@ namespace IJPSystem.Platform.HMI.Views
                     var templateColumn = new DataGridTemplateColumn
                     {
                         Header       = axisShort,
-                        Width        = 130,
+                        Width        = 120,
                         IsReadOnly   = true,
                         CellStyle    = cellStyle,
                         CellTemplate = BuildAxisCellTemplate(axisName, editingStyle),

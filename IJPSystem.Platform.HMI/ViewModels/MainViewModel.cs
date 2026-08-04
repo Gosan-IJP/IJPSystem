@@ -7,6 +7,7 @@ using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.IO;
 using IJPSystem.Platform.Domain.Models.Log;
 using IJPSystem.Platform.Domain.Models.Motion;
+using IJPSystem.Platform.Domain.Models.Vision;
 using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Infrastructure.Config;
 using IJPSystem.Platform.Infrastructure.Repositories;
@@ -129,6 +130,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
             get => _visionConnected;
             private set => SetProperty(ref _visionConnected, value);
         }
+
+        // ── 카메라별 링크 상태 ────────────────────────────────────────────
+        // 9호기는 카메라마다 드라이버가 다르다(DWC=eBUS/JAI, GVC=Hikrobot/MVS).
+        // 한쪽만 끊겨도 VISION 점 하나로는 어느 쪽인지 알 수 없어 따로 표시한다.
+        // Present=false(미구성)면 회색 — HEAD 점과 같은 규칙.
+        //
+        // 아래 두 값은 VisionConfig 의 카메라 Name(하드웨어 식별자)과 맞춘 것이다.
+        private const string DwcName = "DWC";
+        private const string GvcName = "GVC";
+
+        private bool _dwcPresent, _dwcConnected, _gvcPresent, _gvcConnected;
+
+        public bool DwcPresent   { get => _dwcPresent;   private set => SetProperty(ref _dwcPresent, value); }
+        public bool DwcConnected { get => _dwcConnected; private set => SetProperty(ref _dwcConnected, value); }
+        public bool GvcPresent   { get => _gvcPresent;   private set => SetProperty(ref _gvcPresent, value); }
+        public bool GvcConnected { get => _gvcConnected; private set => SetProperty(ref _gvcConnected, value); }
 
         // ── 헤드(Meteor PCC) 연결 상태 ─────────────────────────────────────
         // 상태바 4번째 점(HEAD). MeteorSpit 배선 전엔 데이터 소스가 없어 회색(미연결).
@@ -520,6 +537,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private bool? _lastIoConnected;
         private bool? _lastMotionConnected;
         private bool? _lastVisionConnected;
+        private bool? _lastDwcConnected;
+        private bool? _lastGvcConnected;
 
         private void UpdateIOStates()
         {
@@ -599,9 +618,34 @@ namespace IJPSystem.Platform.HMI.ViewModels
             MotionConnected = machine.Motion?.IsConnected ?? false;
             VisionConnected = machine.Vision?.IsConnected ?? false;
 
+            UpdateCameraLinks(machine.Vision);
+
             LogLinkChange("IO",     IOConnected,     ref _lastIoConnected);
             LogLinkChange("Motion", MotionConnected, ref _lastMotionConnected);
             LogLinkChange("Vision", VisionConnected, ref _lastVisionConnected);
+            if (DwcPresent) LogLinkChange(DwcName, DwcConnected, ref _lastDwcConnected);
+            if (GvcPresent) LogLinkChange(GvcName, GvcConnected, ref _lastGvcConnected);
+        }
+
+        /// <summary>
+        /// 상태바의 카메라별 점을 갱신한다. VisionConfig 에 없는 카메라는 Present=false(회색)로 둔다 —
+        /// "설정에 없음"과 "설정은 있는데 연결 실패"를 색으로 구분할 수 있어야 한다.
+        /// </summary>
+        private void UpdateCameraLinks(IVisionDriver? vision)
+        {
+            var list = vision?.GetAllStatus();
+            if (list == null) { DwcPresent = GvcPresent = false; return; }
+
+            CameraStatus? Find(string name) =>
+                list.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+
+            var dwc = Find(DwcName);
+            DwcPresent   = dwc != null;
+            DwcConnected = dwc?.IsConnected ?? false;
+
+            var gvc = Find(GvcName);
+            GvcPresent   = gvc != null;
+            GvcConnected = gvc?.IsConnected ?? false;
         }
 
         // 드라이버 링크 끊김/복구를 변화 시점에만 기록. 첫 관측은 기준값만 잡고 로그하지 않는다

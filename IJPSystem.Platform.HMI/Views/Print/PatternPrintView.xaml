@@ -366,12 +366,12 @@
 
                                     <!-- T 축 -->
                                     <StackPanel Margin="10,0,0,0">
-                                        <Button Style="{StaticResource JogBtn}" Content="↑ +T" Margin="0,0,0,6"
+                                        <Button Style="{StaticResource JogBtn}" Content="↻ +T" Margin="0,0,0,6"
                                                 Tag="T" IsEnabled="{Binding AxisT.CanJog, FallbackValue=False}"
                                                 PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
                                         <TextBlock Text="T" Foreground="#C084FC" FontWeight="Bold" FontSize="13"
                                                    HorizontalAlignment="Center"/>
-                                        <Button Style="{StaticResource JogBtn}" Content="↓ -T" Margin="0,6,0,0"
+                                        <Button Style="{StaticResource JogBtn}" Content="↺ -T" Margin="0,6,0,0"
                                                 Tag="T" IsEnabled="{Binding AxisT.CanJog, FallbackValue=False}"
                                                 PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"/>
                                     </StackPanel>

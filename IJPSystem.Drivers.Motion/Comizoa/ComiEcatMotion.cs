@@ -294,6 +294,13 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             rc     = ecmSxSt_SetPosition(NetID, (int)a, ecmCNT_FEED, pos, out err);      CheckCmd(rc, err, "SetPosition(FEED)");
         }
 
+        public void SetHomeDirection(AxisId a, int dir)
+        {
+            // 드라이브 설정(ecmHomeCfg_*)은 건드리지 않는다 — 방향은 ecmHomeMot_MoveStart 인자라
+            // 여기 저장해 두었다가 Home() 이 그대로 넘긴다. Init 전에도 호출 가능.
+            _homeDir[a] = dir >= 0 ? +1 : -1;
+        }
+
         public void SetHomeSpeedPattern(AxisId a, double vel, double acc, double dec, double specVel)
         {
             Need();

@@ -331,12 +331,47 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
         private bool _isStepJogging = false;
 
-        public async Task JogMoveAsync(bool isForward, double speedScale = 1.0)
-        {
-            var profile = Info.MotionConfig.Jog;
-            double vel = profile.Velocity * Math.Max(0.01, speedScale);
+        // 조그 프로파일 기본값 — 레시피에 해당 축의 조그 속도가 없을 때만 쓰인다.
+        // Move 기본(20)보다 느리게 잡는다. 조그는 사람이 누르고 있는 동안 움직이는 수동 조작이라
+        // '안 움직여서 못 쓰는' 것보다 '느리게라도 움직이는' 쪽이 낫고, 빠른 건 위험하다.
+        private const double DefaultJogVelocity = 10.0;
+        private const double DefaultJogAccel    = 100.0;
+        private bool _jogProfileWarned;
 
-            if (IsJogContinuity)
+        // 조그 속도/가감속 해석.
+        // Jog 프로파일은 레시피(RecipeDetails_Motor)에서 채워지므로, 레시피에 그 축 행이 없으면 0 이 된다.
+        // 속도 0 으로 명령을 내리면 드라이브가 모션을 시작하지 않아 '명령은 나갔는데 안 움직이는' 상태가 된다
+        // — T·DW 축처럼 레시피에 등록되지 않은 축에서 실제로 발생. Move 쪽과 같은 방식으로 보정하고,
+        // 조그는 연타 대상이라 경고는 축당 1회만 남긴다.
+        private Profile ResolveJogProfile()
+        {
+            var p = Info.MotionConfig.Jog;
+            if (p.Velocity > 0 && p.Acceleration > 0 && p.Deceleration > 0) return p;
+
+            double v = p.Velocity     > 0 ? p.Velocity     : DefaultJogVelocity;
+            double a = p.Acceleration > 0 ? p.Acceleration : DefaultJogAccel;
+            double d = p.Deceleration > 0 ? p.Deceleration : DefaultJogAccel;
+
+            if (!_jogProfileWarned)
+            {
+                _jogProfileWarned = true;
+                _mainViewModel.AddLog(
+                    $"[MOTION] {Info.Name} 조그 프로파일 미설정(vel={p.Velocity}) — 기본값(vel={v}, acc={a}, dec={d}) 적용. " +
+                    "레시피 모터 속도를 설정하세요.", LogLevel.Warning);
+            }
+            return new Profile { Velocity = v, Acceleration = a, Deceleration = d };
+        }
+
+        // stepOverride : 화면이 정한 스텝(그 축의 논리단위, 0=연속). null 이면 축 자체의 JogUnit 을 쓴다(기존 화면들).
+        //                위치 티칭 화면은 축이 아니라 화면이 스텝 모드를 들고 있어 이 인자로 넘긴다.
+        public async Task JogMoveAsync(bool isForward, double speedScale = 1.0, double? stepOverride = null)
+        {
+            var profile = ResolveJogProfile();
+            double vel  = profile.Velocity * Math.Max(0.01, speedScale);
+            double step = stepOverride ?? JogUnit;
+            string unit = string.IsNullOrWhiteSpace(Info.Unit) ? "mm" : Info.Unit;
+
+            if (step <= 0)
             {
                 string direction = isForward ? "Forward(+)" : "Backward(-)";
                 _mainViewModel.AddLog($"[MOTION] Jog: {Info.Name} {direction} ×{speedScale:F2}");
@@ -349,8 +384,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 try
                 {
                     string direction = isForward ? "+" : "-";
-                    _mainViewModel.AddLog($"[MOTION] Jog: {Info.Name} Step {direction}{JogUnit:F3}mm ×{speedScale:F2}");
-                    double distance = isForward ? JogUnit : -JogUnit;
+                    _mainViewModel.AddLog($"[MOTION] Jog: {Info.Name} Step {direction}{step:F3}{unit} ×{speedScale:F2}");
+                    double distance = isForward ? step : -step;
                     await _driver.MoveRel(Info.AxisNo, distance, vel, profile.Acceleration, profile.Deceleration);
                 }
                 finally

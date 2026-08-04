@@ -27,9 +27,10 @@
         </Border>
 
         <Grid Grid.Row="1">
+            <!-- 좌(축 리스트)는 좁히고 우(조작부)를 넓힌다 — 조그 패드에 DW 축이 붙어 폭이 더 필요하다. -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="420"/>
+                <ColumnDefinition Width="560"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Background="#1E293B" CornerRadius="10" BorderBrush="#334155" BorderThickness="1" Margin="0,0,10,0">
@@ -187,14 +188,13 @@
                 </Grid>
             </Border>
 
-            <ScrollViewer Grid.Column="1"
-                          VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled">
-            <Grid>
+            <!-- 스크롤뷰어 제거 — JOG CONTROL 이 남는 높이를 먹고 늘어나야 좌/우 아래끝이 맞는다.
+                 (스크롤뷰어 안에서는 높이가 무한대로 측정돼 * 행이 Auto 처럼 동작한다) -->
+            <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
                     <Border Grid.Row="0" Background="#1E293B" CornerRadius="10" Padding="15,15,15,10" Margin="0,0,0,5" BorderBrush="#334155" BorderThickness="1">
@@ -311,39 +311,9 @@
                                                      Background="#0F172A" Foreground="#22C55E" BorderThickness="0"/>
                                     </Grid>
                                 </StackPanel>
-                            <Separator Background="#334155" Margin="1,5"/>
-                            <StackPanel>
-                                <Grid Margin="0,0,0,5">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Button Grid.Column="0"
-                                            Tag="SEL"
-                                            PreviewMouseDown="JogBackward_MouseDown"
-                                            PreviewMouseUp="JogStop_MouseUp" Margin="0,0,4,0"
-                                            IsEnabled="{Binding SelectedAxis.CanJog, FallbackValue=False}"
-                                            Background="#334155" BorderBrush="#475569" Height="35"
-                                            Style="{StaticResource ModernActionButton}">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="◀" Margin="0,0,5,0" FontSize="10" VerticalAlignment="Center"/>
-                                            <TextBlock Text="JOG -" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Grid.Column="1"
-                                            Tag="SEL"
-                                            PreviewMouseDown="JogForward_MouseDown"
-                                            PreviewMouseUp="JogStop_MouseUp" Margin="4,0,0,0"
-                                            IsEnabled="{Binding SelectedAxis.CanJog, FallbackValue=False}"
-                                            Background="#334155" BorderBrush="#475569" Height="35"
-                                            Style="{StaticResource ModernActionButton}">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="JOG +" VerticalAlignment="Center"/>
-                                            <TextBlock Text="▶" Margin="5,0,0,0" FontSize="10" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                    </Button>
-                                </Grid>
-                            </StackPanel>
+                            <!-- 선택 축 JOG −/+ 버튼 제거(2026-08-04).
+                                 아래 JOG CONTROL 이 축별 버튼을 전부 갖게 되어 중복이고,
+                                 '지금 선택된 축이 뭔지' 를 확인해야 눌러볼 수 있어 오조작 여지가 있었다. -->
                         </StackPanel>
                     </Border>
                     <Border Grid.Row="2" Background="#1E293B" CornerRadius="10" Padding="12" BorderBrush="#334155" BorderThickness="1" MinHeight="240">
@@ -351,10 +321,24 @@
                             <TextBlock DockPanel.Dock="Top" Text="JOG CONTROL" Style="{StaticResource SectionTitleStyle}" Margin="0,0,0,8"/>
                             <!-- Jog 단위 -->
                             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6" HorizontalAlignment="Right">
+                                <!-- 스텝은 '선택 축'이 아니라 화면이 들고 있다(JogStepFor). 한 버튼이 직선축·회전축
+                                     값을 함께 뜻하고, 누른 축의 단위에 맞는 쪽이 적용된다.
+                                     ※ ModernModeButtonStyle 은 Width=65 고정이라 글자가 잘린다 →
+                                       Width=Auto + Content 를 TextBlock 으로 줘 여백을 만든다
+                                       (템플릿 Border 가 Padding 을 쓰지 않아 Padding 만으로는 안 된다). -->
                                 <TextBlock Text="UNIT" Foreground="#64748B" FontSize="9" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <RadioButton Content="Cont."  IsChecked="{Binding SelectedAxis.IsUnitContinuity, Mode=TwoWay}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}"/>
-                                <RadioButton Content="10µm"   IsChecked="{Binding SelectedAxis.IsUnit10um,       Mode=TwoWay}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}" Margin="4,0"/>
-                                <RadioButton Content="100µm"  IsChecked="{Binding SelectedAxis.IsUnit100um,      Mode=TwoWay}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}"/>
+                                <RadioButton IsChecked="{Binding IsJogContinuity, Mode=TwoWay}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}"
+                                             Width="Auto" Height="30" ToolTip="누르고 있는 동안 연속 이동">
+                                    <TextBlock Text="Cont." Margin="14,0"/>
+                                </RadioButton>
+                                <RadioButton IsChecked="{Binding IsStepFine, Mode=TwoWay}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}" Margin="4,0"
+                                             Width="Auto" Height="30" ToolTip="직선축 0.01mm · 회전축(T) 0.1도씩 이동">
+                                    <TextBlock Text="10µm / 0.1°" Margin="14,0"/>
+                                </RadioButton>
+                                <RadioButton IsChecked="{Binding IsStepCoarse, Mode=TwoWay}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}"
+                                             Width="Auto" Height="30" ToolTip="직선축 0.1mm · 회전축(T) 1도씩 이동">
+                                    <TextBlock Text="100µm / 1°" Margin="14,0"/>
+                                </RadioButton>
                             </StackPanel>
                             <!-- 속도 배율 -->
                             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,8">
@@ -437,51 +421,86 @@
                                 </Grid>
                             </Border>
 
-                            <!-- ── Z 축 ── -->
-                            <Border Grid.Column="1" Background="#111827" Padding="6" CornerRadius="8" Margin="0,0,8,0" BorderBrush="#1F2937" BorderThickness="1">
-                                <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="Z" Foreground="#64748B" FontSize="10" FontWeight="Bold"
-                                               HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                    <Button Tag="Z" FontSize="15"
-                                            PreviewMouseDown="JogBackward_MouseDown"
-                                            PreviewMouseUp="JogStop_MouseUp"
-                                            Style="{StaticResource JogControlStyle}"
-                                            IsEnabled="{Binding AxisZ.CanJog, FallbackValue=False}"
-                                            Content="↑  -Z"/>
-                                    <Button Tag="Z" FontSize="15"
-                                            PreviewMouseDown="JogForward_MouseDown"
-                                            PreviewMouseUp="JogStop_MouseUp"
-                                            Style="{StaticResource JogControlStyle}"
-                                            IsEnabled="{Binding AxisZ.CanJog, FallbackValue=False}"
-                                            Content="↓  +Z"/>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- ── T 축 ── -->
-                            <Border Grid.Column="2" Background="#111827" Padding="6" CornerRadius="8" BorderBrush="#1F2937" BorderThickness="1">
-                                <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="T" Foreground="#64748B" FontSize="10" FontWeight="Bold"
-                                               HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                        <Button Tag="T" FontSize="15"
-                                            PreviewMouseDown="JogBackward_MouseDown"
-                                            PreviewMouseUp="JogStop_MouseUp"
-                                            Style="{StaticResource JogControlStyle}"
-                                            IsEnabled="{Binding AxisT.CanJog, FallbackValue=False}"
-                                            Content="▼  -T"/>
-                                        <Button Tag="T" FontSize="15"
-                                            PreviewMouseDown="JogForward_MouseDown"
-                                            PreviewMouseUp="JogStop_MouseUp"
-                                            Style="{StaticResource JogControlStyle}"
-                                            IsEnabled="{Binding AxisT.CanJog, FallbackValue=False}"
-                                            Content="▲  +T"/>
-                                </StackPanel>
-                            </Border>
+                            <!-- ── X/Y 를 뺀 나머지 축(Z/T/DW-X/DW-Y…) — 축 수만큼 자동 생성 ──
+                                 예전엔 Z/T 만 하드코딩돼 있어 DW 축은 이 화면에서 조작할 수 없었다.
+                                 ※ Tag 가 없어도 된다 — 코드비하인드 ResolveAxis 가 버튼의 DataContext(=축)를 먼저 본다.
+                                 기호는 축 성격을 따른다: 회전축(Unit=deg) ↺/↻, Z 는 기계방향대로 ↑(−)/↓(+),
+                                 나머지 직선축은 ◀/▶. -->
+                            <ItemsControl Grid.Column="1" ItemsSource="{Binding JogAxisList}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#111827" Padding="6" CornerRadius="8" Margin="0,0,8,0"
+                                                BorderBrush="#1F2937" BorderThickness="1">
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Info.AxisNo}" Foreground="#64748B" FontSize="10" FontWeight="Bold"
+                                                           HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                                <Button FontSize="15"
+                                                        PreviewMouseDown="JogBackward_MouseDown"
+                                                        PreviewMouseUp="JogStop_MouseUp"
+                                                        Style="{StaticResource JogControlStyle}"
+                                                        IsEnabled="{Binding CanJog, FallbackValue=False}">
+                                                    <Button.Content>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock VerticalAlignment="Center" Margin="0,0,6,0">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Text" Value="◀"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Info.Unit}" Value="deg">
+                                                                                <Setter Property="Text" Value="↺"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding Info.AxisNo}" Value="Z">
+                                                                                <Setter Property="Text" Value="↑"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBlock Text="{Binding Info.AxisNo, StringFormat={}-{0}}" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button.Content>
+                                                </Button>
+                                                <Button FontSize="15"
+                                                        PreviewMouseDown="JogForward_MouseDown"
+                                                        PreviewMouseUp="JogStop_MouseUp"
+                                                        Style="{StaticResource JogControlStyle}"
+                                                        IsEnabled="{Binding CanJog, FallbackValue=False}">
+                                                    <Button.Content>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock VerticalAlignment="Center" Margin="0,0,6,0">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Text" Value="▶"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Info.Unit}" Value="deg">
+                                                                                <Setter Property="Text" Value="↻"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding Info.AxisNo}" Value="Z">
+                                                                                <Setter Property="Text" Value="↓"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBlock Text="{Binding Info.AxisNo, StringFormat={}+{0}}" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button.Content>
+                                                </Button>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </Grid>
                         </Viewbox>
                     </DockPanel>
                 </Border>
             </Grid>
-            </ScrollViewer>
         </Grid>
     </Grid>
 </UserControl>

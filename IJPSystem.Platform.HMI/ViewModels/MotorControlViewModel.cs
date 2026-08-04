@@ -23,15 +23,44 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set => SetProperty(ref _selectedAxis, value);
         }
 
-        // D-패드 조그 버튼(X/Y/Z/T)의 IsEnabled 바인딩용 — 코드비하인드 ResolveAxis와 동일하게
-        // 이름에 해당 축 문자가 포함된 축을 찾는다. (각 축의 CanMove로 활성화 제어)
+        // XY D-패드 조그 버튼의 IsEnabled 바인딩용. (각 축의 CanJog로 활성화 제어)
         public AxisViewModel? AxisX => ResolveByTag("X");
         public AxisViewModel? AxisY => ResolveByTag("Y");
-        public AxisViewModel? AxisZ => ResolveByTag("Z");
-        public AxisViewModel? AxisT => ResolveByTag("T");
+
+        // ★AxisNo 정확히 일치를 먼저 본다. 이름 포함(Contains)만으로 찾으면 "DW-X AXIS" 도 "X" 에 걸려,
+        //   config 순서가 바뀌면 X 패드가 DW-X 를 움직인다. 포함 검색은 옛 이름 표기를 위한 폴백으로만 남긴다.
+        //   ※ 코드비하인드 ResolveAxis 도 같은 규칙이어야 한다(표시와 동작이 갈리면 안 됨).
         private AxisViewModel? ResolveByTag(string tag) =>
-            AxisList.FirstOrDefault(a => a.Info?.Name != null &&
+            AxisList.FirstOrDefault(a => string.Equals(a.Info?.AxisNo, tag, StringComparison.OrdinalIgnoreCase))
+            ?? AxisList.FirstOrDefault(a => a.Info?.Name != null &&
                 a.Info.Name.IndexOf(tag, StringComparison.OrdinalIgnoreCase) >= 0);
+
+        // XY 패드가 X/Y 를 담당하므로 나머지 축(Z/T/DW-X/DW-Y…)만 조그 버튼으로 만든다.
+        // AxisList 기반이라 3축 장비면 Z 하나, 9호기(6축)면 4개가 자동으로 나온다.
+        public IEnumerable<AxisViewModel> JogAxisList =>
+            AxisList.Where(a => a.Info.AxisNo is not ("X" or "Y"));
+
+        // ── 조그 스텝 모드 ───────────────────────────────────────────────────────
+        // 예전에는 '선택 축(SelectedAxis)'이 이 상태를 들고, 조그할 때 대상 축으로 복사했다.
+        // 화면에 안 보이는 축에 따라 같은 라디오의 의미가 달라지는 구조라 화면(=이 VM) 소유로 올린다.
+        // 규칙은 위치 티칭 화면과 공유한다 → Common/JogStep.cs (미세=10µm/0.1°, 거침=100µm/1°)
+        private JogStepMode _jogStep = JogStepMode.Continuous;
+
+        public bool IsJogContinuity { get => _jogStep == JogStepMode.Continuous; set { if (value) SetJogStep(JogStepMode.Continuous); } }
+        public bool IsStepFine      { get => _jogStep == JogStepMode.Fine;       set { if (value) SetJogStep(JogStepMode.Fine); } }
+        public bool IsStepCoarse    { get => _jogStep == JogStepMode.Coarse;     set { if (value) SetJogStep(JogStepMode.Coarse); } }
+
+        private void SetJogStep(JogStepMode mode)
+        {
+            if (_jogStep == mode) return;
+            _jogStep = mode;
+            OnPropertyChanged(nameof(IsJogContinuity));
+            OnPropertyChanged(nameof(IsStepFine));
+            OnPropertyChanged(nameof(IsStepCoarse));
+        }
+
+        /// <summary>이 축에 적용할 조그 스텝(축의 논리단위). 0 = 연속(Cont.).</summary>
+        public double JogStepFor(AxisViewModel axis) => JogStep.For(_jogStep, axis.Info.Unit);
        
         public ICommand AllServoOnCommand  { get; }
         public ICommand AllServoOffCommand { get; }

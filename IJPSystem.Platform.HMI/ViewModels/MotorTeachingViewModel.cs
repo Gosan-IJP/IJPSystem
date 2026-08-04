@@ -19,12 +19,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly MainViewModel _mainVM;
         private readonly string _connectionString;
 
-        // 축별 PropertyChanged 핸들러 저장 (Cleanup 시 해제용)
-        private readonly List<(AxisViewModel Axis, PropertyChangedEventHandler Handler)> _axisHandlers = new();
-
         private ObservableCollection<TeachingPoint> _teachingPoints = new();
         private TeachingPoint? _selectedTeachingPoint;
-        private AxisViewModel? _selectedAxis;
         private readonly RelayCommand _moveToPointCommand;
 
         #region Properties
@@ -45,34 +41,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
-        public AxisViewModel? SelectedAxis
-        {
-            get => _selectedAxis;
-            set
-            {
-                if (_selectedAxis != null)
-                    _selectedAxis.PropertyChanged -= OnSelectedAxisPropertyChanged;
-
-                SetProperty(ref _selectedAxis, value);
-
-                if (_selectedAxis != null)
-                    _selectedAxis.PropertyChanged += OnSelectedAxisPropertyChanged;
-
-                OnPropertyChanged(nameof(ActualPosition));
-                OnPropertyChanged(nameof(IsJogContinuity));
-                OnPropertyChanged(nameof(IsUnit10um));
-                OnPropertyChanged(nameof(IsUnit100um));
-                _moveToPointCommand.RaiseCanExecuteChanged();
-            }
-        }
-
-        private void OnSelectedAxisPropertyChanged(object? _, PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName == nameof(AxisViewModel.Status) || e.PropertyName == nameof(AxisViewModel.CurrentPos))
-                OnPropertyChanged(nameof(ActualPosition));
-        }
-
         public ObservableCollection<AxisViewModel> AxisList => _mainVM.SharedAxisList;
+
+        // XY 패드가 X/Y 를 담당하므로, 나머지 축(Z/T/DW-X/DW-Y…)만 버튼으로 만들어 준다.
+        // AxisList 기반이라 3축 장비면 2개, 9호기(6축)면 4개가 자동으로 나온다 — 화면은 축 수를 모른다.
+        public IEnumerable<AxisViewModel> JogAxisList =>
+            AxisList.Where(a => a.Info.AxisNo is not ("X" or "Y"));
 
         // 현재 편집 중인 레시피 (데이터 로드/저장 기준)
         public string EditingRecipeName => _mainVM.RecipeVM.SelectedRecipeName;
@@ -83,54 +57,28 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 편집 레시피와 적용 레시피가 다를 때 true
         public bool IsRecipeMismatch => EditingRecipeName != ActiveRecipeName;
 
-        // SELECT AXIS 패널의 실시간 위치 (선택된 축)
-        public double ActualPosition => _selectedAxis?.Status?.CurrentPos ?? 0.0;
+        // ── 조그 스텝 모드 ───────────────────────────────────────────────────────
+        // 예전에는 SELECT AXIS 콤보의 '선택 축'이 이 상태를 들고 있었다. 화면에 보이지도 않는 축에 따라
+        // 같은 라디오의 의미가 달라져서, 콤보를 없애면서 스텝 모드를 화면(=이 VM) 소유로 올렸다.
+        //
+        // 스텝 규칙(미세=10µm/0.1°, 거침=100µm/1°)은 축 제어 화면과 공유한다 → Common/JogStep.cs
+        private JogStepMode _jogStep = JogStepMode.Continuous;
 
-        // XYZQ AXIS CONTROL 패널의 실시간 위치
-        public double XActualPosition => GetAxisCurrentPos("X");
-        public double YActualPosition => GetAxisCurrentPos("Y");
-        public double ZActualPosition => GetAxisCurrentPos("Z");
-        public double TActualPosition => GetAxisCurrentPos("T");
+        public bool IsJogContinuity { get => _jogStep == JogStepMode.Continuous; set { if (value) SetJogStep(JogStepMode.Continuous); } }
+        public bool IsStepFine      { get => _jogStep == JogStepMode.Fine;       set { if (value) SetJogStep(JogStepMode.Fine); } }
+        public bool IsStepCoarse    { get => _jogStep == JogStepMode.Coarse;     set { if (value) SetJogStep(JogStepMode.Coarse); } }
 
-        private double GetAxisCurrentPos(string axisNo) =>
-            AxisList.FirstOrDefault(a => a.Info.AxisNo == axisNo)?.Status?.CurrentPos ?? 0.0;
-
-        // Jog 모드 패스스루
-        public bool IsJogContinuity
+        private void SetJogStep(JogStepMode mode)
         {
-            get => _selectedAxis?.IsJogContinuity ?? true;
-            set
-            {
-                if (_selectedAxis != null) _selectedAxis.IsJogContinuity = value;
-                OnPropertyChanged(nameof(IsJogContinuity));
-                OnPropertyChanged(nameof(IsUnit10um));
-                OnPropertyChanged(nameof(IsUnit100um));
-            }
+            if (_jogStep == mode) return;
+            _jogStep = mode;
+            OnPropertyChanged(nameof(IsJogContinuity));
+            OnPropertyChanged(nameof(IsStepFine));
+            OnPropertyChanged(nameof(IsStepCoarse));
         }
 
-        public bool IsUnit10um
-        {
-            get => _selectedAxis?.IsUnit10um ?? false;
-            set
-            {
-                if (_selectedAxis != null) _selectedAxis.IsUnit10um = value;
-                OnPropertyChanged(nameof(IsJogContinuity));
-                OnPropertyChanged(nameof(IsUnit10um));
-                OnPropertyChanged(nameof(IsUnit100um));
-            }
-        }
-
-        public bool IsUnit100um
-        {
-            get => _selectedAxis?.IsUnit100um ?? false;
-            set
-            {
-                if (_selectedAxis != null) _selectedAxis.IsUnit100um = value;
-                OnPropertyChanged(nameof(IsJogContinuity));
-                OnPropertyChanged(nameof(IsUnit10um));
-                OnPropertyChanged(nameof(IsUnit100um));
-            }
-        }
+        /// <summary>이 축에 적용할 조그 스텝(축의 논리단위). 0 = 연속(Conti).</summary>
+        public double JogStepFor(AxisViewModel axis) => JogStep.For(_jogStep, axis.Info.Unit);
 
         #endregion
 
@@ -145,25 +93,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // RecipeViewModel과 동일한 DB를 참조 (경로 중복 계산 제거)
             _connectionString = _mainVM.RecipeVM.DbConnectionString;
 
-            // MoveToPointCommand: 행과 축이 모두 선택되었을 때만 활성화
+            // MoveToPointCommand: 티칭 행이 선택되면 활성화.
+            // (예전엔 '선택 축'도 조건이었는데, OnMoveToPoint 는 AxisList 전체를 이동시키므로 무관했다)
             _moveToPointCommand = new RelayCommand(
                 async _ => await OnMoveToPoint(),
-                _ => _selectedTeachingPoint != null && _selectedAxis != null);
+                _ => _selectedTeachingPoint != null);
 
-            // SelectedAxis 설정 (CanExecute 알림 전에 커맨드 생성 필요)
-            SelectedAxis = AxisList.FirstOrDefault();
-
-            // 모든 축의 위치 변화 → XYZQ 패널 실시간 갱신
-            foreach (var axis in AxisList)
-            {
-                PropertyChangedEventHandler handler = (_, e) =>
-                {
-                    if (e.PropertyName == nameof(AxisViewModel.Status) || e.PropertyName == nameof(AxisViewModel.CurrentPos))
-                        NotifyAxisPositionsChanged();
-                };
-                axis.PropertyChanged += handler;
-                _axisHandlers.Add((axis, handler));
-            }
+            // ※ 축 위치 카드는 AxisViewModel.CurrentPos 에 직접 바인딩한다(자체 PropertyChanged).
+            //    화면이 축 이름을 알 필요가 없어져서, 축별 중계 핸들러도 필요 없다.
 
             // 레시피 변경 감지 → 헤더 표시 실시간 갱신
             _mainVM.RecipeVM.PropertyChanged += OnRecipeVmPropertyChanged;
@@ -172,14 +109,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ApplyCurrentToPointCommand = new RelayCommand(_ => OnApplyCurrentPosition());
 
             // 데이터 로드는 View.Loaded 에서 수행 (중복 호출 방지)
-        }
-
-        private void NotifyAxisPositionsChanged()
-        {
-            OnPropertyChanged(nameof(XActualPosition));
-            OnPropertyChanged(nameof(YActualPosition));
-            OnPropertyChanged(nameof(ZActualPosition));
-            OnPropertyChanged(nameof(TActualPosition));
         }
 
         private void OnRecipeVmPropertyChanged(object? _, PropertyChangedEventArgs e)
@@ -393,15 +322,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// <summary>View가 Unloaded될 때 호출 — 이벤트 구독 전체 해제</summary>
         public void Cleanup()
         {
-            // 축별 XYZQ 위치 핸들러 해제
-            foreach (var (axis, handler) in _axisHandlers)
-                axis.PropertyChanged -= handler;
-            _axisHandlers.Clear();
-
-            // 선택 축 핸들러 해제
-            if (_selectedAxis != null)
-                _selectedAxis.PropertyChanged -= OnSelectedAxisPropertyChanged;
-
             // 레시피 변경 핸들러 해제
             _mainVM.RecipeVM.PropertyChanged -= OnRecipeVmPropertyChanged;
         }
