@@ -17,7 +17,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
 {
     public class GlassViewModel : ViewModelBase, IDisposable
     {
-        private const string CamId = "CAM_02";
+        // 글라스뷰 카메라 ID. 표준은 CAM_GV 이고, 옛 표기(CAM_02)로 적힌 config 도 받아준다.
+        //   CameraId 는 이름이 아니라 드라이버 조회 키(CaptureAsync/GetStatus/SetLight)라
+        //   코드 상수와 그 PC 의 VisionConfig 가 정확히 같아야 한다. 저장소만 바꾸면 아직
+        //   옛 ID 로 적힌 장비(0호기)가 조용히 '미연결'로 뜬다 — 그래서 실행 시점에 해석한다.
+        //   ※ 두 장비 config 를 모두 CAM_GV 로 갱신하면 NewCamId 만 남기고 폴백을 지울 것.
+        private const string NewCamId = "CAM_GV";
+        private const string OldCamId = "CAM_02";
+
+        private readonly string CamId;   // 실제 config 에서 찾은 ID (없으면 NewCamId)
 
         private readonly IVisionDriver _vision;
         private readonly MainViewModel _mainVM;
@@ -201,10 +209,37 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand LightOffCommand   { get; }
         public ICommand OpenImageCommand  { get; }
 
+        /// <summary>
+        /// VisionConfig 에 실제로 들어 있는 글라스뷰 카메라 ID 를 고른다 — CAM_GV 우선, 없으면 옛 CAM_02.
+        /// 둘 다 없으면 표준 ID 를 그대로 쓴다(미연결로 표시되고, 로그로 원인을 알 수 있게 한다).
+        /// </summary>
+        private static string ResolveCamId(IVisionDriver vision, MainViewModel mainVM)
+        {
+            var ids = vision?.GetAllStatus()?.Select(s => s.CameraId).ToList();
+            if (ids == null || ids.Count == 0) return NewCamId;
+
+            if (ids.Any(id => string.Equals(id, NewCamId, StringComparison.OrdinalIgnoreCase)))
+                return NewCamId;
+
+            if (ids.Any(id => string.Equals(id, OldCamId, StringComparison.OrdinalIgnoreCase)))
+            {
+                mainVM.AddLog(
+                    $"[VISION] 글라스뷰 카메라를 옛 ID '{OldCamId}' 로 찾았습니다 — " +
+                    $"VisionConfig.json 의 CameraId 를 '{NewCamId}' 로 갱신하세요.", LogLevel.Warning);
+                return OldCamId;
+            }
+
+            mainVM.AddLog(
+                $"[VISION] VisionConfig 에 글라스뷰 카메라('{NewCamId}'/'{OldCamId}')가 없습니다 — 미연결로 표시됩니다.",
+                LogLevel.Warning);
+            return NewCamId;
+        }
+
         public GlassViewModel(MainViewModel mainVM)
         {
             _mainVM = mainVM;
             _vision = mainVM.GetController().GetMachine().Vision;
+            CamId   = ResolveCamId(_vision, mainVM);
 
             StartLiveCommand  = new RelayCommand(_ => StartLive(),              _ => !IsLiveMode && !IsBusy);
             StopLiveCommand   = new RelayCommand(_ => StopLive(),               _ => IsLiveMode);

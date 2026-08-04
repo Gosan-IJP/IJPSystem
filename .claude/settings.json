@@ -351,7 +351,9 @@
       "Bash(perl -0pi -e 's/\\(Grid.Column=\"0\" Height=\"\\)64\\(\" MinWidth=\"90\"\\)/${1}72${2}/g; s/\\(Grid.Column=\"2\" Height=\"\\)64\\(\" MinWidth=\"90\"\\)/${1}72${2}/g' IJPSystem.Platform.HMI/Views/Maintenance/Motor/MotorTeachingView.xaml)",
       "Bash(perl -0pi -e 's/Height=\"72\" MinWidth=\"90\"/Height=\"72\" MinWidth=\"76\"/g' IJPSystem.Platform.HMI/Views/Maintenance/Motor/MotorTeachingView.xaml)",
       "Bash(perl -0pi -e 's/Width        = 105,/Width        = 100,/; s/Width = 140,/Width = 130,/' IJPSystem.Platform.HMI/Views/Maintenance/Motor/MotorTeachingView.xaml.cs)",
-      "Bash(perl -0pi -e 's/Width        = 100,/Width        = 120,/' IJPSystem.Platform.HMI/Views/Maintenance/Motor/MotorTeachingView.xaml.cs)"
+      "Bash(perl -0pi -e 's/Width        = 100,/Width        = 120,/' IJPSystem.Platform.HMI/Views/Maintenance/Motor/MotorTeachingView.xaml.cs)",
+      "Bash(perl -0pi -e 's/<ColumnDefinition Width=\"40\"\\\\/>\\\\r?\\\\n\\(\\\\s+\\)<ColumnDefinition Width=\"130\"\\\\/>/<ColumnDefinition Width=\"150\"\\\\/>/g' IJPSystem.Platform.HMI/Views/Maintenance/Motor/MotorControlView.xaml)",
+      "Bash(perl -0pi -e 's/CAM_02/CAM_GV/g' IJPSystem.Tests/CompositeVisionDriverTests.cs)"
     ],
     "additionalDirectories": [
       "d:\\tmp",

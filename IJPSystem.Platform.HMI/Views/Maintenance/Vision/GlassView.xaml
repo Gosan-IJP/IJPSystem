@@ -58,8 +58,10 @@
                     <Grid>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="🔭" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="GLASS VIEW  —  CAM_02" Foreground="White"
-                                       FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+                            <!-- ID 를 박아두면 config 와 어긋났을 때 화면이 거짓말을 한다 →
+                                 실제로 붙잡은 카메라의 ID 를 그대로 보여준다(CAM_GV / 옛 CAM_02). -->
+                            <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"
+                                       Text="{Binding CamStatus.CameraId, StringFormat=GLASS VIEW  —  {0}, FallbackValue=GLASS VIEW}"/>
                             <Border Margin="12,0,0,0" CornerRadius="6" Padding="8,3">
                                 <Border.Style>
                                     <Style TargetType="Border">

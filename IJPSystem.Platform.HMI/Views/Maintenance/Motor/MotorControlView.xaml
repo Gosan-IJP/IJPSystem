@@ -70,24 +70,23 @@
                     <Border Grid.Row="0" Background="#243146" CornerRadius="10,10,0,0">
                         <Grid Margin="10,0">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="40"/>
-                                <ColumnDefinition Width="130"/>
+                                <ColumnDefinition Width="150"/>
                                 <ColumnDefinition Width="140"/>
                                 <ColumnDefinition Width="130"/>
                                 <ColumnDefinition Width="110"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="AXIS" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
-                            <TextBlock Grid.Column="1" Text="MOTOR NAME" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
+                            <!-- AXIS 열 삭제 — MOTOR NAME 이 "X AXIS" 라 축 이름이 두 번 나온다. -->
+                            <TextBlock Grid.Column="0" Text="MOTOR NAME" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
 
-                            <TextBlock Grid.Column="2"
+                            <TextBlock Grid.Column="1"
                                        Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <Run Text="STATUS " FontSize="11"/>
                                 <Run Text="(Servo/Orgin/InPos)" FontSize="9"/>
                             </TextBlock>
-                            <TextBlock Grid.Column="3" Text="MOTOR SENSOR" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
-                            <TextBlock Grid.Column="4" Text="POSITION(mm,deg)" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
-                            <TextBlock Grid.Column="5" Text="ACTION" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
+                            <TextBlock Grid.Column="2" Text="MOTOR SENSOR" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
+                            <TextBlock Grid.Column="3" Text="POSITION(mm,deg)" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
+                            <TextBlock Grid.Column="4" Text="ACTION" Foreground="#94A3B8" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11"/>
                         </Grid>
 
                     </Border>
@@ -116,43 +115,43 @@
                                         </Border.Style>
                                         <Grid Margin="10,0">
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="40"/>
-                                                <ColumnDefinition Width="130"/>
+                                                <ColumnDefinition Width="150"/>
                                                 <ColumnDefinition Width="140"/>
                                                 <ColumnDefinition Width="130"/>
                                                 <ColumnDefinition Width="110"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
 
-                                            <TextBlock Grid.Column="0" Text="{Binding Info.AxisNo}" Foreground="White" VerticalAlignment="Center" HorizontalAlignment="Center" FontFamily="Consolas"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding Info.Name}" Foreground="#CBD5E1" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0" FontSize="12"/>
+                                            <TextBlock Grid.Column="0" Text="{Binding Info.Name}" Foreground="#CBD5E1" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="10,0" FontSize="12"/>
 
-                                            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                 <Ellipse Width="10" Height="10" Margin="4,0" Fill="{Binding Status.IsServoOn, Converter={StaticResource SignalToColorConverter}}" ToolTip="Servo On"/>
                                                 <Ellipse Width="10" Height="10" Margin="4,0" Fill="{Binding Status.IsHomeDone, Converter={StaticResource SignalToColorConverter}}" ToolTip="Home Done"/>
                                                 <Ellipse Width="10" Height="10" Margin="4,0" Fill="{Binding Status.IsInPosition, Converter={StaticResource SignalToColorConverter}}" ToolTip="In Position"/>
                                             </StackPanel>
 
-                                            <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <Border Width="32" Height="16" CornerRadius="4" Margin="3,0" Background="{Binding Status.UpperLimit, Converter={StaticResource SensorToBgConverter}}" ToolTip="상한 리미트(+EL)">
-                                                    <TextBlock Text="상한" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            <!-- 리미트 표기를 CW/CCW 로 — 회전축(T)에는 상한/하한이 말이 안 되고,
+                                                 드라이브/코미조아 문서도 CW(+EL) / CCW(−EL) 로 부른다. -->
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Border Width="34" Height="16" CornerRadius="4" Margin="3,0" Background="{Binding Status.UpperLimit, Converter={StaticResource SensorToBgConverter}}" ToolTip="CW 리미트(+EL) — 플러스 방향 끝">
+                                                    <TextBlock Text="CW" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
-                                                <Border Width="32" Height="16" CornerRadius="4" Margin="3,0" Background="{Binding Status.LowerLimit, Converter={StaticResource SensorToBgConverter}}" ToolTip="하한 리미트(-EL)">
-                                                    <TextBlock Text="하한" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <Border Width="34" Height="16" CornerRadius="4" Margin="3,0" Background="{Binding Status.LowerLimit, Converter={StaticResource SensorToBgConverter}}" ToolTip="CCW 리미트(−EL) — 마이너스 방향 끝">
+                                                    <TextBlock Text="CCW" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                                 <Border Width="38" Height="16" CornerRadius="4" Margin="3,0" Background="{Binding Status.HomeSensor, Converter={StaticResource SensorToBgConverter}}" ToolTip="Home Sensor">
                                                     <TextBlock Text="HOME" Foreground="White" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                             </StackPanel>
 
-                                            <Border Grid.Column="4" Background="#0F172A" CornerRadius="4" Height="28" Margin="5,0" BorderBrush="#334155" BorderThickness="1">
+                                            <Border Grid.Column="3" Background="#0F172A" CornerRadius="4" Height="28" Margin="5,0" BorderBrush="#334155" BorderThickness="1">
                                                 <TextBlock Text="{Binding Status.CurrentPos, StringFormat={}{0:F3}}"
                                                Foreground="#22C55E" FontWeight="Bold" FontFamily="Consolas" 
                                                VerticalAlignment="Center" HorizontalAlignment="Right" 
                                                Margin="8,0" FontSize="13"/>
                                             </Border>
 
-                                            <StackPanel Grid.Column="5" Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Center">
                                                 <!-- 축별 조그(누르는 동안 이동) — DataContext(행 축) 기반이라 축 개수 무관 -->
                                                 <Button Content="◀" Width="30" Margin="2" FontSize="12" FontWeight="Bold"
                                                         PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
@@ -256,39 +255,74 @@
                             </Grid>
                             <Separator Background="#334155" Margin="1,5"/>
                             <StackPanel>
-                                    <Grid Margin="0,0,0,10">
-                                        <TextBlock Text="Moving Method" Foreground="#94A3B8" VerticalAlignment="Center" FontSize="11"/>
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                            <RadioButton Content="ABS" 
-                                                         IsChecked="{Binding SelectedAxis.IsAbsMode, Mode=TwoWay}" 
-                                                         GroupName="MoveMethod"
-                                                         Style="{StaticResource ModernModeButtonStyle}"/>
-                                            <RadioButton Content="INC" 
-                                                         IsChecked="{Binding SelectedAxis.IsIncMode, Mode=TwoWay}" 
-                                                         Margin="5,0,0,0" 
-                                                         GroupName="MoveMethod"
-                                                         Style="{StaticResource ModernModeButtonStyle}"/>
-                                        </StackPanel>
-                                    </Grid>
-                                    <Grid Margin="0,0,0,12">
-                                        <TextBlock Text="Target Position" Foreground="#94A3B8" VerticalAlignment="Center" FontSize="11"/>
-                                        <Border Background="#0F172A" CornerRadius="4" BorderBrush="#334155" BorderThickness="1" HorizontalAlignment="Right" Width="120" Height="28">
-                                            <TextBox Text= "{Binding SelectedAxis.TargetPosition, UpdateSourceTrigger=PropertyChanged}" 
-                                                     Background="Transparent" Foreground="White" BorderThickness="0" 
-                                                     VerticalContentAlignment="Center" HorizontalContentAlignment="Right" Padding="5"/>
-                                        </Border>
-                                    </Grid>
-                                    <Grid>
+                                    <!-- 이동 조건(ABS/INC · 목표값)은 왼쪽에 쌓고, 실행 버튼은 그 오른쪽에 세로로 붙인다.
+                                         조건을 훑고 바로 옆에서 실행하는 흐름이고, 아래로 내려 두면 폭이 남아 글자가 잘렸다.
+                                         버튼은 상황에 따라 이동/정지가 바뀐다 — 정지는 이동 중에만 의미가 있고,
+                                         멈춰 있을 때 떠 있으면 눌러도 아무 일이 없어 오해를 준다.
+                                         ※ 비상정지는 위 MASTER CONTROL 의 All STOP 이 담당한다 — 이 버튼과 무관하게 항상 있다. -->
+                                    <Grid Margin="0,0,0,4">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition/>
-                                            <ColumnDefinition/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <Button Grid.Column="0" Content="{DynamicResource Btn_Move}" Command="{Binding SelectedAxis.MoveAbsCommand}"
-                                                Background="#10B981" BorderBrush="#10B981" Margin="0,0,4,0" Height="35"
-                                                Style="{StaticResource ModernActionButton}"/>
-                                        <Button Grid.Column="1" Content="{DynamicResource Btn_Stop}" Command="{Binding SelectedAxis.StopCommand}"
-                                                Background="#F87171" BorderBrush="#EF4444" Margin="4,0,0,0" Height="35"
-                                                Style="{StaticResource ModernActionButton}"/>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <Grid Grid.Row="0" Grid.Column="0" Margin="0,0,12,10">
+                                            <TextBlock Text="Moving Method" Foreground="#94A3B8" VerticalAlignment="Center" FontSize="11"/>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                <RadioButton Content="ABS"
+                                                             IsChecked="{Binding SelectedAxis.IsAbsMode, Mode=TwoWay}"
+                                                             GroupName="MoveMethod"
+                                                             Style="{StaticResource ModernModeButtonStyle}"/>
+                                                <RadioButton Content="INC"
+                                                             IsChecked="{Binding SelectedAxis.IsIncMode, Mode=TwoWay}"
+                                                             Margin="5,0,0,0"
+                                                             GroupName="MoveMethod"
+                                                             Style="{StaticResource ModernModeButtonStyle}"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
+                                            <TextBlock Text="Target Position" Foreground="#94A3B8" VerticalAlignment="Center" FontSize="11"/>
+                                            <Border Background="#0F172A" CornerRadius="4" BorderBrush="#334155" BorderThickness="1" HorizontalAlignment="Right" Width="120" Height="28">
+                                                <TextBox Text= "{Binding SelectedAxis.TargetPosition, UpdateSourceTrigger=PropertyChanged}"
+                                                         Background="Transparent" Foreground="White" BorderThickness="0"
+                                                         VerticalContentAlignment="Center" HorizontalContentAlignment="Right" Padding="5"/>
+                                            </Border>
+                                        </Grid>
+
+                                        <Grid Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Width="150">
+                                        <Button Height="66" Command="{Binding SelectedAxis.MoveAbsCommand}"
+                                                Background="#10B981" BorderBrush="#10B981">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource ModernActionButton}">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding SelectedAxis.IsMoveActive}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <!-- Btn_Move/Btn_Stop 문자열에 이미 ▶/■ 기호가 들어 있다(언어 리소스).
+                                                 대상 축은 바로 위 Select Axis 콤보에 있으므로 버튼에 또 적지 않는다. -->
+                                            <TextBlock Text="{DynamicResource Btn_Move}" FontSize="14" FontWeight="Bold"/>
+                                        </Button>
+
+                                        <!-- 이동 중에만 나타나는 정지 -->
+                                        <Button Height="66" Command="{Binding SelectedAxis.StopCommand}"
+                                                Background="#F87171" BorderBrush="#EF4444"
+                                                Style="{StaticResource ModernActionButton}"
+                                                Visibility="{Binding SelectedAxis.IsMoveActive,
+                                                             Converter={StaticResource BooleanToVisibilityConverter},
+                                                             FallbackValue=Collapsed}">
+                                            <!-- 남은 거리는 아래 DISTANCE TO GO 패널이 이미 보여준다. -->
+                                            <TextBlock Text="{DynamicResource Btn_Stop}" FontSize="14" FontWeight="Bold"/>
+                                        </Button>
+                                        </Grid>
                                     </Grid>
 
                                     <!-- Move 진행률 / 남은거리 (이동 중에만 표시) -->

@@ -88,34 +88,34 @@ namespace IJPSystem.Tests
         [Fact]
         public void 카메라별_Driver_지정이_전역설정보다_우선한다()
         {
-            var (drv, fakes) = Build("ebus", Cam("CAM_DW"), Cam("CAM_02", "hikrobot"));
+            var (drv, fakes) = Build("ebus", Cam("CAM_DW"), Cam("CAM_GV", "hikrobot"));
 
             Assert.Equal(new[] { "CAM_DW" }, fakes["ebus"].Assigned);
-            Assert.Equal(new[] { "CAM_02" }, fakes["hikrobot"].Assigned);
+            Assert.Equal(new[] { "CAM_GV" }, fakes["hikrobot"].Assigned);
             _ = drv;
         }
 
         [Fact]
         public async Task 촬영이_담당_드라이버로_라우팅된다()
         {
-            var (drv, fakes) = Build("ebus", Cam("CAM_DW"), Cam("CAM_02", "hikrobot"));
+            var (drv, fakes) = Build("ebus", Cam("CAM_DW"), Cam("CAM_GV", "hikrobot"));
 
             // FilePath 에 실린 키로 어느 드라이버가 처리했는지 확인한다.
             Assert.Equal("ebus",     (await drv.CaptureAsync("CAM_DW")).FilePath);
-            Assert.Equal("hikrobot", (await drv.CaptureAsync("CAM_02")).FilePath);
+            Assert.Equal("hikrobot", (await drv.CaptureAsync("CAM_GV")).FilePath);
 
             Assert.Equal(new[] { "CAM_DW" }, fakes["ebus"].Captured);
-            Assert.Equal(new[] { "CAM_02" }, fakes["hikrobot"].Captured);
+            Assert.Equal(new[] { "CAM_GV" }, fakes["hikrobot"].Captured);
         }
 
         [Fact]
         public void 같은_드라이버를_쓰는_카메라는_인스턴스를_공유한다()
         {
             // 카메라마다 인스턴스를 만들면 같은 네트워크를 중복 열거하고 장치 점유가 충돌한다.
-            var (_, fakes) = Build("ebus", Cam("CAM_DW"), Cam("CAM_02"), Cam("CAM_03", "hikrobot"));
+            var (_, fakes) = Build("ebus", Cam("CAM_DW"), Cam("CAM_GV"), Cam("CAM_03", "hikrobot"));
 
             Assert.Equal(2, fakes.Count);
-            Assert.Equal(new[] { "CAM_DW", "CAM_02" }, fakes["ebus"].Assigned);
+            Assert.Equal(new[] { "CAM_DW", "CAM_GV" }, fakes["ebus"].Assigned);
         }
 
         [Fact]
@@ -132,16 +132,16 @@ namespace IJPSystem.Tests
         public void 상태목록은_설정_순서를_유지한다()
         {
             // 하위 드라이버별로 모아 내면 화면 카메라 목록 순서가 뒤바뀐다.
-            var (drv, _) = Build("ebus", Cam("CAM_02", "hikrobot"), Cam("CAM_DW"), Cam("CAM_03", "hikrobot"));
+            var (drv, _) = Build("ebus", Cam("CAM_GV", "hikrobot"), Cam("CAM_DW"), Cam("CAM_03", "hikrobot"));
 
-            Assert.Equal(new[] { "CAM_02", "CAM_DW", "CAM_03" },
+            Assert.Equal(new[] { "CAM_GV", "CAM_DW", "CAM_03" },
                          drv.GetAllStatus().Select(s => s.CameraId));
         }
 
         [Fact]
         public void 하나라도_연결되면_IsConnected_는_참이다()
         {
-            var (drv, fakes) = Build("ebus", Cam("CAM_DW"), Cam("CAM_02", "hikrobot"));
+            var (drv, fakes) = Build("ebus", Cam("CAM_DW"), Cam("CAM_GV", "hikrobot"));
 
             fakes["ebus"].Connected = false;
             Assert.True(drv.IsConnected);          // hikrobot 은 살아 있음
@@ -153,7 +153,7 @@ namespace IJPSystem.Tests
         [Fact]
         public void 파라미터_설정이_해당_카메라의_드라이버에만_적용된다()
         {
-            var (drv, fakes) = Build("ebus", Cam("CAM_DW"), Cam("CAM_02", "hikrobot"));
+            var (drv, fakes) = Build("ebus", Cam("CAM_DW"), Cam("CAM_GV", "hikrobot"));
 
             drv.SetExposure("CAM_DW", 0.5);
             Assert.Equal(0.5, fakes["ebus"].Exposure);
