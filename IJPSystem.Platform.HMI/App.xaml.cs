@@ -278,6 +278,26 @@ namespace IJPSystem.Platform.HMI
             // 카메라별 Driver 지정(VisionConfig)이 우선, 없으면 전역 DriverMode.Vision.
             // 9호기처럼 벤더가 섞이면(JAI=eBUS / 하이크로봇=별도) 카메라마다 달라진다.
             string global = DriverMode(d => d.Vision);
+
+            // ★단 Virtual 은 예외 — 카메라별 지정보다 전역이 이긴다.
+            //   Virtual 은 "이 PC 에는 하드웨어가 없다"는 선언이라, 카메라별 Driver 가 이기면
+            //   개발 PC 에서 벤더 SDK(MVS 등)를 로드하려다 실패하고 그 카메라만 미연결로 남는다.
+            //   시뮬레이션이 목적인데 일부만 가상이 되는 셈이라 전 카메라를 가상으로 내린다.
+            if (global == "virtual")
+            {
+                var overridden = root.VisionCameraList
+                                     .Where(c => !string.IsNullOrWhiteSpace(c.Driver))
+                                     .Select(c => $"{c.CameraId}={c.Driver}")
+                                     .ToList();
+                if (overridden.Count > 0)
+                    LoggerService.WriteToFile("INFO",
+                        $"[VISION] DriverMode.Vision=Virtual — VisionConfig 의 카메라별 Driver 무시(전 카메라 가상): {string.Join(", ", overridden)}");
+
+                var virtualDriver = CreateVisionDriver("virtual");
+                virtualDriver.Initialize(root.VisionCameraList);
+                return virtualDriver;
+            }
+
             var keys = root.VisionCameraList
                            .Select(c => CompositeVisionDriver.ResolveKey(c, global))
                            .Distinct(StringComparer.OrdinalIgnoreCase)

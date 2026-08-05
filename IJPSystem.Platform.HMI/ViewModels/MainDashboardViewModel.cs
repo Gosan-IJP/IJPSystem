@@ -179,23 +179,36 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
+        // 알람으로 멈춘 것인지(=STOP 버튼으로 멈춘 것과 구분). 알람 해제 시 자동 재개하지 않기 위해 필요.
+        private bool _pausedByAlarm;
+        // 현재 알람이 떠 있는지 — 알람 상태에서 START 를 눌러 재개하는 것을 막는다.
+        private bool _alarmActive;
+
         // MainViewModel 이 AlarmVM.HasActiveAlarm 변경 시 호출
         public void OnAlarmActiveChanged(bool isAlarmActive)
         {
+            _alarmActive = isAlarmActive;
+            (StartCommand as RelayCommand)?.RaiseCanExecuteChanged();
+
             if (!IsRunning) return;
 
             if (isAlarmActive && !IsPaused)
             {
                 IsPaused = true;
+                _pausedByAlarm = true;
                 StopAllMotion();
-                // 진행 중 step 의 await 를 즉시 깨움 → 외부 루프가 게이트에서 대기 후 같은 step 재시도
+                // 진행 중 step 의 await 를 즉시 깨움 → 외부 루프가 게이트에서 대기
                 _stepCts?.Cancel();
                 _logAction?.Invoke(T("Log_AutoPrintAlarmPause"), LogLevel.Warning);
             }
-            else if (!isAlarmActive && IsPaused)
+            else if (!isAlarmActive && IsPaused && _pausedByAlarm)
             {
-                IsPaused = false;
-                _logAction?.Invoke(T("Log_AutoPrintAlarmResume"), LogLevel.Info);
+                // ★알람이 풀려도 자동으로 재개하지 않는다(실장 2026-08-04).
+                //   예전엔 여기서 게이트를 열어, 알람 이력 화면에서 해제하는 순간
+                //   조작자가 메인 화면을 보고 있지 않은 상태로 설비가 다시 움직였다.
+                //   재개는 반드시 사람이 메인 화면에서 START 를 누르거나 초기화를 실행해야 한다.
+                _pausedByAlarm = false;
+                _logAction?.Invoke(T("Log_AutoPrintAlarmResume"), LogLevel.Warning);
             }
         }
 
@@ -439,9 +452,16 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // 연속 여부는 IsContinuousMode 토글로 결정(별도 연속 버튼 없음).
             StartCommand = new RelayCommand(async _ =>
             {
+                // 알람이 떠 있는 동안에는 시작도 재개도 막는다 — 원인을 두고 다시 움직이면 안 된다.
+                if (_alarmActive)
+                {
+                    _logAction?.Invoke(T("Log_AutoPrintAlarmBlocked"), LogLevel.Warning);
+                    return;
+                }
                 if (IsRunning && IsPaused)
                 {
                     IsPaused = false;
+                    _pausedByAlarm = false;
                     _logAction?.Invoke(T("Log_AutoPrintResume"), LogLevel.Info);
                     return;
                 }
@@ -452,7 +472,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         _logAction?.Invoke(T("Log_AutoPrintContinuousStart"), LogLevel.Info);
                     await RunAutoPrintAsync();
                 }
-            }, _ => !IsRunning || IsPaused);
+            }, _ => !_alarmActive && (!IsRunning || IsPaused));   // 알람 중에는 버튼 자체를 비활성
 
             // STOP 은 취소가 아니라 일시정지 — 현재 step 끝까지 마무리 후 다음 step 진입 전 멈춤. 재시작은 START.
             // 연속 토글도 함께 끔 → 재개 시 현재 사이클까지만 마치고 반복 종료(연속 취소를 시각적으로도 반영).
@@ -698,6 +718,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 IsRunning = false;
                 IsPaused  = false;     // 다음 런을 위해 게이트 해제
+                _pausedByAlarm = false;
                 CurrentStepNumber = 0;
                 IsVacuumOn = _machine.IsGlassDetected();
                 _stepCts?.Dispose();
@@ -723,6 +744,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _resettingForInit = true;
             IsContinuousMode  = false;   // 연속 토글 OFF(반복 중단)
             IsPaused          = false;   // 일시정지 게이트 해제 → 루프가 취소를 감지
+            _pausedByAlarm    = false;   // 알람으로 멈춘 런도 초기화로 확실히 끝낸다
             _stepCts?.Cancel();
             _cts?.Cancel();
 

@@ -353,8 +353,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
             else
             {
+                // 한 포트(COM12)에 조명 컨트롤러가 2대라 카메라로 대상을 지목한다(sID 는 config).
                 _strobeCfg = new ConfigLoader().LoadStrobeConfig(PathUtils.GetConfigPath("StrobeConfig.json"));
-                _strobe    = new ICoreStrobe(_strobeCfg);
+                _strobe    = new ICoreStrobe(_strobeCfg, CamId);
             }
 
             // 트리거 체인 — 실장은 NI-DAQmx 어댑터, 가상은 가상 카메라의 트리거 시뮬레이션을 구동.
@@ -469,9 +470,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 bool next = !IsStrobeOn;
                 _strobe.Enable(next);
                 IsStrobeOn = next;
-                // EnableRegister 미설정(-1) 장비면 Enable 은 no-op — 커미셔닝 중임을 로그로 상기.
-                _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 발광 {(next ? "ON" : "OFF")} 명령 " +
-                               "(StrobeConfig.EnableRegister 미설정이면 장비는 무시)", LogLevel.Info);
+                // Operation(0x300) 을 쓰고 리드백까지 확인한다 — 실패하면 위 Enable 이 예외를 던진다.
+                // 그래도 불이 안 들어오면 컨트롤러의 LED Enable(채널) 이 꺼진 것(Configurator 전용 설정).
+                _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 발광 {(next ? "ON" : "OFF")} " +
+                               "(불이 안 들어오면 iPulse Configurator 의 LED Enable 채널 확인)", LogLevel.Info);
             }
             catch (Exception ex)
             {
@@ -493,9 +495,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 if (_strobeReady)
                 {
                     IsStrobeOn = true;   // 연결 시 Enable(true)로 켠 상태와 동기화
+                    // sID 는 카메라별 배정이라 config 전체가 아니라 이 컨트롤러 인스턴스에서 읽는다.
                     string port = _strobeCfg != null
-                        ? $" ({_strobeCfg.ComPort}, {_strobeCfg.BaudRate}bps, Unit {_strobeCfg.UnitId}, " +
-                          $"Reg 0x{_strobeCfg.DelayRegister:X4})"
+                        ? $" ({_strobeCfg.ComPort}, {_strobeCfg.BaudRate}bps, sID {(_strobe as ICoreStrobe)?.UnitId}, " +
+                          $"Delay Reg 0x{_strobeCfg.DelayRegister:X3} {(_strobeCfg.DelayIsFloat32 ? "float32" : "int")})"
                         : "";
                     _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 연결됨(포트 열림){port} — 장비 응답은 Delay 적용/리드백으로 확인",
                                    LogLevel.Info);

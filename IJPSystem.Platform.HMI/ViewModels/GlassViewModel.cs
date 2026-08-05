@@ -1,5 +1,7 @@
 using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Common;
+using IJPSystem.Platform.Infrastructure.Config;
+using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;   // iCore 조명 컨트롤러(글라스뷰 조명)
 using IJPSystem.Platform.Domain.Enums;
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.Vision;
@@ -286,6 +288,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 라이브 틱 재진입 방지 플래그 — IsBusy 와 분리한 이유: IsBusy 는 "⏳ 처리 중" 표시에
         // 바인딩되어 있어, 틱마다 켜고 끄면 초당 5회 깜빡인다(실장 피드백 2026-07-23).
         private bool _liveTicking;
+        private readonly Vision.LiveFrameBuffer _liveBuffer = new();
 
         private async Task LiveTickAsync()
         {
@@ -298,7 +301,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 var image = await _vision.CaptureAsync(CamId, saveToDisk: false);
                 if (image.IsValid)
                 {
-                    var frame = Vision.VisionDriverImageSource.FromPixels(image);
+                    // 같은 버퍼에 덮어쓴다 — 프레임마다 새 비트맵을 만들면 대형 객체 힙이 불어나
+                    // Gen2 수집으로 화면이 끊긴다. (DispatcherTimer 틱이라 여기는 UI 스레드다)
+                    var frame = _liveBuffer.Write(image);
                     if (frame != null) CurrentFrame = frame;
                     CaptureCount++;
                 }
@@ -337,11 +342,64 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
 
         // ── 조명 ON/OFF ───────────────────────────────────────────────────────
+        // 글라스뷰 조명은 iCore iPulse LED 컨트롤러(COM12, sID 는 StrobeConfig)가 켠다.
+        // Operation(0x300)=1(Continuous) 로 상시 점등 — 외부 트리거(0호기의 NI 카운터 펄스)가 필요 없다.
+        //
+        // ※ 이전에는 _vision.SetLight() 만 불렀는데, 실장 드라이버(eBUS/Hikrobot)의 SetLight 는
+        //   상태 플래그만 바꾸고 하드웨어로 나가지 않는다 — 화면 LED 만 켜지고 조명은 그대로였다.
+        //   카메라 상태 표시는 유지하되(화면 LED), 실제 점등은 컨트롤러가 담당한다.
         private void ExecuteLight(bool on)
         {
             _vision.SetLight(CamId, on);
             if (on) _vision.SetLightIntensity(CamId, LightIntensity);
             CamStatus = _vision.GetStatus(CamId);
+
+            if (!EnsureStrobe()) return;
+            try
+            {
+                _strobe!.Enable(on);
+                _mainVM.AddLog($"[VISION] Glass: 조명 {(on ? "ON" : "OFF")} (sID {(_strobe as ICoreStrobe)?.UnitId})",
+                               LogLevel.Info);
+            }
+            catch (Exception ex)
+            {
+                _strobeReady = false;
+                _mainVM.AddLog($"[VISION] Glass: 조명 {(on ? "ON" : "OFF")} 실패 — {ex.Message}", LogLevel.Error);
+            }
+        }
+
+        // 조명 컨트롤러 지연 연결. COM 포트가 없거나 다른 프로그램(iPulse Configurator)이 점유 중이어도
+        // 화면은 떠야 하므로 실패를 허용하고, 다음 조작에서 다시 시도한다.
+        private IStrobeController? _strobe;
+        private bool _strobeReady;
+
+        private bool EnsureStrobe()
+        {
+            if (_strobeReady && _strobe?.IsConnected == true) return true;
+            try
+            {
+                if (_strobe == null)
+                {
+                    // 가상 비전이면 조명도 가상 — 개발 PC 에서 COM 포트를 찾지 않는다.
+                    if (_vision is IJPSystem.Drivers.Vision.VirtualVisionDriver)
+                        _strobe = new VirtualStrobe();
+                    else
+                        _strobe = new ICoreStrobe(
+                            new ConfigLoader().LoadStrobeConfig(PathUtils.GetConfigPath("StrobeConfig.json")),
+                            CamId);
+                }
+                _strobe.Init();
+                _strobeReady = true;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _strobeReady = false;
+                _mainVM.AddLog(
+                    $"[VISION] Glass: 조명 컨트롤러 연결 실패 — {ex.Message} " +
+                    "(iPulse Configurator 가 포트를 점유 중이면 Port Close 후 재시도)", LogLevel.Warning);
+                return false;
+            }
         }
 
         // ── 이미지 파일 열기 ──────────────────────────────────────────────────

@@ -22,6 +22,49 @@ namespace IJPSystem.Platform.HMI.Vision
         bool IsOpen { get; }
     }
 
+    /// <summary>
+    /// 라이브 프리뷰용 프레임 버퍼. 같은 WriteableBitmap 을 계속 재사용해 픽셀만 덮어쓴다.
+    ///
+    /// 프레임마다 BitmapSource.Create 로 새로 만들면 1280×1024 기준 1.3MB 가 매번 대형 객체 힙에
+    /// 잡히고(85KB 초과), 초당 5장이면 Gen2 수집이 잦아져 화면이 끊긴다. 재사용하면 할당이 0 이다.
+    ///
+    /// ※ UI 스레드 전용. WriteableBitmap 은 Freeze 할 수 없고 만든 스레드에서만 쓸 수 있다 —
+    ///   DispatcherTimer 틱에서 호출할 것(await 뒤에도 UI 컨텍스트로 돌아온다).
+    /// </summary>
+    public sealed class LiveFrameBuffer
+    {
+        private WriteableBitmap? _bmp;
+        private int _w, _h, _bpp;
+
+        /// <summary>픽셀을 써 넣고 화면에 바인딩할 소스를 돌려준다. 버퍼/포맷이 맞지 않으면 null.</summary>
+        public BitmapSource? Write(VisionImage img)
+        {
+            if (img.PixelData == null || img.Width <= 0 || img.Height <= 0) return null;
+
+            var fmt = img.BitsPerPixel switch
+            {
+                8  => System.Windows.Media.PixelFormats.Gray8,
+                24 => System.Windows.Media.PixelFormats.Bgr24,
+                32 => System.Windows.Media.PixelFormats.Bgra32,
+                _  => default(System.Windows.Media.PixelFormat),
+            };
+            if (fmt == default) return null;
+
+            int stride = img.Width * (img.BitsPerPixel / 8);
+            if (img.PixelData.Length < stride * img.Height) return null;   // 버퍼 부족 — 포맷 불일치
+
+            // 해상도나 포맷이 바뀌면(ROI 변경 등) 새로 만든다.
+            if (_bmp == null || _w != img.Width || _h != img.Height || _bpp != img.BitsPerPixel)
+            {
+                _bmp = new WriteableBitmap(img.Width, img.Height, 96, 96, fmt, null);
+                _w = img.Width; _h = img.Height; _bpp = img.BitsPerPixel;
+            }
+
+            _bmp.WritePixels(new Int32Rect(0, 0, img.Width, img.Height), img.PixelData, stride, 0);
+            return _bmp;
+        }
+    }
+
     /// <summary>가상 뷰 소스 — 카메라 없이 회색 배경 + 노이즈 더미 프레임 생성. (Virtual 모드용)</summary>
     public sealed class VirtualImageSource : IImageSource
     {

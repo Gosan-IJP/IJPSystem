@@ -365,7 +365,8 @@
 
     <!-- AUTO PRINT Sequence -->
     <system:String x:Key="Log_AutoPrintAlarmPause">[AUTO PRINT] Alarm raised — motion stopped, sequence paused</system:String>
-    <system:String x:Key="Log_AutoPrintAlarmResume">[AUTO PRINT] Alarm cleared — resuming</system:String>
+    <system:String x:Key="Log_AutoPrintAlarmResume">[AUTO PRINT] Alarm cleared — NOT resuming automatically. Press START on the main screen or run Initialize</system:String>
+    <system:String x:Key="Log_AutoPrintAlarmBlocked">[AUTO PRINT] Cannot start while an alarm is active — clear the alarm first, then press START</system:String>
     <system:String x:Key="Log_AutoPrintStopMotionError">[AUTO PRINT] Motion stop error: {0}</system:String>
     <system:String x:Key="Log_AutoPrintResume">[AUTO PRINT] Resumed — continuing from next step</system:String>
     <system:String x:Key="Log_AutoPrintStopPause">[AUTO PRINT] STOP — pausing after current step completes (press START to resume)</system:String>

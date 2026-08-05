@@ -428,6 +428,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
             Report("IO",     m.IO,     m.IO?.IsConnected     ?? false);
             Report("MOTION", m.Motion, m.Motion?.IsConnected ?? false);
             Report("VISION", m.Vision, m.Vision?.IsConnected ?? false);
+
+            // 카메라가 여러 대면 위 한 줄로는 부족하다 — CompositeVisionDriver 의 연결=OK 는
+            // '한 대라도 붙었다'는 뜻이라, 한쪽만 실패해도 전체가 정상으로 읽힌다.
+            // 어느 카메라가 빠졌는지 여기서 이름으로 남긴다.
+            var cams = m.Vision?.GetAllStatus();
+            if (cams != null && cams.Count > 1)
+                foreach (var c in cams)
+                    AddLog($"[VISION] {c.CameraId}({c.Name}) — 연결={(c.IsConnected ? "OK" : "실패/미연결")}",
+                           c.IsConnected ? LogLevel.Info : LogLevel.Warning);
         }
 
         private void StartTimers()

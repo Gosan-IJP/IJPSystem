@@ -184,8 +184,12 @@
                         </Grid>
 
                         <!-- ② 캡처 이미지 (이미지 있을 때) -->
+                        <!-- ScalingMode 는 LowQuality(=쌍선형, GPU) 여야 한다. HighQuality(Fant)는 CPU
+                             소프트웨어 경로라, 프레임이 바뀔 때가 아니라 매 렌더 패스(60Hz)마다 1280×1024
+                             를 다시 리샘플링한다 → 렌더 스레드가 밀려 창 전체가 깜빡이고 화면이 찢어진다
+                             (실장 확인 2026-08-05). 어차피 축소 표시라 화질 차이는 눈에 띄지 않는다. -->
                         <Image Source="{Binding CurrentFrame}"
-                               Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
+                               Stretch="Uniform" RenderOptions.BitmapScalingMode="LowQuality"
                                Visibility="{Binding HasImage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
                         <!-- ③ 이미지 경로 표시 (좌상단 오버레이) -->
@@ -239,11 +243,12 @@
             <StackPanel>
 
                 <!-- ── 조명 제어 ───────────────────────────────────────────
-                     Pulse 장비에는 글라스뷰 조명 하드웨어가 없음(실장 확인 2026-07-23)
-                     → 기능은 유지하되 화면에서 숨김 (삭제하지 않음 — NJI/P&ID 와 동일 패턴) -->
+                     2026-07-23 에 "조명 하드웨어 없음"으로 판단해 숨겼었으나, 9호기 글라스뷰에는
+                     드랍와처와 별개로 전용 iCore iPulse LED 컨트롤러가 달려 있다(COM12, sID 는
+                     StrobeConfig.json). 0호기처럼 NI 카운터 펄스로 트리거하지 않고 Continuous 상시
+                     점등이라 이 버튼만으로 켜진다 → 다시 표시(2026-08-05). -->
                 <Border Background="#111827" CornerRadius="12" Padding="16" Margin="0,0,0,10"
-                        BorderBrush="#334155" BorderThickness="1"
-                        Visibility="Collapsed">
+                        BorderBrush="#334155" BorderThickness="1">
                     <StackPanel>
                         <TextBlock Text="LIGHT CONTROL" Foreground="#3B82F6"
                                    FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
@@ -303,7 +308,10 @@
                             </TextBlock>
                         </StackPanel>
 
-                        <Grid>
+                        <!-- 강도는 컨트롤러로 나가지 않는다. iPulse 매뉴얼에 밝기/정격전류 레지스터가
+                             없고, 정격을 넘기면 LED 가 파손된다 → 밝기는 iPulse Configurator 에서
+                             설정하고 Save Parameter. 슬라이더를 두면 "옮겼는데 안 변한다"가 되므로 숨김. -->
+                        <Grid Visibility="Collapsed">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>

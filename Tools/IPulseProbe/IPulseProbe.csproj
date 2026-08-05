@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    iCore iPulse LED 컨트롤러 진단 도구 (읽기 전용).
+
+    ※ 솔루션(IJPSystem.slnx)에는 넣지 않는다 — 실장 진단용이라 앱 빌드에 딸려갈 이유가 없다.
+      빌드/배포: Tools/IPulseProbe/README.md 참고.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>IJPSystem.Tools.IPulseProbe</RootNamespace>
+    <AssemblyName>IPulseProbe</AssemblyName>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NModbus" Version="3.0.81" />
+    <PackageReference Include="NModbus.Serial" Version="3.0.81" />
+    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -38,183 +38,172 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
     /// </summary>
     public sealed class StrobeConfig
     {
-        public string ComPort  { get; set; } = "COM4";
-        public int    BaudRate { get; set; } = 9600;
+        public string ComPort  { get; set; } = "COM12";
+        public int    BaudRate { get; set; } = 115200;
         public Parity Parity   { get; set; } = Parity.None;
         public int    DataBits { get; set; } = 8;
         public StopBits StopBits { get; set; } = StopBits.One;
         public int    TimeoutMs { get; set; } = 1000;
 
-        /// <summary>Modbus 슬레이브(Unit) ID.</summary>
-        public byte UnitId { get; set; } = 1;
+        /// <summary>
+        /// 운전 모드 레지스터(0x300). 0=OFF, 1=Continuous(상시 점등), 2=Pulse(트리거 스트로브).
+        /// 조명 ON/OFF 는 이 레지스터가 전부다 — 외부 트리거 없이 시리얼만으로 켜고 끌 수 있다.
+        /// </summary>
+        public ushort OperationRegister { get; set; } = 0x300;
 
-        /// <summary>Delay Time 홀딩 레지스터 시작 주소. (iCore_Set Delay time.vi = FC16)</summary>
-        public ushort DelayRegister { get; set; } = 0x0000;
+        /// <summary>Trigger Delay 레지스터(0x314). LabVIEW <c>iCore_Set Delay time.vi</c> 대상.</summary>
+        public ushort DelayRegister { get; set; } = 0x314;
 
         /// <summary>
-        /// µs 1단위당 레지스터 증분. 컨트롤러 분해능이 0.1µs 면 10, 1µs 면 1.
-        /// 이 값이 틀리면 지연이 통째로 배수만큼 어긋나 속도가 그 배수로 틀린다.
+        /// ★지연은 스케일 정수가 아니라 <b>IEEE-754 float32</b> 다(2026-08-05 실측 확정).
+        /// Duration 이 [0,16672] → 0x41200000 → 10.0 으로, Period 는 10000.0 으로 정확히 떨어졌다.
+        /// 정수로 쓰면 890 → 1.2e-42 가 되어 지연이 사실상 0 이 된다(이전 구현의 실패 원인).
         /// </summary>
-        public double RegisterScale { get; set; } = 1.0;
+        public bool DelayIsFloat32 { get; set; } = true;
 
-        /// <summary>
-        /// true 면 지연을 32bit(상위/하위 2워드)로 쓴다. 워드 순서는 장비에 맞춰
-        /// <see cref="HighWordFirst"/> 로 조정. false 면 16bit 단일 레지스터.
-        /// </summary>
-        public bool Use32BitDelay { get; set; } = false;
-
-        /// <summary>32bit 쓰기의 워드 순서(true=상위 먼저, big-endian 워드).</summary>
-        public bool HighWordFirst { get; set; } = true;
-
-        /// <summary>발광 on/off 레지스터 주소. 음수면 Enable() 은 no-op.</summary>
-        public int EnableRegister { get; set; } = -1;
+        /// <summary>32bit 워드 순서. 실측 결과 <b>하위 워드 먼저</b>(false).</summary>
+        public bool HighWordFirst { get; set; } = false;
 
         /// <summary>지연 변경 후 발광이 안정될 때까지의 대기[ms]. (LabVIEW SettleMs)</summary>
         public int SettleMs { get; set; } = 50;
+
+        /// <summary>
+        /// 카메라별 컨트롤러. 9호기는 <b>한 포트(COM12)에 2대</b>가 sID 로 구분돼 물려 있다.
+        /// 포트는 한 프로세스에서 한 번만 열 수 있으므로 <see cref="IPulseBus"/> 로 공유한다.
+        /// </summary>
+        public List<StrobeDeviceConfig> Devices { get; set; } = new();
+
+        /// <summary>카메라 ID 로 장비 설정을 찾는다. 없으면 목록의 첫 장비(단일 구성 호환).</summary>
+        public StrobeDeviceConfig? DeviceFor(string? cameraId) =>
+            Devices.FirstOrDefault(d => string.Equals(d.Camera, cameraId, StringComparison.OrdinalIgnoreCase))
+            ?? Devices.FirstOrDefault();
+    }
+
+    /// <summary>한 대의 iPulse 컨트롤러 배정.</summary>
+    public sealed class StrobeDeviceConfig
+    {
+        /// <summary>이 컨트롤러가 비추는 카메라의 CameraId (예: CAM_DW / CAM_GV).</summary>
+        public string Camera { get; set; } = "";
+
+        /// <summary>Modbus 슬레이브(sID) — 장비의 DIP-SW 로 정해진다.</summary>
+        public byte UnitId { get; set; } = 1;
+
+        /// <summary>
+        /// 이 조명을 켤 때 쓸 운전 모드. 드랍와처는 토출 동기가 필요해 Pulse(2),
+        /// 글라스뷰는 육안 조명이라 Continuous(1) 로 켠다.
+        /// </summary>
+        public ushort RunMode { get; set; } = 2;
     }
 
     // ---------- 구현 ----------
 
     /// <summary>
-    /// iCore 스트로브 컨트롤러 — Modbus RTU 구현.
-    /// LabVIEW <c>iCore_Set Delay time.vi</c> = Write Multiple Holding Registers(FC16) 에 대응한다.
-    /// ※ 지연은 촬영 스레드에서 연속 호출되므로 모든 트랜잭션을 _io 락으로 직렬화한다
-    ///   (<see cref="Meniscus.DmdModbusRtuClient"/> 와 동일 규약).
+    /// COM 포트 하나를 여러 iPulse 컨트롤러가 공유하는 버스.
+    ///
+    /// 9호기는 COM12 한 포트에 2대(sID1/sID2)가 물려 있는데, <b>COM 포트는 한 프로세스에서
+    /// 한 번만 열린다</b> — 컨트롤러마다 SerialPort 를 열면 두 번째가 실패한다.
+    /// 그래서 포트별로 인스턴스를 공유하고 참조 수로 수명을 관리한다.
+    /// 모든 트랜잭션은 락으로 직렬화한다(RS-485 반이중이라 겹치면 프레임이 깨진다).
     /// </summary>
-    public sealed class ICoreStrobe : IStrobeController
+    public sealed class IPulseBus : IDisposable
     {
-        private readonly StrobeConfig _cfg;
+        private static readonly Dictionary<string, IPulseBus> _shared = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly object _registry = new();
+
         private readonly object _io = new object();
+        private readonly string _key;
         private SerialPort? _port;
         private IModbusSerialMaster? _master;
+        private int _refCount;
 
-        public ICoreStrobe(StrobeConfig? cfg = null) => _cfg = cfg ?? new StrobeConfig();
+        private IPulseBus(string key) => _key = key;
 
-        public bool   IsConnected           => _master != null;
-        public double LastDelayMicroseconds { get; private set; } = double.NaN;
-
-        /// <summary>지연 변경 후 발광 안정 대기[ms]. 시퀀스가 이 값을 참조한다.</summary>
-        public int SettleMs => _cfg.SettleMs;
-
-        public void Init()
+        /// <summary>포트별 공유 인스턴스를 얻는다(없으면 열고, 있으면 참조만 늘린다).</summary>
+        public static IPulseBus Open(StrobeConfig cfg)
         {
-            Close();
-            _port = new SerialPort(_cfg.ComPort, _cfg.BaudRate, _cfg.Parity, _cfg.DataBits, _cfg.StopBits)
+            lock (_registry)
             {
-                ReadTimeout  = _cfg.TimeoutMs,
-                WriteTimeout = _cfg.TimeoutMs,
-            };
-            _port.Open();
-            _master = new ModbusFactory().CreateRtuMaster(_port);
+                if (!_shared.TryGetValue(cfg.ComPort, out var bus))
+                {
+                    bus = new IPulseBus(cfg.ComPort);
+                    _shared[cfg.ComPort] = bus;
+                }
+                bus.EnsureOpen(cfg);
+                bus._refCount++;
+                return bus;
+            }
         }
 
-        public void SetDelayMicroseconds(double us)
+        private void EnsureOpen(StrobeConfig cfg)
         {
-            if (us < 0) throw new ArgumentOutOfRangeException(nameof(us), "지연은 음수일 수 없습니다.");
-
-            uint raw = (uint)Math.Round(us * _cfg.RegisterScale);
-            // 16bit 레지스터를 넘기면 조용히 잘린 값이 써져 지연이 엉뚱해진다 → 명시적으로 실패시킨다.
-            if (!_cfg.Use32BitDelay && raw > ushort.MaxValue)
-                throw new ArgumentOutOfRangeException(nameof(us),
-                    $"지연 {us:F1}us(raw {raw}) 이 16bit 범위를 넘습니다. StrobeConfig.Use32BitDelay 를 켜세요.");
-
             lock (_io)
             {
-                EnsureConnected();
-                try { _port?.DiscardInBuffer(); } catch { /* 잔류 바이트 정리 실패 무시 */ }
-                try
+                if (_master != null) return;
+                _port = new SerialPort(cfg.ComPort, cfg.BaudRate, cfg.Parity, cfg.DataBits, cfg.StopBits)
                 {
-                    WriteRaw(raw);
-                }
-                catch (IOException ex) when (ex.Message.Contains("Checksum"))
-                {
-                    // 실장 iCore 는 쓰기 응답 프레임이 비표준([02][86][00][00][01] 등, CRC 불일치)이라
-                    // NModbus 검증에 걸린다(2026-07-23). 실제 반영 여부는 리드백(FC3, 정상 동작)으로
-                    // 판정한다 — 일치하면 쓰기 성공으로 간주하고 비표준 ACK 는 무시.
-                    try { _port?.DiscardInBuffer(); } catch { }
-                    uint? rb = ReadRawCore();
-                    if (rb != raw)
-                        throw new IOException(
-                            $"쓰기 응답 CRC 불일치 + 리드백 불일치(리드백 {(rb?.ToString() ?? "실패")}, 기대 {raw})", ex);
-                }
-            }
-            LastDelayMicroseconds = us;
-        }
-
-        /// <summary>지연 raw 값을 장비 형식(16/32bit)에 맞춰 쓴다. _io 락 안에서 호출.</summary>
-        private void WriteRaw(uint raw)
-        {
-            if (_cfg.Use32BitDelay)
-            {
-                ushort hi = (ushort)(raw >> 16), lo = (ushort)(raw & 0xFFFF);
-                _master!.WriteMultipleRegisters(_cfg.UnitId, _cfg.DelayRegister,
-                    _cfg.HighWordFirst ? new[] { hi, lo } : new[] { lo, hi });
-            }
-            else
-            {
-                // FC6(Write Single) — 실장 iCore 가 FC16 에도 비표준 응답을 주지만 단일 레지스터엔 FC6 이 자연스럽다.
-                _master!.WriteSingleRegister(_cfg.UnitId, _cfg.DelayRegister, (ushort)raw);
+                    ReadTimeout  = cfg.TimeoutMs,
+                    WriteTimeout = cfg.TimeoutMs,
+                };
+                _port.Open();
+                _master = new ModbusFactory().CreateRtuMaster(_port);
             }
         }
 
-        public void Enable(bool on)
+        public bool IsOpen => _master != null;
+
+        public ushort[]? ReadHolding(byte unit, ushort addr, ushort count)
         {
-            if (_cfg.EnableRegister < 0) return;   // 미배선 장비 — 발광은 상시 ON
             lock (_io)
             {
-                EnsureConnected();
-                _master!.WriteSingleRegister(_cfg.UnitId, (ushort)_cfg.EnableRegister, (ushort)(on ? 1 : 0));
+                if (_master == null) return null;
+                try { return _master.ReadHoldingRegisters(unit, addr, count); }
+                catch { return null; }
             }
         }
 
         /// <summary>
-        /// 지연 레지스터 리드백 — LabVIEW 원본(Write 후 Read Holding Registers 확인)과 동일.
-        /// 커미셔닝에서 통신/주소 검증에 쓴다: 타임아웃=보레이트·UnitId 오류,
-        /// Modbus IllegalDataAddress=주소 오류(통신은 정상), 일치=통신·주소 OK.
+        /// 단일 레지스터 쓰기 + 리드백 검증.
+        /// 실장 iCore 는 쓰기 응답 프레임이 비표준이라(2026-07-23 관측) NModbus CRC 검증에 걸린다 →
+        /// 예외를 삼키고 <b>리드백으로 판정</b>한다. 반영되지 않았으면 false.
         /// </summary>
-        public uint? TryReadDelayRaw()
+        public bool WriteSingleVerified(byte unit, ushort addr, ushort value)
         {
-            try
+            lock (_io)
             {
-                lock (_io)
+                if (_master == null) return false;
+                try { _master.WriteSingleRegister(unit, addr, value); }
+                catch { try { _port?.DiscardInBuffer(); } catch { } }
+
+                try { return _master.ReadHoldingRegisters(unit, addr, 1) is { Length: > 0 } r && r[0] == value; }
+                catch { return false; }
+            }
+        }
+
+        /// <summary>2워드 쓰기 + 리드백 검증(워드 순서는 호출자가 맞춰 넘긴다).</summary>
+        public bool WritePairVerified(byte unit, ushort addr, ushort[] words)
+        {
+            lock (_io)
+            {
+                if (_master == null || words.Length != 2) return false;
+                try { _master.WriteMultipleRegisters(unit, addr, words); }
+                catch { try { _port?.DiscardInBuffer(); } catch { } }
+
+                try
                 {
-                    EnsureConnected();
-                    try { _port?.DiscardInBuffer(); } catch { }
-                    return ReadRawCore();
+                    var r = _master.ReadHoldingRegisters(unit, addr, 2);
+                    return r.Length == 2 && r[0] == words[0] && r[1] == words[1];
                 }
-            }
-            catch
-            {
-                return null;   // 리드백 미지원 장비도 있으므로 실패는 오류가 아니라 '확인 불가'
+                catch { return false; }
             }
         }
 
-        /// <summary>지연 레지스터 읽기(FC3). _io 락 안에서 호출. 실패 시 null.</summary>
-        private uint? ReadRawCore()
+        public void Dispose()
         {
-            try
+            lock (_registry)
             {
-                ushort count = (ushort)(_cfg.Use32BitDelay ? 2 : 1);
-                ushort[] regs = _master!.ReadHoldingRegisters(_cfg.UnitId, _cfg.DelayRegister, count);
-                if (regs.Length < count) return null;
-                if (!_cfg.Use32BitDelay) return regs[0];
-                return _cfg.HighWordFirst
-                    ? ((uint)regs[0] << 16) | regs[1]
-                    : ((uint)regs[1] << 16) | regs[0];
+                if (--_refCount > 0) return;    // 다른 컨트롤러가 아직 쓴다
+                _shared.Remove(_key);
             }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private void EnsureConnected()
-        {
-            if (_master == null) throw new InvalidOperationException("스트로브 미연결. Init() 먼저 호출.");
-        }
-
-        public void Close()
-        {
             lock (_io)
             {
                 _master?.Dispose();
@@ -223,6 +212,126 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
                 _port?.Dispose();
                 _port = null;
             }
+        }
+    }
+
+    /// <summary>
+    /// iCore iPulse LED 컨트롤러 한 대. (모델 1P1S-100A, Modbus RTU/FC3·FC6·FC16)
+    ///
+    /// 레지스터는 매뉴얼(rev03) + 실물 프로브(2026-08-05)로 확정:
+    ///   Operation(0x300)   0=OFF / 1=Continuous / 2=Pulse   ← 조명 ON/OFF 는 이것뿐
+    ///   Trigger Delay(0x314)  IEEE-754 float32, 하위 워드 먼저 [us]
+    /// 밝기·정격전류(Rated Current)는 <b>건드리지 않는다</b> — 매뉴얼에 주소가 없고,
+    /// 정격을 넘겨 쓰면 LED 가 파손된다. 그쪽은 iPulse Configurator 로 세팅하고 저장한다.
+    /// </summary>
+    public sealed class ICoreStrobe : IStrobeController
+    {
+        private readonly StrobeConfig _cfg;
+        private readonly StrobeDeviceConfig _dev;
+        private IPulseBus? _bus;
+
+        /// <param name="cameraId">이 조명이 비추는 카메라(CAM_DW / CAM_GV). null 이면 목록의 첫 장비.</param>
+        public ICoreStrobe(StrobeConfig? cfg = null, string? cameraId = null)
+        {
+            _cfg = cfg ?? new StrobeConfig();
+            _dev = _cfg.DeviceFor(cameraId) ?? new StrobeDeviceConfig();
+        }
+
+        public bool   IsConnected           => _bus?.IsOpen == true;
+        public double LastDelayMicroseconds { get; private set; } = double.NaN;
+
+        /// <summary>이 컨트롤러의 sID — 로그·진단 표시용.</summary>
+        public byte UnitId => _dev.UnitId;
+
+        /// <summary>지연 변경 후 발광 안정 대기[ms]. 시퀀스가 이 값을 참조한다.</summary>
+        public int SettleMs => _cfg.SettleMs;
+
+        public void Init()
+        {
+            Close();
+            _bus = IPulseBus.Open(_cfg);
+        }
+
+
+        /// <summary>
+        /// 발광 지연[us] 설정 — Trigger Delay(0x314).
+        /// ★값은 IEEE-754 float32(하위 워드 먼저)로 쓴다. 정수로 쓰면 890 → 1.2e-42 가 되어
+        ///   지연이 사실상 0 이 된다(이전 구현이 그랬고, 그래서 액적 위상이 안 움직였다).
+        /// </summary>
+        public void SetDelayMicroseconds(double us)
+        {
+            if (us < 0) throw new ArgumentOutOfRangeException(nameof(us), "지연은 음수일 수 없습니다.");
+            if (_bus == null) throw new InvalidOperationException("스트로브 미연결. Init() 먼저 호출.");
+
+            ushort[] words = ToWords(us);
+            if (!_bus.WritePairVerified(_dev.UnitId, _cfg.DelayRegister, words))
+                throw new IOException(
+                    $"지연 {us:F1}us 쓰기 실패(sID {_dev.UnitId}, 0x{_cfg.DelayRegister:X3}) — 리드백 불일치.");
+
+            LastDelayMicroseconds = us;
+        }
+
+        /// <summary>us → 장비 워드 배열. float32(실측 확정) 또는 정수 폴백.</summary>
+        private ushort[] ToWords(double us)
+        {
+            uint bits = _cfg.DelayIsFloat32
+                ? unchecked((uint)BitConverter.SingleToInt32Bits((float)us))
+                : (uint)Math.Round(us);
+
+            ushort hi = (ushort)(bits >> 16), lo = (ushort)(bits & 0xFFFF);
+            return _cfg.HighWordFirst ? new[] { hi, lo } : new[] { lo, hi };
+        }
+
+        /// <summary>
+        /// 조명 ON/OFF — Operation(0x300). 켤 때는 이 장비의 <see cref="StrobeDeviceConfig.RunMode"/>
+        /// (드랍와처=Pulse, 글라스뷰=Continuous), 끌 때는 0(OFF).
+        /// ※ 컨트롤러의 LED Enable(채널) 이 꺼져 있으면 이 값을 바꿔도 불은 안 들어온다.
+        ///   그건 Configurator 로만 설정 가능하다.
+        /// </summary>
+        public void Enable(bool on)
+        {
+            if (_bus == null) throw new InvalidOperationException("스트로브 미연결. Init() 먼저 호출.");
+
+            ushort mode = on ? _dev.RunMode : (ushort)0;
+            if (!_bus.WriteSingleVerified(_dev.UnitId, _cfg.OperationRegister, mode))
+                throw new IOException(
+                    $"조명 {(on ? "ON" : "OFF")} 실패(sID {_dev.UnitId}, 0x{_cfg.OperationRegister:X3}={mode}) — 리드백 불일치.");
+        }
+
+        /// <summary>현재 운전 모드(0=OFF, 1=Continuous, 2=Pulse). 읽기 실패 시 null.</summary>
+        public ushort? ReadOperation()
+        {
+            var r = _bus?.ReadHolding(_dev.UnitId, _cfg.OperationRegister, 1);
+            return r is { Length: > 0 } ? r[0] : null;
+        }
+
+        /// <summary>
+        /// 지연 레지스터 리드백(raw 비트). 커미셔닝 검증용 — 통신·주소가 맞는지 확인한다.
+        /// float32 로 해석하려면 <see cref="ReadDelayMicroseconds"/> 를 쓸 것.
+        /// </summary>
+        public uint? TryReadDelayRaw()
+        {
+            var regs = _bus?.ReadHolding(_dev.UnitId, _cfg.DelayRegister, 2);
+            if (regs == null || regs.Length < 2) return null;
+            return _cfg.HighWordFirst
+                ? ((uint)regs[0] << 16) | regs[1]
+                : ((uint)regs[1] << 16) | regs[0];
+        }
+
+        /// <summary>지연 리드백을 us 로 해석. 실패 시 null.</summary>
+        public double? ReadDelayMicroseconds()
+        {
+            uint? raw = TryReadDelayRaw();
+            if (raw == null) return null;
+            return _cfg.DelayIsFloat32
+                ? BitConverter.Int32BitsToSingle(unchecked((int)raw.Value))
+                : raw.Value;
+        }
+
+        public void Close()
+        {
+            _bus?.Dispose();
+            _bus = null;
         }
 
         public void Dispose() => Close();

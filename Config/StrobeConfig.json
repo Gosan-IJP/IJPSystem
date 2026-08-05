@@ -1,16 +1,28 @@
 {
-  "_comment": "iCore 스트로브(Modbus RTU). 실장 2026-07-23 StrobeScan 으로 확정: COM7/115200bps/Unit2 응답. DelayRegister=0x0000 은 리드백으로 검증(쓴 값이 그대로 읽히면 OK), RegisterScale 은 액적 이동량으로 물리 검증 예정.",
-  "ComPort": "COM7",
+  "_comment1": "iCore iPulse LED 컨트롤러(모델 1P1S-100A). 9호기는 한 포트(COM12/USB)에 2대가 sID 로 물려 있다.",
+  "_comment2": "실측 2026-08-05 (Tools/IPulseProbe): FC3 응답, 0x200 Slave Address 가 각각 1/2, Operation(0x300)=0(OFF).",
+  "_comment3": "★시간 파라미터는 IEEE-754 float32(하위 워드 먼저). Duration [0,16672]=0x41200000=10.0us, Period=10000.0us 로 정확히 떨어져 확정.",
+  "_comment4": "이전 설정(COM7 / DelayRegister 0 / 정수 스케일)은 전부 틀렸다 — 주소도 형식도 달라 드랍와처 지연이 한 번도 걸리지 않았다.",
+  "_comment5": "★밝기·정격전류(Rated Current)는 여기서 다루지 않는다. 매뉴얼에 주소가 없고 정격 초과 시 LED 가 파손된다 → iPulse Configurator 로 설정하고 Save Parameter.",
+  "_comment6": "★LED Enable(채널)이 꺼져 있으면 Operation 을 바꿔도 불이 안 들어온다. 이것도 Configurator 전용.",
+
+  "ComPort": "COM12",
   "BaudRate": 115200,
   "Parity": 0,
   "DataBits": 8,
   "StopBits": 1,
   "TimeoutMs": 1000,
-  "UnitId": 2,
-  "DelayRegister": 0,
-  "RegisterScale": 1.0,
-  "Use32BitDelay": false,
-  "HighWordFirst": true,
-  "EnableRegister": -1,
-  "SettleMs": 50
+
+  "OperationRegister": 768,
+  "DelayRegister": 788,
+  "DelayIsFloat32": true,
+  "HighWordFirst": false,
+  "SettleMs": 50,
+
+  "_comment7": "Camera = CameraId(VisionConfig 와 같은 키). RunMode = 켤 때 쓸 Operation 값 — 드랍와처는 토출 동기가 필요해 Pulse(2), 글라스뷰는 육안 조명이라 Continuous(1).",
+  "_comment8": "★sID↔카메라 배정은 미검증. Tools/IPulseProbe 의 '--light <sID> 1' 로 어느 조명이 켜지는지 확인 후 확정할 것(둘의 설정이 동일해 통신으로는 구분 불가).",
+  "Devices": [
+    { "Camera": "CAM_DW", "UnitId": 1, "RunMode": 2 },
+    { "Camera": "CAM_GV", "UnitId": 2, "RunMode": 1 }
+  ]
 }

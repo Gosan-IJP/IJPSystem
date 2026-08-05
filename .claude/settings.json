@@ -353,7 +353,16 @@
       "Bash(perl -0pi -e 's/Width        = 105,/Width        = 100,/; s/Width = 140,/Width = 130,/' IJPSystem.Platform.HMI/Views/Maintenance/Motor/MotorTeachingView.xaml.cs)",
       "Bash(perl -0pi -e 's/Width        = 100,/Width        = 120,/' IJPSystem.Platform.HMI/Views/Maintenance/Motor/MotorTeachingView.xaml.cs)",
       "Bash(perl -0pi -e 's/<ColumnDefinition Width=\"40\"\\\\/>\\\\r?\\\\n\\(\\\\s+\\)<ColumnDefinition Width=\"130\"\\\\/>/<ColumnDefinition Width=\"150\"\\\\/>/g' IJPSystem.Platform.HMI/Views/Maintenance/Motor/MotorControlView.xaml)",
-      "Bash(perl -0pi -e 's/CAM_02/CAM_GV/g' IJPSystem.Tests/CompositeVisionDriverTests.cs)"
+      "Bash(perl -0pi -e 's/CAM_02/CAM_GV/g' IJPSystem.Tests/CompositeVisionDriverTests.cs)",
+      "Bash(./publish/IPulseProbe.exe --port COM99)",
+      "Bash(./publish/IPulseProbe.exe --port COM99 --no-pause)",
+      "Bash(head -254 IJPSystem.Platform.Infrastructure/Devices/DropWatcher/StrobeTrigger.cs)",
+      "Bash(tail -n +373 IJPSystem.Platform.Infrastructure/Devices/DropWatcher/StrobeTrigger.cs)",
+      "Bash(echo \"=== win-x86 \\(신규 stage 출처\\) ===\"; ls IJPSystem.Platform.HMI/bin/Release/net8.0-windows/win-x86/ | sort > /tmp/rid.txt; wc -l < /tmp/rid.txt; echo \"=== 무RID Release \\(기존 stage 출처\\) ===\"; ls IJPSystem.Platform.HMI/bin/Release/net8.0-windows/ | sort > /tmp/norid.txt; wc -l < /tmp/norid.txt; echo \"=== win-x86 에만 있는 것 ===\"; comm -23 /tmp/rid.txt /tmp/norid.txt; echo \"=== 무RID 에만 있는 것 ===\"; comm -13 /tmp/rid.txt /tmp/norid.txt)",
+      "Bash(grep -n \"C:\\\\\\\\\\\\\\\\\\\\|Path.Combine\\\\|LogDir\\\\|folder\")",
+      "Bash(bash /tmp/corflags.sh Installer/publish/IJPSystem.Platform.HMI.dll Installer/publish/IJPSystem.Platform.Infrastructure.dll Installer/publish/IJPSystem.Platform.Domain.dll)",
+      "Bash(grep -ciE \"^System\\\\..*\\\\.dll$\")",
+      "Bash(grep -n \"GroupBox\\\\|<Border\\\\|Header=\\\\|Text=\\\\\"[A-Z가-힣 ]\\\\{2,\\\\}\\\\\"\\\\|StackPanel\\\\|ScrollViewer\\\\|RowDefinition\\\\|Grid.Row=\" IJPSystem.Platform.HMI/Views/Maintenance/Vision/GlassView.xaml)"
     ],
     "additionalDirectories": [
       "d:\\tmp",
@@ -374,7 +383,8 @@
       "C:\\Users\\bluey\\AppData\\Local\\Temp\\claude\\d--IJP-IJPSystem\\fc660880-50bf-4c7d-87fd-3a0b4067e104\\scratchpad\\StrobeScan\\publish",
       "d:\\IJP\\IJPSystem\\publish",
       "d:\\IJP",
-      "D:\\IJP\\IJPSystem\\Config"
+      "D:\\IJP\\IJPSystem\\Config",
+      "\\tmp"
     ]
   }
 }

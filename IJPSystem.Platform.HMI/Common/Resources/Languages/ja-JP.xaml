@@ -365,7 +365,8 @@
 
     <!-- AUTO PRINT シーケンス -->
     <system:String x:Key="Log_AutoPrintAlarmPause">[AUTO PRINT] アラーム発生 — モーション停止後に一時停止</system:String>
-    <system:String x:Key="Log_AutoPrintAlarmResume">[AUTO PRINT] アラーム解除 — 再開</system:String>
+    <system:String x:Key="Log_AutoPrintAlarmResume">[AUTO PRINT] アラーム解除 — 自動では再開しません。メイン画面で START を押すか初期化を実行してください</system:String>
+    <system:String x:Key="Log_AutoPrintAlarmBlocked">[AUTO PRINT] アラーム発生中は開始できません — 解除後に START を押してください</system:String>
     <system:String x:Key="Log_AutoPrintStopMotionError">[AUTO PRINT] モーション停止中のエラー: {0}</system:String>
     <system:String x:Key="Log_AutoPrintResume">[AUTO PRINT] 再開 — 次のステップから継続</system:String>
     <system:String x:Key="Log_AutoPrintStopPause">[AUTO PRINT] STOP — 現在のステップ完了後に一時停止 (STARTで再開)</system:String>

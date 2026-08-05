@@ -365,7 +365,8 @@
 
     <!-- AUTO PRINT 시퀀스 -->
     <system:String x:Key="Log_AutoPrintAlarmPause">[AUTO PRINT] 알람 발생 — 모션 정지 후 일시정지</system:String>
-    <system:String x:Key="Log_AutoPrintAlarmResume">[AUTO PRINT] 알람 해제 — 재개</system:String>
+    <system:String x:Key="Log_AutoPrintAlarmResume">[AUTO PRINT] 알람 해제 — 자동 재개하지 않습니다. 메인 화면에서 START 를 누르거나 초기화를 실행하세요</system:String>
+    <system:String x:Key="Log_AutoPrintAlarmBlocked">[AUTO PRINT] 알람이 있는 동안에는 시작할 수 없습니다 — 알람을 해제한 뒤 START 를 누르세요</system:String>
     <system:String x:Key="Log_AutoPrintStopMotionError">[AUTO PRINT] 모션 정지 중 오류: {0}</system:String>
     <system:String x:Key="Log_AutoPrintResume">[AUTO PRINT] 재개 — 다음 단계부터 이어서 진행</system:String>
     <system:String x:Key="Log_AutoPrintStopPause">[AUTO PRINT] STOP — 현재 단계 완료 후 일시정지 (START로 재개)</system:String>
