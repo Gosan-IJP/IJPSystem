@@ -19,8 +19,9 @@
   "HighWordFirst": false,
   "SettleMs": 50,
 
-  "_comment7": "Camera = CameraId(VisionConfig 와 같은 키). RunMode = 켤 때 쓸 Operation 값 — 드랍와처는 토출 동기가 필요해 Pulse(2), 글라스뷰는 육안 조명이라 Continuous(1).",
-  "_comment8": "★sID↔카메라 배정은 미검증. Tools/IPulseProbe 의 '--light <sID> 1' 로 어느 조명이 켜지는지 확인 후 확정할 것(둘의 설정이 동일해 통신으로는 구분 불가).",
+  "_comment7": "Camera = CameraId(VisionConfig 와 같은 키). RunMode = 켤 때 쓸 Operation 값 — DWC 는 토출 동기가 필요해 Pulse(2), GVC 는 육안 조명이라 Continuous(1).",
+  "_comment8": "sID 배정 확정(2026-08-06). ① GVC 화면 LIGHT ON(sID 2) 시 실제 점등 확인 ② Trigger_Count 가 sID1=59198 / sID2=1042 로 57배 차 — 토출마다 발광하는 DWC 가 sID 1 ③ Trigger Delay 가 sID1 에만 설정됨(지연은 DWC 전용).",
+  "_comment9": "★DWC 실장 메모: Trigger Input(0x301) 이 Internal(0) 로 되어 있다 — 제어PC 에 NI 런타임(nicaiu.dll)이 없어 트리거가 안 들어오니 임시로 자체 발광시킨 상태. NI 복구 후 Digital IO(1) 로 되돌릴 것. Internal 이면 토출과 무동기라 액적이 정지해 보이지 않는다.",
   "Devices": [
     { "Camera": "CAM_DW", "UnitId": 1, "RunMode": 2 },
     { "Camera": "CAM_GV", "UnitId": 2, "RunMode": 1 }
