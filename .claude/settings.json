@@ -395,7 +395,10 @@
       "Bash(xargs sed -n '1,40p')",
       "Bash(powershell.exe -NoProfile -Command '\\(Get-Item \"D:\\\\IJP\\\\IJPSystem\\\\_hotfix\\\\IJPSystem.Platform.HMI.dll\"\\).VersionInfo.ProductVersion')",
       "Bash(grep -v \"//\")",
-      "Bash(DOTNET_ROLL_FORWARD=LatestMajor dotnet test IJPSystem.Tests/IJPSystem.Tests.csproj --nologo -v q --filter \"XamlResourceOrderTests\")"
+      "Bash(DOTNET_ROLL_FORWARD=LatestMajor dotnet test IJPSystem.Tests/IJPSystem.Tests.csproj --nologo -v q --filter \"XamlResourceOrderTests\")",
+      "Bash(python3 -c ' *)",
+      "Bash(./crossprobe.exe)",
+      "Bash(DOTNET_ROLL_FORWARD=LatestMajor ./crossprobe.exe)"
     ],
     "additionalDirectories": [
       "d:\\tmp",

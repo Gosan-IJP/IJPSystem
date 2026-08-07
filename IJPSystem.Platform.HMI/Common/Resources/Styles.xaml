@@ -228,20 +228,33 @@
         <Setter Property="Margin"       Value="3"/>
     </Style>
     
+    <!-- 공용 액션 버튼.
+         Background 는 반드시 TemplateBinding 이어야 한다 — 색을 상수로 박아두면 화면에서 지정한
+         Background(ON=초록/STOP=빨강 등)와 DataTrigger 로 바꾸는 상태색이 <b>전부 무시된다</b>.
+         실제로 글라스뷰 LIVE 버튼은 IsLiveMode 로 색을 바꾸도록 돼 있었으나 화면은 늘 같은
+         회색이었다(2026-08-08). 기본색은 Setter 로 둬서 색을 지정하지 않은 버튼은 그대로다.
+         호버는 배경을 덮어쓰지 않고 밝기+테두리로만 표현한다 — 덮어쓰면 지정색이 사라진다. -->
     <Style x:Key="MutedActionButtonStyle" TargetType="Button">
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="FontSize" Value="18"/>
         <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Background" Value="#1E293B"/>
+        <Setter Property="BorderBrush" Value="#334155"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="border" Background="#1E293B" CornerRadius="10" BorderBrush="#334155" BorderThickness="1.5">
+                    <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="10"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1.5">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#334155"/>
+                            <Setter TargetName="border" Property="Opacity"     Value="0.85"/>
                             <Setter TargetName="border" Property="BorderBrush" Value="#3B82F6"/>
+                        </Trigger>
+                        <!-- 비활성이 보이지 않으면 "눌러도 반응이 없다"로 읽힌다 -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="border" Property="Opacity" Value="0.4"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

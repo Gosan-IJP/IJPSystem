@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:cvts="clr-namespace:IJPSystem.Platform.HMI.Common.Converters"
+             xmlns:vis="clr-namespace:IJPSystem.Platform.HMI.Vision"
              mc:Ignorable="d" d:DesignHeight="780" d:DesignWidth="1200"
              Background="#0B0F1A">
 
@@ -33,6 +34,17 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- 헤더 툴 버튼 (크로스라인 등) — 패턴인쇄 화면의 툴 버튼과 같은 크기·색 -->
+        <Style x:Key="GlassToolBtn" TargetType="Button" BasedOn="{StaticResource MutedActionButtonStyle}">
+            <Setter Property="Height"     Value="28"/>
+            <Setter Property="Padding"    Value="10,0"/>
+            <Setter Property="Margin"     Value="0,0,6,0"/>
+            <Setter Property="MinWidth"   Value="72"/>
+            <Setter Property="Background" Value="#334155"/>
+            <Setter Property="FontSize"   Value="11"/>
+            <Setter Property="Cursor"     Value="Hand"/>
         </Style>
     </UserControl.Resources>
 
@@ -118,30 +130,55 @@
                             </Border>
                         </StackPanel>
 
-                        <!-- 이미지 열기 버튼 (우측 정렬) -->
-                        <Button HorizontalAlignment="Right" VerticalAlignment="Center"
-                                Command="{Binding OpenImageCommand}"
-                                Background="Transparent" BorderThickness="0"
-                                Cursor="Hand" ToolTip="저장된 이미지 파일 열기">
-                            <Border CornerRadius="6" Padding="10,5">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="#334155"/>
+                        <!-- 우측 툴 (크로스라인 / 이미지 열기) -->
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center">
+
+                            <!-- 크로스라인 표시/숨김 — 켜져 있으면 색으로 상태를 알 수 있게 한다
+                                 (패턴인쇄 화면의 Toggle Cross line 과 같은 규약). -->
+                            <Button Command="{Binding ToggleCrossLineCommand}"
+                                    Content="✛ Cross" ToolTip="크로스라인 표시/숨김 (드래그로 이동)">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource GlassToolBtn}">
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsMouseOver,
-                                                RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
-                                                <Setter Property="Background" Value="#475569"/>
+                                            <DataTrigger Binding="{Binding CrossLineVisible}" Value="True">
+                                                <Setter Property="Background" Value="#B91C1C"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </Border.Style>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="📂" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="이미지 열기" Foreground="#94A3B8"
-                                               FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
-                        </Button>
+                                </Button.Style>
+                            </Button>
+
+                            <Button Style="{StaticResource GlassToolBtn}" Margin="0,0,12,0"
+                                    Command="{Binding CenterCrossCommand}"
+                                    IsEnabled="{Binding CrossLineVisible}"
+                                    Content="⊹ Center" ToolTip="크로스라인 중앙 정렬"/>
+
+                            <!-- 이미지 열기 버튼 -->
+                            <Button VerticalAlignment="Center"
+                                    Command="{Binding OpenImageCommand}"
+                                    Background="Transparent" BorderThickness="0"
+                                    Cursor="Hand" ToolTip="저장된 이미지 파일 열기">
+                                <Border CornerRadius="6" Padding="10,5">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#334155"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsMouseOver,
+                                                    RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                                                    <Setter Property="Background" Value="#475569"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="📂" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="이미지 열기" Foreground="#94A3B8"
+                                                   FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                            </Button>
+                        </StackPanel>
                     </Grid>
                 </Border>
 
@@ -192,7 +229,18 @@
                                Stretch="Uniform" RenderOptions.BitmapScalingMode="LowQuality"
                                Visibility="{Binding HasImage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
-                        <!-- ③ 이미지 경로 표시 (좌상단 오버레이) -->
+                        <!-- ③ 크로스라인 — 라이브·정지·이미지 없음 어느 상태에서도 같은 자리에 선다.
+                             글라스 모서리를 이 선에 맞춰 조그하는 용도라, 프레임이 바뀌었다고
+                             기준선이 움직이면 안 된다. 드래그로 이동, ⊹ Center 로 중앙 복귀.
+                             Source 를 주는 이유: 위치를 패널이 아니라 <b>이미지</b> 기준으로 잡아
+                             레터박스가 생겨도 좌표가 어긋나지 않고, 픽셀 좌표를 읽어줄 수 있다.
+                             숨김 상태에서는 마우스도 받지 않는다. -->
+                        <vis:CrossLineOverlay ShowCross="{Binding CrossLineVisible}"
+                                              Source="{Binding CurrentFrame}"
+                                              XRatio="{Binding CrossXRatio, Mode=TwoWay}"
+                                              YRatio="{Binding CrossYRatio, Mode=TwoWay}"/>
+
+                        <!-- ④ 이미지 경로 표시 (좌상단 오버레이) -->
                         <Border HorizontalAlignment="Left" VerticalAlignment="Top"
                                 Background="#CC0D1117" CornerRadius="0,0,6,0" Padding="8,4"
                                 Visibility="{Binding HasImage, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -201,7 +249,7 @@
                                        TextTrimming="CharacterEllipsis" MaxWidth="400"/>
                         </Border>
 
-                        <!-- ④ 라이브 FPS 오버레이 (우상단, 라이브 중일 때) -->
+                        <!-- ⑤ 라이브 FPS 오버레이 (우상단, 라이브 중일 때) -->
                         <Border VerticalAlignment="Top" HorizontalAlignment="Right"
                                 Background="#CC0D1117" CornerRadius="0,0,0,6" Padding="8,4"
                                 Visibility="{Binding IsLiveMode, Converter={StaticResource BooleanToVisibilityConverter}}">

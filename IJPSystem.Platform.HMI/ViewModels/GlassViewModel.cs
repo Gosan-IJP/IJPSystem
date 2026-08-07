@@ -202,6 +202,29 @@ namespace IJPSystem.Platform.HMI.ViewModels
             private set => SetProperty(ref _isBusy, value);
         }
 
+        // ── 크로스라인 (기준선) ───────────────────────────────────────────────
+        // 패턴인쇄 화면(VisualMonitorViewModel)과 같은 규약: 표시 여부 + 화면 비율 좌표.
+        // 글라스 모서리를 이 선에 맞춰 조그하는 용도라, 라이브·정지 어느 상태에서도 유지된다.
+        // 기본은 꺼둔다 — 항상 켜져 있으면 캡쳐 이미지를 그냥 보고 싶을 때 방해가 된다.
+        private bool _crossLineVisible;
+        public bool CrossLineVisible
+        {
+            get => _crossLineVisible;
+            set => SetProperty(ref _crossLineVisible, value);
+        }
+
+        private double _crossXRatio = 0.5, _crossYRatio = 0.5;
+        public double CrossXRatio
+        {
+            get => _crossXRatio;
+            set => SetProperty(ref _crossXRatio, Math.Clamp(value, 0, 1));
+        }
+        public double CrossYRatio
+        {
+            get => _crossYRatio;
+            set => SetProperty(ref _crossYRatio, Math.Clamp(value, 0, 1));
+        }
+
         // ── 커맨드 ────────────────────────────────────────────────────────────
         public ICommand StartLiveCommand  { get; }
         public ICommand StopLiveCommand   { get; }
@@ -210,6 +233,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand LightOnCommand    { get; }
         public ICommand LightOffCommand   { get; }
         public ICommand OpenImageCommand  { get; }
+        public ICommand ToggleCrossLineCommand { get; }
+        public ICommand CenterCrossCommand     { get; }
 
         /// <summary>
         /// VisionConfig 에 실제로 들어 있는 글라스뷰 카메라 ID 를 고른다 — CAM_GV 우선, 없으면 옛 CAM_02.
@@ -252,6 +277,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             LightOnCommand   = new RelayCommand(_ => ExecuteLight(true),  _ => !IsBusy);
             LightOffCommand  = new RelayCommand(_ => ExecuteLight(false), _ => !IsBusy);
             OpenImageCommand = new RelayCommand(_ => ExecuteOpenImage(),  _ => !IsLiveMode);
+            // 크로스라인은 카메라와 무관한 화면 오버레이라 조건 없이 언제나 조작 가능하다.
+            ToggleCrossLineCommand = new RelayCommand(_ => CrossLineVisible = !CrossLineVisible);
+            CenterCrossCommand     = new RelayCommand(_ => { CrossXRatio = 0.5; CrossYRatio = 0.5; });
 
             // 카메라 상태 폴링 (500ms)
             _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
