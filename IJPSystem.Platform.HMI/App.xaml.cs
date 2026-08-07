@@ -91,6 +91,18 @@ namespace IJPSystem.Platform.HMI
                     () => loader.LoadAppSettings(GetConfigPath("AppConfig.json")));
                 IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Initialize(appSettings);
 
+                // 장비 설정(노즐 헤드 사양 등) — 레시피 DB 와 <b>분리</b>한다. 레시피는 호기 간에
+                // 복사해 다니지만 장비 설정이 따라오면 다른 장비의 피치·배율로 측정하게 된다.
+                IJPSystem.Platform.Infrastructure.Config.MachineSettings.Initialize(
+                    GetConfigPath("MachineData.db"));
+
+                // 차트 축 글꼴 — 차트가 처음 그려지기 전에 정해야 한다.
+                // Typeface 를 한 번 읽어 해석을 끝낸 뒤 로그를 남긴다(지연 해석이라 그냥 찍으면
+                // 항상 "미해석"만 나온다 — 실제로 그래서 실장 로그가 쓸모없었다, 2026-08-07).
+                Common.ChartFont.Configure(appSettings.ChartFontFile);
+                _ = Common.ChartFont.Typeface;
+                LoggerService.WriteToFile("INFO", $"[BOOT] 차트 축 글꼴: {Common.ChartFont.Description}");
+
                 // 로그 보존 정리 — 기동 시 1회. 파일 수가 많으면 수 초 걸릴 수 있어 백그라운드로 돌린다
                 // (스플래시 진행을 막지 않는다). 실패해도 기동에 영향 없음.
                 int keepDays = appSettings.LogSaveDays;
@@ -344,6 +356,11 @@ namespace IJPSystem.Platform.HMI
                 LoggerService.WriteToFile("INFO",
                     $"[BOOT] IJPSystem HMI v{ver} | {bitness} | Admin={admin} | " +
                     $".NET {Environment.Version} | OS {Environment.OSVersion.Version} | PC {Environment.MachineName}");
+
+                // 어셈블리 버전은 빌드마다 안 바뀌어 "새 DLL 이 적용됐는지"를 못 가린다 —
+                // 실제로 로드된 파일의 경로·수정시각을 남겨야 복사가 먹었는지 확인할 수 있다.
+                foreach (string line in Common.BuildInfo.DescribeLoaded())
+                    LoggerService.WriteToFile("INFO", line);
             }
             catch { /* 배너 실패는 앱 진행에 영향 없음 */ }
         }

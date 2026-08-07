@@ -6,7 +6,9 @@ using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.HMI;
 using IJPSystem.Platform.HMI.Common;
 using IJPSystem.Platform.HMI.Views;
+using IJPSystem.Platform.Infrastructure.Config;
 using static IJPSystem.Platform.HMI.Common.Loc;
+using MachineKeys = IJPSystem.Platform.Infrastructure.Config.MachineSettingsStore.Keys;
 using Microsoft.Data.Sqlite;
 using System;
 using System.Collections.Generic;
@@ -299,6 +301,128 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
+        // ── 노즐 정보 (헤드 사양) ─────────────────────────────────────────────
+        // <b>장비 설정</b>이다 — 레시피가 아니라 MachineSettings DB 에 저장된다.
+        // 헤드는 장비에 달린 것이라 제품이 바뀐다고 안 바뀌고, 헤드를 교체하면 모든 레시피에
+        // 동시에 적용돼야 한다. 드랍와처도 같은 값을 읽으므로 화면과 측정이 갈라지지 않는다.
+        //
+        // 화면은 레시피 편집 화면에 있지만 값은 레시피에 딸리지 않는다 — 그래서 UI 에
+        // "장비 공통" 이라고 표시한다. 저장은 [저장] 버튼과 같이 일어난다(조작 일관성).
+
+        private static MachineSettingsStore Machine =>
+            IJPSystem.Platform.Infrastructure.Config.MachineSettings.Current;
+
+        private double _nozzlePitchUm;
+        /// <summary>같은 열 안에서 인접 노즐 간 거리[µm]. 0=미입력.</summary>
+        public double NozzlePitchUm
+        {
+            get => _nozzlePitchUm;
+            set { if (SetProperty(ref _nozzlePitchUm, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
+        }
+
+        public int[] NozzleRowOptions { get; } = { 1, 2, 3, 4 };
+
+        private int _nozzleRows;
+        /// <summary>노즐 열 수(1~4). 0=미입력.</summary>
+        public int NozzleRows
+        {
+            get => _nozzleRows;
+            set { if (SetProperty(ref _nozzleRows, Math.Clamp(value, 0, 4)) && !_isLoading) IsDirty = true; }
+        }
+
+        private double _nozzleRowPitchUm;
+        /// <summary>열과 열 사이 거리[µm]. 1열 헤드면 의미 없다.</summary>
+        public double NozzleRowPitchUm
+        {
+            get => _nozzleRowPitchUm;
+            set { if (SetProperty(ref _nozzleRowPitchUm, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
+        }
+
+        private double _nozzleDiameterUm;
+        /// <summary>노즐 구경[µm]. 액적 크기 판정의 기준값.</summary>
+        public double NozzleDiameterUm
+        {
+            get => _nozzleDiameterUm;
+            set { if (SetProperty(ref _nozzleDiameterUm, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
+        }
+
+        private int _nozzleCount;
+        /// <summary>헤드 전체 노즐 수.</summary>
+        public int NozzleCount
+        {
+            get => _nozzleCount;
+            set { if (SetProperty(ref _nozzleCount, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
+        }
+
+        /// <summary>장비 설정 DB → 화면. 레시피 선택과 무관하므로 생성 시 1회만 읽는다.</summary>
+        private void LoadNozzleSpec()
+        {
+            if (!IJPSystem.Platform.Infrastructure.Config.MachineSettings.IsReady) return;
+
+            bool prev = _isLoading;
+            _isLoading = true;      // 읽기만으로 IsDirty 가 켜지면 안 된다
+            try
+            {
+                NozzlePitchUm    = Machine.GetDouble(MachineKeys.NozzlePitchUm);
+                NozzleRows       = Machine.GetInt   (MachineKeys.NozzleRows);
+                NozzleRowPitchUm = Machine.GetDouble(MachineKeys.NozzleRowPitchUm);
+                NozzleDiameterUm = Machine.GetDouble(MachineKeys.NozzleDiameterUm);
+                NozzleCount      = Machine.GetInt   (MachineKeys.NozzleCount);
+            }
+            finally { _isLoading = prev; }
+        }
+
+        /// <summary>화면 → 장비 설정 DB. 레시피 저장과 함께 호출된다.</summary>
+        private void SaveNozzleSpec()
+        {
+            if (!IJPSystem.Platform.Infrastructure.Config.MachineSettings.IsReady) return;
+
+            Machine.Set(MachineKeys.NozzlePitchUm,    NozzlePitchUm);
+            Machine.Set(MachineKeys.NozzleRows,       NozzleRows);
+            Machine.Set(MachineKeys.NozzleRowPitchUm, NozzleRowPitchUm);
+            Machine.Set(MachineKeys.NozzleDiameterUm, NozzleDiameterUm);
+            Machine.Set(MachineKeys.NozzleCount,      NozzleCount);
+        }
+
+        // ── 글라스 정보 ───────────────────────────────────────────────────────
+        // 인쇄 영역·스캔 횟수 산출의 입력값. 원점 오프셋은 척 기준점과 글라스 좌상단의 차이다.
+
+        private double _glassWidthMm;
+        public double GlassWidthMm
+        {
+            get => _glassWidthMm;
+            set { if (SetProperty(ref _glassWidthMm, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
+        }
+
+        private double _glassHeightMm;
+        public double GlassHeightMm
+        {
+            get => _glassHeightMm;
+            set { if (SetProperty(ref _glassHeightMm, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
+        }
+
+        private double _glassThicknessMm;
+        public double GlassThicknessMm
+        {
+            get => _glassThicknessMm;
+            set { if (SetProperty(ref _glassThicknessMm, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
+        }
+
+        private double _glassOriginXMm;
+        /// <summary>척 기준점 → 글라스 기준점 오프셋 X[mm]. 음수 허용(기준점보다 앞쪽).</summary>
+        public double GlassOriginXMm
+        {
+            get => _glassOriginXMm;
+            set { if (SetProperty(ref _glassOriginXMm, value) && !_isLoading) IsDirty = true; }
+        }
+
+        private double _glassOriginYMm;
+        public double GlassOriginYMm
+        {
+            get => _glassOriginYMm;
+            set { if (SetProperty(ref _glassOriginYMm, value) && !_isLoading) IsDirty = true; }
+        }
+
         // 도어 사용 유무 — 기타정보 화면 콤보박스에 바인딩
         // Why: 현장 설치 환경에 따라 안전키 미연결 시 운전 시작 차단을 해제할 수 있어야 함
         public bool IsDoorCheckEnabled
@@ -354,6 +478,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _raiseAlarm = raiseAlarm;
 
             InitDatabase();
+            LoadNozzleSpec();   // 장비 설정 — 레시피와 무관하므로 여기서 1회만 읽는다
 
             CreateRecipeCommand   = new RelayCommand(_ => ExecuteCreateRecipe());
             DeleteRecipeCommand   = new RelayCommand(_ => ExecuteDeleteRecipe(), _ => !string.IsNullOrEmpty(SelectedRecipeName) && SelectedRecipeName != ActiveRecipeName);
@@ -465,6 +590,24 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 // 기본 1(양방향) — 이 컬럼이 없던 기존 레시피의 현행 동작(양방향)을 그대로 유지.
                 try { db.Execute("ALTER TABLE Recipes ADD COLUMN PrintDirection INTEGER DEFAULT 1"); }
                 catch { /* 이미 존재하면 무시 */ }
+
+                // 글라스 정보 컬럼 마이그레이션(2026-08-07). 기본 0 = 미입력.
+                //
+                // ※ 노즐 헤드 사양은 여기 두지 않는다 — 헤드는 <b>장비</b>에 달린 것이라 제품이
+                //   바뀐다고 안 바뀐다. 레시피마다 복사본을 두면 헤드 교체 시 모든 레시피를 고쳐야 하고,
+                //   드랍와처가 보는 값과 갈라진다. MachineSettings(장비 설정 DB)로 간다.
+                foreach (string col in new[]
+                {
+                    "GlassWidthMm REAL DEFAULT 0",
+                    "GlassHeightMm REAL DEFAULT 0",
+                    "GlassThicknessMm REAL DEFAULT 0",
+                    "GlassOriginXMm REAL DEFAULT 0",     // 글라스 기준점 오프셋
+                    "GlassOriginYMm REAL DEFAULT 0",
+                })
+                {
+                    try { db.Execute($"ALTER TABLE Recipes ADD COLUMN {col}"); }
+                    catch { /* 이미 존재하면 무시 */ }
+                }
             }
         }
 
@@ -546,6 +689,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     PrintDirectionIndex = db.QueryFirstOrDefault<int?>(
                         "SELECT PrintDirection FROM Recipes WHERE Name=@recipeName",
                         new { recipeName }) ?? 1;
+
+                    // 글라스 정보 — 한 번의 조회로 가져온다(컬럼마다 왕복하면 5번이 된다).
+                    // 노즐 사양은 여기 없다 — 장비 설정이라 레시피를 바꿔도 그대로다.
+                    var spec = db.QueryFirstOrDefault(
+                        @"SELECT GlassWidthMm, GlassHeightMm, GlassThicknessMm, GlassOriginXMm, GlassOriginYMm
+                          FROM Recipes WHERE Name=@recipeName", new { recipeName });
+                    if (spec != null)
+                    {
+                        GlassWidthMm      = Convert.ToDouble(spec.GlassWidthMm     ?? 0d);
+                        GlassHeightMm     = Convert.ToDouble(spec.GlassHeightMm    ?? 0d);
+                        GlassThicknessMm  = Convert.ToDouble(spec.GlassThicknessMm ?? 0d);
+                        GlassOriginXMm    = Convert.ToDouble(spec.GlassOriginXMm   ?? 0d);
+                        GlassOriginYMm    = Convert.ToDouble(spec.GlassOriginYMm   ?? 0d);
+                    }
                 }
 
                 LoadTeachingPoints(recipeName);
@@ -848,9 +1005,24 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                          }, trans);
                         }
 
-                        // PurgeTime / Swath / HeadLength / PrintDirection 저장
-                        db.Execute("UPDATE Recipes SET PurgeTime=@purgeTime, Swath=@swath, HeadLength=@headLength, PrintDirection=@printDir WHERE Name=@name",
-                            new { purgeTime = PurgeTime, swath = SwathCount, headLength = HeadLength, printDir = PrintDirectionIndex, name = SelectedRecipeName }, trans);
+                        // PurgeTime / Swath / HeadLength / PrintDirection + 노즐·글라스 정보 저장
+                        db.Execute(@"UPDATE Recipes SET
+                                         PurgeTime=@purgeTime, Swath=@swath, HeadLength=@headLength, PrintDirection=@printDir,
+                                         GlassWidthMm=@gW, GlassHeightMm=@gH, GlassThicknessMm=@gT,
+                                         GlassOriginXMm=@gX, GlassOriginYMm=@gY
+                                     WHERE Name=@name",
+                            new
+                            {
+                                purgeTime = PurgeTime, swath = SwathCount, headLength = HeadLength,
+                                printDir = PrintDirectionIndex,
+                                gW = GlassWidthMm, gH = GlassHeightMm, gT = GlassThicknessMm,
+                                gX = GlassOriginXMm, gY = GlassOriginYMm,
+                                name = SelectedRecipeName
+                            }, trans);
+
+                        // 노즐 헤드 사양은 장비 설정 DB 로 — 레시피 트랜잭션 밖이다.
+                        // 레시피가 아니라 장비에 달린 값이라 이 레시피에만 적용되면 안 된다.
+                        SaveNozzleSpec();
 
                         // 티칭 포인트 저장
                         if (TeachingPoints.Count > 0)
@@ -1169,12 +1341,17 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         WHERE RecipeId = (SELECT Id FROM Recipes WHERE Name = @oldName)",
                             new { newId, oldName = SelectedRecipeName }, trans);
 
-                        // C. PurgeTime / Swath / HeadLength / PrintDirection 복사
+                        // C. PurgeTime / Swath / HeadLength / PrintDirection + 노즐·글라스 정보 복사
                         db.Execute(@"UPDATE Recipes SET
-                                         PurgeTime      = (SELECT PurgeTime      FROM Recipes WHERE Name=@oldName),
-                                         Swath          = (SELECT Swath          FROM Recipes WHERE Name=@oldName),
-                                         HeadLength     = (SELECT HeadLength     FROM Recipes WHERE Name=@oldName),
-                                         PrintDirection = (SELECT PrintDirection FROM Recipes WHERE Name=@oldName)
+                                         PurgeTime        = (SELECT PurgeTime        FROM Recipes WHERE Name=@oldName),
+                                         Swath            = (SELECT Swath            FROM Recipes WHERE Name=@oldName),
+                                         HeadLength       = (SELECT HeadLength       FROM Recipes WHERE Name=@oldName),
+                                         PrintDirection   = (SELECT PrintDirection   FROM Recipes WHERE Name=@oldName),
+                                         GlassWidthMm     = (SELECT GlassWidthMm     FROM Recipes WHERE Name=@oldName),
+                                         GlassHeightMm    = (SELECT GlassHeightMm    FROM Recipes WHERE Name=@oldName),
+                                         GlassThicknessMm = (SELECT GlassThicknessMm FROM Recipes WHERE Name=@oldName),
+                                         GlassOriginXMm   = (SELECT GlassOriginXMm   FROM Recipes WHERE Name=@oldName),
+                                         GlassOriginYMm   = (SELECT GlassOriginYMm   FROM Recipes WHERE Name=@oldName)
                                      WHERE Id=@newId",
                             new { oldName = SelectedRecipeName, newId }, trans);
 

@@ -1,0 +1,18 @@
+<Project>
+
+  <!--
+    모든 프로젝트에 빌드 시각을 어셈블리 안에 박는다.
+    InformationalVersion 뒤에 "+yyyyMMdd-HHmm" 으로 붙고, 화면·로그의 build 표시가 이 값을 읽는다.
+
+    ※ 파일 수정시각으로 판단하면 안 된다 — 복사하면 새 시각이 찍혀 <b>내용은 옛날인데 방금 빌드한
+      것처럼</b> 보인다. 실제로 사라진 win-x86 출력 폴더에 남아 있던 7/22 산출물을 복사해 배포하고도
+      표시는 당일로 나와, 실장에서 "예전 버전이 실행됨"의 원인을 며칠 못 찾았다(2026-08-07).
+
+    ※ 프로젝트마다 값이 따로 박히므로, HMI 와 Infrastructure 의 표시가 다르면 <b>짝이 안 맞는
+      DLL 조합</b>이라는 뜻이다 — 그 조합은 MethodNotFound 로 앱이 죽는다. 부팅 로그에서 바로 보인다.
+  -->
+  <PropertyGroup>
+    <SourceRevisionId>$([System.DateTime]::Now.ToString(yyyyMMdd-HHmm))</SourceRevisionId>
+  </PropertyGroup>
+
+</Project>

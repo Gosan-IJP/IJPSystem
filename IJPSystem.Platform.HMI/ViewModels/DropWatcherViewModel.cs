@@ -161,8 +161,45 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 if (!SetProperty(ref _currentFrame, value)) return;
                 OnPropertyChanged(nameof(HasImage));
                 OnPropertyChanged(nameof(HasNoImage));
+                ApplyFovScale(value);
+                RaiseGuideChanged();      // 프레임이 바뀌면 ROI 도 그 프레임 기준으로 다시 계산
             }
         }
+
+        /// <summary>
+        /// 시야(FOV) ÷ 프레임 픽셀수 로 µm/px 를 맞춘다.
+        /// <para>
+        /// 시야는 광학계가 정하는 고정값이므로 프레임 해상도가 얼마든 이 식이 성립한다.
+        /// 반대로 µm/px 를 고정해 두면 해상도가 달라지는 순간(비닝·크롭·가상 드라이버) 눈금이
+        /// 실제와 다른 크기를 말한다 — 사양 1.9564 × 1.9509 mm 인데 화면은 1112 × 849 µm 로
+        /// 나오던 건(2026-08-07). 그래서 프레임이 바뀔 때마다 다시 맞춘다.
+        /// </para>
+        /// </summary>
+        private void ApplyFovScale(BitmapSource? frame)
+        {
+            if (frame == null) return;
+
+            double? sy = _procCfg.ScaleYFromFov(frame.PixelHeight);
+            if (Math.Abs(MicronsPerPixelY - (sy ?? 0)) > 1e-9)
+            {
+                _micronsPerPixelY = sy ?? 0;
+                OnPropertyChanged(nameof(MicronsPerPixelY));
+            }
+
+            double? scale = _procCfg.ScaleFromFov(frame.PixelWidth);
+            if (scale is not > 0) return;
+            if (Math.Abs(_procCfg.MicronsPerPixel - scale.Value) < 1e-6) return;
+
+            _mainVM.AddLog($"[VISION] DropWatcher: 시야 {_procCfg.FieldOfViewXUm:F0}µm ÷ {frame.PixelWidth}px " +
+                           $"→ 스케일 {scale.Value:F4}µm/px (기존 {_procCfg.MicronsPerPixel:F4})", LogLevel.Info);
+            MicronsPerPixel = scale.Value;
+        }
+
+        // 눈금 전용 세로 스케일. 0 이면 눈금자가 가로 스케일을 쓴다.
+        // 측정(직경·부피·속도)은 가로 스케일 하나만 쓴다 — 축마다 다른 스케일로 물리량을
+        // 계산하면 어느 쪽이 쓰였는지 알 수 없는 숫자가 나온다.
+        private double _micronsPerPixelY;
+        public double MicronsPerPixelY => _micronsPerPixelY;
 
         public bool HasImage   => CurrentFrame != null;
         public bool HasNoImage => CurrentFrame == null;
@@ -240,25 +277,181 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public double Delay2Us { get => _delay2Us; private set => SetProperty(ref _delay2Us, value); }
 
         // ── Measure Parameter ─────────────────────────────────────────────────
-        private double _measureStartUm = 130.0;
-        public double MeasureStartUm { get => _measureStartUm; set => SetProperty(ref _measureStartUm, value); }
+        // 전부 <b>_procCfg 를 직접</b> 읽고 쓴다. 화면에 따로 값을 들고 있으면 config 를 고쳐도
+        // 화면은 옛 기본값을 보여주고, 검출은 config 값을 쓰게 되어 둘이 갈라진다 — 실제로
+        // MeasureAreaXUm 을 150 으로 바꿨는데 화면은 60 으로 떠서 분홍 창(88px)과 실제 측정창
+        // (219px)이 달랐다(2026-08-07). [교정값 저장]을 누르면 그 60 이 파일에 덮어써진다.
+        public double MeasureStartUm
+        {
+            get => _procCfg.MeasureStartUm;
+            set { if (SetCfg(v => _procCfg.MeasureStartUm = v, _procCfg.MeasureStartUm, value)) RaiseGuideChanged(); }
+        }
 
-        private double _measureEndUm = 910.0;
-        public double MeasureEndUm { get => _measureEndUm; set => SetProperty(ref _measureEndUm, value); }
+        public double MeasureEndUm
+        {
+            get => _procCfg.MeasureEndUm;
+            set { if (SetCfg(v => _procCfg.MeasureEndUm = v, _procCfg.MeasureEndUm, value)) RaiseGuideChanged(); }
+        }
 
         private double _timeIntervalUs = 5.0;
         public double TimeIntervalUs { get => _timeIntervalUs; set => SetProperty(ref _timeIntervalUs, value); }
 
-        private double _measureAreaXUm = 60.0;
-        public double MeasureAreaXUm { get => _measureAreaXUm; set => SetProperty(ref _measureAreaXUm, value); }
+        public double MeasureAreaXUm
+        {
+            get => _procCfg.MeasureAreaXUm;
+            set { if (SetCfg(v => _procCfg.MeasureAreaXUm = v, _procCfg.MeasureAreaXUm, value)) RaiseGuideChanged(); }
+        }
+
+        /// <summary>_procCfg 필드용 setter 보조 — 값이 실제로 바뀌었을 때만 알림을 내보낸다.</summary>
+        private bool SetCfg(Action<double> assign, double current, double value,
+                            [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
+        {
+            if (Math.Abs(current - value) < 1e-9) return false;
+            assign(value);
+            OnPropertyChanged(name);
+            return true;
+        }
+
+        // ── 화면 가이드라인 (ImageScaleRuler 오버레이) ────────────────────────
+        // 분홍 측정창은 라이브든 불러온 이미지든 항상 같은 자리에 떠 있어야 한다 — 액적이 창 안에
+        // 드는지, 창이 어긋났는지를 '측정하기 전에' 눈으로 판단하는 것이 이 가이드의 목적이다.
+        // 값은 전부 이미지 픽셀. 설정(NozzlePitchPx 등)이 있으면 그것을 쓰고, 없으면 마지막 측정에서
+        // 실측한 격자를 쓴다 — 한 번 측정하고 나면 그 뒤로는 라인이 그 자리에 고정된다.
+        private (double OriginXPx, double PitchPx, int Count)? _lastGrid;
+
+        private double Upp => Math.Max(0.0001, _procCfg.MicronsPerPixel);
+
+        // 우선순위: 설정 픽셀값 → 시야·피치에서 계산(µm ÷ 스케일).
+        // 검출(DropWatcherProcessor)이 쓰는 규칙과 <b>같은 순서</b>다 — 다르면 화면의 창은 액적 위에
+        // 얹혀 있는데 측정은 딴 자리를 뒤진다(실장 2026-08-06: 가이드 113px / 검출 371px → 15개 중 5개).
+        // 실측 격자(_lastGrid)는 여기서 쓰지 않고, 측정 때 설정값이 비어 있으면 설정에 적어 넣는다.
+        public double GuidePitchPx  => _procCfg.NozzlePitchPx   > 0 ? _procCfg.NozzlePitchPx
+                                     : _procCfg.NozzlePitchUm > 0 ? _procCfg.NozzlePitchUm / Upp : 0;
+        public double GuideOriginPx => _procCfg.NozzleOriginXPx > 0 ? _procCfg.NozzleOriginXPx : GuidePitchPx / 2.0;
+        public double GuideWindowPx => _procCfg.MeasureAreaXPx  > 0 ? _procCfg.MeasureAreaXPx  : MeasureAreaXUm / Upp;
+        public double GuideTopPx    => _procCfg.MeasureTopPx    > 0 ? _procCfg.MeasureTopPx    : _procCfg.NozzleYPixel + MeasureStartUm / Upp;
+        public double GuideBottomPx => _procCfg.MeasureBottomPx > 0 ? _procCfg.MeasureBottomPx : _procCfg.NozzleYPixel + MeasureEndUm   / Upp;
+
+        /// <summary>화면에 실제로 서 있는 ROI 요약 — 스케일·피치가 맞는지 눈으로 검산하는 줄.</summary>
+        public string GuideSummary
+        {
+            get
+            {
+                double pitch = GuidePitchPx;
+                if (pitch < 2) return "ROI — 노즐 피치 또는 스케일 미설정";
+
+                int w = CurrentFrame?.PixelWidth ?? _procCfg.ExpectedImageWidth;
+                string cols = w > 0 ? $" · 창 {(int)Math.Max(0, (w - GuideOriginPx) / pitch) + 1}개" : "";
+                // 실측 간격을 나란히 보여 준다 — 설정값과 크게 다르면 피치나 스케일이 틀렸다는 뜻이고,
+                // 그 판단을 화면에서 바로 할 수 있어야 [격자 자동 맞춤]을 누를지 결정할 수 있다.
+                string meas = _lastGrid is { PitchPx: > 0 } g ? $" · 실측 {g.PitchPx:F1}px" : "";
+
+                // 창 폭은 간격 대비 비율로 같이 보여 준다 — 절대 픽셀만 보면 좁은지 알 수 없는데,
+                // 너무 좁으면 ROI 가 조금만 어긋나도 액적이 창 밖으로 빠져 안 잡힌다.
+                double win = Math.Min(GuideWindowPx, pitch);
+                return $"ROI — 간격 {pitch:F1}px({_procCfg.NozzlePitchUm:F0}µm) · " +
+                       $"창폭 {win:F0}px({win / pitch * 100:F0}%) · " +
+                       $"{Upp:F3}µm/px · Y {GuideTopPx:F0}~{GuideBottomPx:F0}px{cols}{meas}";
+            }
+        }
+
+        private void RaiseGuideChanged()
+        {
+            OnPropertyChanged(nameof(GuidePitchPx));
+            OnPropertyChanged(nameof(GuideOriginPx));
+            OnPropertyChanged(nameof(GuideWindowPx));
+            OnPropertyChanged(nameof(GuideTopPx));
+            OnPropertyChanged(nameof(GuideBottomPx));
+            OnPropertyChanged(nameof(GuideSummary));
+        }
+
+        // ── ROI 미세 이동 ─────────────────────────────────────────────────────
+        // 라이브로 토출을 보면서 액적이 창 한가운데 오도록 맞추는 용도. 설정 파일을 열거나
+        // µm 를 되짚어 계산하지 않고 화면을 보며 바로 맞출 수 있어야 쓸모가 있다.
+        // 이동량은 픽셀 — 스케일이 바뀌어도 화면에서 움직인 만큼 그대로 남는다.
+        private double _guideStepPx = 5;
+        public double GuideStepPx { get => _guideStepPx; set => SetProperty(ref _guideStepPx, Math.Max(1, value)); }
+
+        /// <summary>ROI 를 상하좌우로 <see cref="GuideStepPx"/> 만큼 옮긴다. 인자: L/R/U/D.</summary>
+        private void NudgeGuide(string dir)
+        {
+            double step = Math.Max(1, GuideStepPx);
+            switch (dir)
+            {
+                case "L": NozzleOriginXPx = Math.Max(0, GuideOriginPx - step); break;
+                case "R": NozzleOriginXPx = GuideOriginPx + step;              break;
+                case "U": ShiftBand(-step); break;
+                case "D": ShiftBand(+step); break;
+            }
+        }
+
+        /// <summary>측정 구간(초록 기준선)을 통째로 옮긴다 — 폭은 유지된다.</summary>
+        private void ShiftBand(double dy)
+        {
+            // µm 로만 잡혀 있던 구간을 픽셀로 굳힌 뒤 옮긴다. 이후로는 스케일이 바뀌어도
+            // 사용자가 눈으로 맞춘 자리에 그대로 남는다.
+            int top = (int)Math.Round(Math.Max(0, GuideTopPx    + dy));
+            int bot = (int)Math.Round(Math.Max(top + 4, GuideBottomPx + dy));
+
+            _procCfg.MeasureTopPx    = top;
+            _procCfg.MeasureBottomPx = bot;
+            RaiseGuideChanged();
+        }
+
+        private IReadOnlyList<Vision.NozzleMeasureMark>? _measureMarks;
+        /// <summary>측정 결과 마커(초록). 측정 전이나 미검출이면 null 이라 분홍 가이드만 남는다.</summary>
+        public IReadOnlyList<Vision.NozzleMeasureMark>? MeasureMarks
+        {
+            get => _measureMarks;
+            private set => SetProperty(ref _measureMarks, value);
+        }
+
+        // 가이드 격자를 픽셀로 고정하는 입력값 — _procCfg 와 같은 인스턴스를 보므로
+        // [교정값 저장]이 그대로 파일에 기록한다. 0 이면 마지막 실측 격자를 쓴다.
+        public double NozzlePitchPx
+        {
+            get => _procCfg.NozzlePitchPx;
+            set
+            {
+                if (Math.Abs(_procCfg.NozzlePitchPx - value) < 1e-9) return;
+                _procCfg.NozzlePitchPx = value;
+                OnPropertyChanged();
+                RaiseGuideChanged();
+            }
+        }
+
+        public double NozzleOriginXPx
+        {
+            get => _procCfg.NozzleOriginXPx;
+            set
+            {
+                if (Math.Abs(_procCfg.NozzleOriginXPx - value) < 1e-9) return;
+                _procCfg.NozzleOriginXPx = value;
+                OnPropertyChanged();
+                RaiseGuideChanged();
+            }
+        }
 
         // ── 캘리브레이션 ───────────────────────────────────────────────────────
         // 부피/직경/속도/낙하위치의 절대값이 µm/px 에 비례하므로 실장에서 반드시 교정한다.
         // 교정법: 실제 노즐 피치(µm)를 입력 → 검출 액적들의 평균 픽셀 피치로 µm/px 산출.
 
         // 헤드 사양상 인접 노즐 간 실제 거리[µm]. (예: 100dpi ≈ 254µm) — 실제 헤드값으로 입력.
-        private double _nozzlePitchUm = 254.0;
-        public double NozzlePitchUm { get => _nozzlePitchUm; set => SetProperty(ref _nozzlePitchUm, value); }
+        // 여기도 _procCfg 직결 — 화면에 따로 들고 있으면 config 값과 갈라진다(위 Measure Parameter 참고).
+        public double NozzlePitchUm
+        {
+            get => _procCfg.NozzlePitchUm;
+            set
+            {
+                if (!SetCfg(v => _procCfg.NozzlePitchUm = v, _procCfg.NozzlePitchUm, value)) return;
+                // 장비 설정에도 즉시 반영 — 레시피 화면의 '노즐 정보'와 같은 값이어야 한다.
+                // 여기서 교정으로 피치를 확정하고 저쪽에서 옛값을 보면 그 순간 다시 갈라진다.
+                if (IJPSystem.Platform.Infrastructure.Config.MachineSettings.IsReady && value > 0)
+                    IJPSystem.Platform.Infrastructure.Config.MachineSettings.Current
+                        .Set(MachineSettingsStore.Keys.NozzlePitchUm, value);
+                RaiseGuideChanged();
+            }
+        }
 
         // µm/px — _procCfg 와 동기(같은 인스턴스라 분석에 즉시 반영). 교정 버튼으로 자동 산출되거나 직접 입력.
         public double MicronsPerPixel
@@ -269,6 +462,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 if (Math.Abs(_procCfg.MicronsPerPixel - value) < 1e-9) return;
                 _procCfg.MicronsPerPixel = value;
                 OnPropertyChanged();
+                RaiseGuideChanged();   // µm 로 잡힌 가이드(창 폭·측정 구간)가 스케일에 딸려 움직인다
             }
         }
 
@@ -315,12 +509,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private static readonly SKColor AxisText = new SKColor(0x94, 0xA3, 0xB8);
         private static readonly SKColor AxisGrid = new SKColor(0x33, 0x41, 0x55);
 
-        // ※ 2026-07-23 실장 크래시 이력 — 차트 텍스트는 절대 건드리지 말 것:
-        //   축에 SKTypeface(맑은 고딕)를 명시하자 제어 PC 첫 렌더에서 네이티브 즉사.
-        //   그 PC 는 Skia 글꼴 스택이 깨져 있어(기본 글꼴 글자도 안 그려짐) 코드로는 해결 불가.
-        //   → 오늘 이전의 검증된 축 구성(크기 10, 배율/글꼴 미지정) 그대로 유지한다.
-        //   축 글자 표시는 OS 수리(Font Cache 서비스/재부팅) 후 재검토. 차트 의미는 WPF 헤더가 전달한다.
-        private static SolidColorPaint TextPaint() => new(AxisText);
+        // 축 글자 글꼴 — 제어 PC 는 Skia 의 시스템 글꼴 <b>조회</b>가 깨져 축 숫자가 통째로 안 나온다
+        // (격자선은 그려지고 WPF 한글은 멀쩡하다 → OS 글꼴이 아니라 Skia 글꼴 관리자 문제).
+        //
+        // 2026-07-23 에 SKTypeface.FromFamilyName("맑은 고딕") 으로 지정했다가 제어 PC 첫 렌더에서
+        // 네이티브 즉사한 것이 바로 그 관리자 경로다. ChartFont 는 글꼴 <b>파일</b>을 직접 읽어
+        // 관리자를 건너뛴다. 실패하면 null → 예전 동작(글꼴 미지정)으로 떨어지므로 더 나빠지지 않는다.
+        // 그래도 문제가 생기면 AppConfig.json 의 ChartFontFile="none" 으로 DLL 교체 없이 끌 수 있다.
+        private static SolidColorPaint TextPaint()
+        {
+            var paint = new SolidColorPaint(AxisText);
+            var tf = Common.ChartFont.Typeface;
+            if (tf != null) paint.SKTypeface = tf;
+            return paint;
+        }
 
         // ── 커맨드 ────────────────────────────────────────────────────────────
         public ICommand SetDelay1Command           { get; }
@@ -332,6 +534,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand ToggleLiveViewCommand      { get; }
         public ICommand CalibrateScaleCommand      { get; }
         public ICommand SaveCalibrationCommand     { get; }
+        /// <summary>화면의 액적에서 격자(간격·1번 X)를 읽어 가이드라인을 그 자리에 고정한다.</summary>
+        public ICommand AutoFitGridCommand         { get; }
+        public ICommand NudgeGuideCommand          { get; }
         public ICommand ToggleSpitCommand          { get; }
         public ICommand CaptureFocusReferenceCommand { get; }
         public ICommand ToggleStrobeCommand        { get; }
@@ -344,6 +549,17 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _vision = mainVM.GetController().GetMachine().Vision;
             _cfgPath = PathUtils.GetConfigPath("DropWatcherConfig.json");
             _procCfg = new ConfigLoader().LoadDropWatcherConfig(_cfgPath);
+
+            // 노즐 피치는 <b>장비 설정</b>이 기준이다 — 레시피 화면의 '노즐 정보'와 같은 값을 본다.
+            // 같은 물리량을 두 곳에서 들고 있으면 반드시 갈라진다(2026-08-07 에만 같은 종류의
+            // 버그를 두 번 잡았다: 가이드 113px vs 검출 371px, 화면 60µm vs 설정 150µm).
+            // 장비 설정이 비어 있으면(미입력) config 값을 그대로 쓴다 — 기존 현장이 안 깨진다.
+            if (IJPSystem.Platform.Infrastructure.Config.MachineSettings.IsReady)
+            {
+                double machinePitch = IJPSystem.Platform.Infrastructure.Config.MachineSettings.Current
+                    .GetDouble(MachineSettingsStore.Keys.NozzlePitchUm);
+                if (machinePitch > 0) _procCfg.NozzlePitchUm = machinePitch;
+            }
             _proc   = new DropWatcherProcessor(_procCfg);
 
             // 실장은 iCore Modbus, 가상은 지연을 가상 카메라로 흘려보내는 대역.
@@ -377,6 +593,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ToggleLiveViewCommand      = new RelayCommand(_ => ToggleLiveView());
             CalibrateScaleCommand      = new RelayCommand(async _ => await ExecuteCalibrateScaleAsync(), _ => !IsBusy);
             SaveCalibrationCommand     = new RelayCommand(_ => ExecuteSaveCalibration());
+            AutoFitGridCommand         = new RelayCommand(async _ => await ExecuteAutoFitGridAsync(), _ => !IsBusy);
+            // 라이브 중에도 눌러야 의미가 있다(액적을 보면서 맞추는 것이 목적) → CanExecute 제한 없음.
+            NudgeGuideCommand          = new RelayCommand(p => NudgeGuide(p as string ?? ""));
             ToggleSpitCommand          = new RelayCommand(async _ => await ExecuteToggleSpitAsync());
             CaptureFocusReferenceCommand = new RelayCommand(_ => ExecuteCaptureFocusReference(), _ => !IsBusy);
             ToggleStrobeCommand        = new RelayCommand(_ => ExecuteToggleStrobe());
@@ -666,6 +885,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // → 보이는 것과 측정 대상이 항상 같다. 샘플을 분석하고 싶으면 샘플 파일을 열면 된다.
         private async Task ExecuteMeasureAsync(string action)
         {
+            // 라이브와 동시에 캡쳐하면 같은 카메라 스트림을 두 곳에서 만져 드라이버가 죽는다.
+            bool wasLive = IsLiveView;
+            if (wasLive) ToggleLiveView();
+            await WaitLiveGrabDoneAsync();
+
             IsBusy = true;
             RaiseMeasureCanExecute();
             var cts = NewMeasureCts();
@@ -686,16 +910,61 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     src   = "라이브 캡쳐";
                 }
 
+                // 설정 오류(스케일·피치)는 출처와 무관하게 막는다 — 틀린 채로 계산하면
+                // "그럴듯하지만 전부 틀린 숫자"가 나와 오히려 판단을 망친다.
+                string? setupError = await Task.Run(() => _proc.ValidateSetup(frame), cts.Token);
+                if (setupError != null)
+                {
+                    _mainVM.AddLog($"[VISION] DropWatcher: {action} 중단 — {setupError}", LogLevel.Warning);
+                    return;
+                }
+
+                // 출처 불일치는 다르게 다룬다. 라이브인데 크기가 안 맞으면 설정이 틀린 것이라 막지만,
+                // [이미지 열기]로 일부러 연 파일(0호기 샘플 등)은 분석하려고 연 것이라 막지 않는다.
+                // 대신 그 이미지의 µm/px 는 이 카메라 값과 다르므로 반드시 짚어준다.
+                string? sourceWarn = await Task.Run(() => _proc.ValidateSource(frame), cts.Token);
+                if (sourceWarn != null)
+                {
+                    bool openedFile = !string.IsNullOrEmpty(_measureSourcePath) && File.Exists(_measureSourcePath);
+                    if (!openedFile)
+                    {
+                        _mainVM.AddLog($"[VISION] DropWatcher: {action} 중단 — {sourceWarn}", LogLevel.Warning);
+                        return;
+                    }
+                    _mainVM.AddLog(
+                        $"[VISION] DropWatcher: {sourceWarn} — 연 파일이라 측정은 진행합니다. " +
+                        "CALIBRATION 의 Scale 을 이 이미지에 맞춰 교정한 뒤 값을 해석하세요.", LogLevel.Warning);
+                }
+
+                // 이미지에서 실제로 보이는 노즐 격자 — 측정창을 픽셀로 고정할 값이다.
+                // 창이 액적과 어긋났을 때 "얼마로 넣어야 하는지"를 화면에서 바로 알 수 있어야
+                // 스케일·피치 교정 없이도 라인을 맞출 수 있다.
+                var grid = await Task.Run(() => _proc.EstimateNozzleGrid(frame), cts.Token);
+                if (grid is { } g)
+                {
+                    // 설정에 픽셀 격자가 없으면 이 실측값을 <b>검출에도 함께</b> 쓴다.
+                    // 가이드만 실측값을 쓰고 검출은 µm 환산값을 쓰면 둘이 어긋나 — 화면의 창은
+                    // 액적 위에 얹혀 있는데 측정은 엉뚱한 자리를 뒤져 개수가 모자란다
+                    // (실장 2026-08-06: 가이드 113px / 검출 371px → 15개 중 5개만 잡힘).
+                    _lastGrid = g;
+                    if (_procCfg.NozzlePitchPx   <= 0) _procCfg.NozzlePitchPx   = g.PitchPx;
+                    if (_procCfg.NozzleOriginXPx <= 0) _procCfg.NozzleOriginXPx = g.OriginXPx;
+                    OnPropertyChanged(nameof(NozzlePitchPx));
+                    OnPropertyChanged(nameof(NozzleOriginXPx));
+                    RaiseGuideChanged();
+                    _mainVM.AddLog(
+                        $"[VISION] DropWatcher: 실측 격자 — 간격 {g.PitchPx:F1}px · 1번 X {g.OriginXPx:F0}px · " +
+                        $"액적 {g.Count}개 (DropWatcherConfig.json 의 NozzlePitchPx / NozzleOriginXPx 에 넣으면 창이 고정됩니다)",
+                        LogLevel.Info);
+                }
+
                 var drops = await Task.Run(() => _proc.DetectDroplets(frame), cts.Token);
                 double delayUs = AppliedDelayUs > 0 ? AppliedDelayUs : DelayTimeUs;
 
-                // 오버레이(컬럼 분할선/측정창/중심마커/속도) 생성 → 좌측 이미지로 표시.
-                string dir = Path.Combine(Path.GetTempPath(), "IJP_DropWatcher");
-                Directory.CreateDirectory(dir);
-                string annPath = Path.Combine(dir, $"annotated_{DateTime.Now:HHmmss_fff}.png");
-                string? saved = await Task.Run(() => _proc.SaveAnnotatedFrame(annPath, frame, drops, delayUs), cts.Token);
-                if (!string.IsNullOrEmpty(saved)) CurrentImagePath = saved;
-                else if (!string.IsNullOrEmpty(frame.FilePath)) CurrentImagePath = frame.FilePath;
+                // 오버레이는 화면(ImageScaleRuler)이 벡터로 그린다 — 예전처럼 OpenCV 로 이미지에
+                // 구워 넣으면 그 PNG 위에 화면 가이드가 또 그려져 선이 두 겹으로 보인다(실장 2026-08-06).
+                // 원본 프레임을 그대로 두면 라이브·측정 후 화면이 같은 그림이 되고, 확대해도 선이 안 뭉갠다.
+                if (!string.IsNullOrEmpty(frame.FilePath)) CurrentImagePath = frame.FilePath;
 
                 ReportDroplets(action, drops, delayUs, src);
             }
@@ -712,6 +981,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 IsBusy = false;
                 RaiseMeasureCanExecute();
+                // 측정 결과(초록 마커)를 보여줘야 하므로 라이브는 되돌리지 않는다 —
+                // 되돌리면 다음 프레임이 결과 화면을 덮어써 무엇을 쟀는지 볼 수 없다.
             }
         }
 
@@ -769,11 +1040,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 LastResultText = "액적 미검출";
                 ClearResultCard();
+                MeasureMarks = null;                     // 초록 마커 지움 — 분홍 가이드는 남는다
                 _mainVM.AddLog($"[VISION] DropWatcher: {action}({src}) — 액적 미검출", LogLevel.Warning);
                 return;
             }
 
             double[] vel = _proc.ComputeDropletVelocities(drops, delayUs);
+
+            // 화면 오버레이용 마커 — 이미지에 굽지 않고 벡터로 얹는다(라이브에서도 부담 없다).
+            MeasureMarks = drops.Select((d, i) => new Vision.NozzleMeasureMark
+            {
+                XPixel   = d.CentroidXPixel,
+                YPixel   = d.CentroidYPixel,
+                Velocity = i < vel.Length ? vel[i] : double.NaN,
+            }).ToList();
             var okVel = vel.Where(v => !double.IsNaN(v)).ToArray();
             double avgDia = drops.Average(d => d.DiameterMicron);
             double avgVol = drops.Average(d => d.VolumePicoLiter);
@@ -976,6 +1256,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
             else
             {
+                // 이전 측정의 초록 결과는 다른 프레임의 값이다 — 라이브 화면에 남겨 두면
+                // 지금 보고 있는 액적의 속도처럼 읽힌다. 분홍 ROI 는 그대로 둔다(그게 기준선이다).
+                MeasureMarks = null;
                 IsLiveView = true;
                 _liveTimer.Start();
                 _mainVM.AddLog("[VISION] DropWatcher: Live View 시작", LogLevel.Info);
@@ -1079,6 +1362,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 return;
             }
 
+            // 라이브와 동시 캡쳐 금지 — 카메라 스트림을 두 곳에서 만지면 드라이버가 죽는다.
+            bool wasLive = IsLiveView;
+            if (wasLive) ToggleLiveView();
+            await WaitLiveGrabDoneAsync();
+
             IsBusy = true;
             RaiseMeasureCanExecute();
             try
@@ -1158,13 +1446,74 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// <summary>저장된 초점 기준 선명도(0 이면 미설정 — 초점 검사 비활성).</summary>
         public double ReferenceSharpness => _procCfg.ReferenceSharpness;
 
+        /// <summary>
+        /// 지금 보이는 화면의 액적에서 노즐 격자를 읽어 가이드라인을 고정한다.
+        /// 값은 <see cref="NozzlePitchPx"/>/<see cref="NozzleOriginXPx"/> 에 들어가고,
+        /// [교정값 저장]을 눌러야 파일에 남는다 — 눌러 보고 마음에 안 들면 그냥 다시 맞추면 된다.
+        /// </summary>
+        private async Task ExecuteAutoFitGridAsync()
+        {
+            // 라이브를 먼저 세운다 — 5fps 로 도는 캡쳐와 동시에 한 장을 더 요청하면 같은
+            // 카메라 스트림을 두 곳에서 만지게 되고, eBUS 드라이버가 네이티브 예외를 던진다.
+            bool wasLive = IsLiveView;
+            if (wasLive) ToggleLiveView();
+            await WaitLiveGrabDoneAsync();
+
+            IsBusy = true;
+            RaiseMeasureCanExecute();
+            try
+            {
+                VisionImage frame;
+                if (!string.IsNullOrEmpty(_measureSourcePath) && File.Exists(_measureSourcePath))
+                    frame = new VisionImage { CameraId = CamId, FilePath = _measureSourcePath, IsValid = true };
+                else
+                    frame = await _vision.CaptureAsync(CamId, saveToDisk: false);
+
+                var grid = await Task.Run(() => _proc.EstimateNozzleGrid(frame));
+                if (grid is not { } g)
+                {
+                    _mainVM.AddLog(
+                        "[VISION] DropWatcher: 격자 자동 맞춤 실패 — 액적이 2개 이상 보여야 간격을 잴 수 있습니다.",
+                        LogLevel.Warning);
+                    return;
+                }
+
+                NozzlePitchPx   = Math.Round(g.PitchPx, 1);
+                NozzleOriginXPx = Math.Round(g.OriginXPx, 1);
+                _mainVM.AddLog(
+                    $"[VISION] DropWatcher: 격자 자동 맞춤 — 간격 {NozzlePitchPx:F1}px · 1번 X {NozzleOriginXPx:F1}px " +
+                    $"(액적 {g.Count}개). 유지하려면 [교정값 저장]을 누르세요.", LogLevel.Success);
+            }
+            catch (Exception ex)
+            {
+                _mainVM.AddLog($"[VISION] DropWatcher: 격자 자동 맞춤 실패: {ex.Message}", LogLevel.Error);
+            }
+            finally
+            {
+                IsBusy = false;
+                RaiseMeasureCanExecute();
+                if (wasLive) ToggleLiveView();   // 보고 있던 라이브는 되돌려 준다
+            }
+        }
+
+        /// <summary>
+        /// 진행 중인 라이브 캡쳐 1장이 끝나기를 기다린다.
+        /// 타이머를 세워도 그 순간 날아가 있던 요청은 남아 있어서, 그대로 새 캡쳐를 걸면
+        /// 카메라 스트림을 동시에 두 곳에서 만지게 된다.
+        /// </summary>
+        private async Task WaitLiveGrabDoneAsync()
+        {
+            for (int i = 0; i < 40 && _liveGrabbing; i++) await Task.Delay(50);   // 최대 2초
+        }
+
         private void ExecuteSaveCalibration()
         {
             try
             {
                 new ConfigLoader().SaveDropWatcherConfig(_cfgPath, _procCfg);
                 _mainVM.AddLog(
-                    $"[VISION] DropWatcher: 캘리브레이션 저장 — {MicronsPerPixel:F3} µm/px, 노즐면 Y={NozzleYPixel:F0}px",
+                    $"[VISION] DropWatcher: 캘리브레이션 저장 — {MicronsPerPixel:F3} µm/px, 노즐면 Y={NozzleYPixel:F0}px, " +
+                    $"격자 {NozzlePitchPx:F1}px @ {NozzleOriginXPx:F1}px",
                     LogLevel.Success);
             }
             catch (Exception ex)

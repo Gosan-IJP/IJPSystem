@@ -1,4 +1,5 @@
 ﻿using IJPSystem.Platform.Domain.Common;
+using IJPSystem.Platform.Application.Sequences;   // PointNames — 티칭 위치 목록
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.Motion;
 using IJPSystem.Platform.HMI.Common;
@@ -66,6 +67,25 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand AllServoOffCommand { get; }
         public ICommand AllStopCommand     { get; }
 
+        // ── 티칭 위치 이동 ────────────────────────────────────────────────────
+        // 버튼을 하드코딩하지 않고 PointNames.All 을 그대로 돌린다 — 포인트가 늘거나 줄면
+        // 화면이 따라온다(티칭 화면도 같은 목록을 쓴다). 호기별 포인트 차이도 이걸로 흡수된다.
+        public IReadOnlyList<string> TeachPoints => PointNames.All;
+
+        /// <summary>티칭 위치로 이동. CommandParameter 로 포인트 이름을 받는다.</summary>
+        public ICommand MovePointCommand { get; }
+
+        private bool _isPointMoving;
+        public bool IsPointMoving
+        {
+            get => _isPointMoving;
+            private set
+            {
+                if (SetProperty(ref _isPointMoving, value))
+                    (MovePointCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+
         private double _jogSpeedScale = 1.0;
         public double JogSpeedScale
         {
@@ -93,6 +113,59 @@ namespace IJPSystem.Platform.HMI.ViewModels
             AllServoOnCommand  = new RelayCommand(async _ => await ExecuteAllServoOn());
             AllServoOffCommand = new RelayCommand(async _ => await ExecuteAllServoOff());
             AllStopCommand     = new RelayCommand(async _ => await ExecuteAllStop());
+
+            MovePointCommand   = new RelayCommand(
+                async p => await MoveToPointAsync(p as string ?? ""),
+                _ => !IsPointMoving);
+        }
+
+        // 티칭 위치 이동. 절대좌표 이동이라 원점 미완료 상태에서는 위험하다 —
+        // 패턴 인쇄 화면과 같은 기준으로 막는다(알람/레시피/원점).
+        private async Task MoveToPointAsync(string pointName)
+        {
+            if (string.IsNullOrWhiteSpace(pointName)) return;
+
+            if (_mainVM.HasActiveAlarm)
+            {
+                _mainVM.AddLog($"[MOTION] {pointName} 이동 — 중단 (미해제 알람 존재)", LogLevel.Warning);
+                return;
+            }
+            if (string.IsNullOrEmpty(_mainVM.RecipeVM?.ActiveRecipeName))
+            {
+                _mainVM.AddLog($"[MOTION] {pointName} 이동 — 중단 (적용된 레시피 없음)", LogLevel.Warning);
+                return;
+            }
+
+            var allAxes = _mainVM.GetController()?.GetMachine()?.Motion?.GetAllStatus();
+            if (allAxes == null || allAxes.Count == 0)
+            {
+                _mainVM.AddLog($"[MOTION] {pointName} 이동 — 중단 (축 정보 없음 — 모션 드라이버 확인)", LogLevel.Error);
+                return;
+            }
+            var notHomed = allAxes.Where(a => !a.IsHomeDone).Select(a => a.AxisNo).ToList();
+            if (notHomed.Count > 0)
+            {
+                _mainVM.AddLog(
+                    $"[MOTION] {pointName} 이동 — 중단 (INITIALIZE 미수행, 미원점 축: {string.Join(", ", notHomed)})",
+                    LogLevel.Warning);
+                return;
+            }
+
+            IsPointMoving = true;
+            try
+            {
+                var motion = new Services.MotionServiceAdapter(_mainVM);
+                await motion.MoveToPointAsync(pointName, System.Threading.CancellationToken.None);
+                _mainVM.AddLog($"[MOTION] {pointName} 이동 완료", LogLevel.Info);
+            }
+            catch (Exception ex)
+            {
+                _mainVM.AddLog($"[MOTION] {pointName} 이동 실패 — {ex.Message}", LogLevel.Error);
+            }
+            finally
+            {
+                IsPointMoving = false;
+            }
         }
 
         private async Task ExecuteAllServoOn()

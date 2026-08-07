@@ -89,8 +89,9 @@
                             </Ellipse>
                             <Ellipse Width="16" Height="16" Margin="4,0">
                                 <Ellipse.Style>
+                                    <!-- STANDBY 램프 — 실물 경광등을 주황이 아닌 파랑으로 쓴다(2026-08-07). -->
                                     <Style TargetType="Ellipse">
-                                        <Setter Property="Fill" Value="#451a03"/>
+                                        <Setter Property="Fill" Value="#0c2a45"/>
                                         <Setter Property="Opacity" Value="0.3"/>
                                         <Style.Triggers>
                                             <MultiDataTrigger>
@@ -98,7 +99,7 @@
                                                     <Condition Binding="{Binding HasActiveAlarm}" Value="False"/>
                                                     <Condition Binding="{Binding IsStandby}" Value="True"/>
                                                 </MultiDataTrigger.Conditions>
-                                                <Setter Property="Fill" Value="#F59E0B"/>
+                                                <Setter Property="Fill" Value="#3B82F6"/>
                                                 <Setter Property="Opacity" Value="1.0"/>
                                             </MultiDataTrigger>
                                         </Style.Triggers>
@@ -387,7 +388,8 @@
                             <Style TargetType="Ellipse">
                                 <Setter Property="Fill" Value="#64748B"/>
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsStandby}"     Value="True"><Setter Property="Fill" Value="#F59E0B"/></DataTrigger>
+                                    <!-- 경광등(상단)과 같은 파랑 — 같은 상태를 두 색으로 보이면 고장으로 읽힌다 -->
+                                    <DataTrigger Binding="{Binding IsStandby}"     Value="True"><Setter Property="Fill" Value="#3B82F6"/></DataTrigger>
                                     <DataTrigger Binding="{Binding IsRunning}"     Value="True"><Setter Property="Fill" Value="#22C55E"/></DataTrigger>
                                     <DataTrigger Binding="{Binding HasActiveAlarm}" Value="True"><Setter Property="Fill" Value="#EF4444"/></DataTrigger>
                                 </Style.Triggers>
@@ -399,7 +401,7 @@
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="#64748B"/>
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsStandby}"     Value="True"><Setter Property="Foreground" Value="#F59E0B"/></DataTrigger>
+                                    <DataTrigger Binding="{Binding IsStandby}"     Value="True"><Setter Property="Foreground" Value="#3B82F6"/></DataTrigger>
                                     <DataTrigger Binding="{Binding IsRunning}"     Value="True"><Setter Property="Foreground" Value="#22C55E"/></DataTrigger>
                                     <DataTrigger Binding="{Binding HasActiveAlarm}" Value="True"><Setter Property="Foreground" Value="#EF4444"/></DataTrigger>
                                 </Style.Triggers>
@@ -528,7 +530,13 @@
                     <TextBlock Text="RECIPE :  " Foreground="#94A3B8" FontSize="11" FontWeight="Bold"/>
                     <TextBlock Text="{Binding RecipeVM.ActiveRecipeName}"
                                Foreground="#3B82F6" FontSize="12" FontWeight="Bold"
-                               Margin="0,0,20,0"/>
+                               Margin="0,0,16,0"/>
+
+                    <!-- 실행 중인 빌드(본체 DLL 수정시각). 실장에서 DLL 을 복사한 뒤 그 파일이 실제로
+                         도는지 로그를 열지 않고 확인하는 자리 — 예전 버전이 그대로 뜨는 일이 반복됐다. -->
+                    <TextBlock x:Name="BuildStampText" Foreground="#475569" FontSize="10"
+                               FontFamily="Consolas" VerticalAlignment="Center" Margin="0,0,20,0"
+                               ToolTip="실행 중인 IJPSystem.Platform.HMI.dll 의 수정시각"/>
                 </StackPanel>
             </StatusBarItem>
         </StatusBar>

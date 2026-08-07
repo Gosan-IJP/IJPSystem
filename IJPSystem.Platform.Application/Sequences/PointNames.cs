@@ -7,6 +7,8 @@ namespace IJPSystem.Platform.Application.Sequences
     public static class PointNames
     {
         public const string Ready          = "READY";
+        /// <summary>글라스 얼라인 위치 — 정렬 카메라(GVC)로 글라스 기준을 잡는 자리.</summary>
+        public const string GlassAlign     = "GLASS ALIGN";
         public const string Load           = "LOAD";
         public const string Unload         = "UNLOAD";
         public const string Purge          = "PURGE";
@@ -23,7 +25,7 @@ namespace IJPSystem.Platform.Application.Sequences
         // (글라스 로드/언로드는 수동이라 전용 티칭 위치가 필요 없음)
         public static IReadOnlyList<string> All { get; } = new[]
         {
-            Ready, Purge,
+            Ready, GlassAlign, Purge,
             PrintStart, PrintEnd, DropWatcher,
             PrintHeadUp, PrintHeadDown,
         };

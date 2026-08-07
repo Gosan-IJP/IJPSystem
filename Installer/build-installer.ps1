@@ -1,4 +1,4 @@
-<#
+﻿<#
     build-installer.ps1
     IJPSystem HMI 설치 파일(setup.exe) 생성 스크립트.
 

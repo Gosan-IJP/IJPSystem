@@ -14,8 +14,19 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
     public sealed class TriggerChainSettings
     {
         // ── 소스 ──────────────────────────────────────────────────────────────
-        /// <summary>헤드 토출 펄스 입력 터미널.</summary>
+        /// <summary>
+        /// 분주기 입력 터미널. <b>PFI8 = 엔코더/프린트 펄스</b> (랩뷰 구성, 2026-08-07 공유).
+        /// <para>
+        /// 드랍와처는 정지 상태 토출이라 이 펄스가 토출 펄스지만, 인쇄 중에는 스테이지 엔코더
+        /// 펄스가 같은 핀으로 들어온다 — 즉 이 체인은 <b>위치 동기 스트로브</b>다. 이동 거리에
+        /// 동기해 일정 간격마다 LED 를 발광시키므로, 스테이지 속도가 변해도 촬영 간격(거리)이
+        /// 일정하다. 시간 기반으로 바꾸면 인쇄 중 촬영 위치가 속도에 따라 흔들린다.
+        /// </para>
+        /// </summary>
         public string SpitPulseTerminal { get; set; } = "/Dev1/PFI8";
+
+        /// <summary>드랍와처 세팅 화면 트리거(스핏 동기) 입력. 랩뷰는 /Dev1/PFI5 를 쓴다 — 아직 미사용.</summary>
+        public string SpitSyncTerminal { get; set; } = "/Dev1/PFI5";
 
         /// <summary>LED/Cam 펄스 폭 산출용 고속 타임베이스.</summary>
         public string TimebaseTerminal { get; set; } = "/Dev1/100MHzTimebase";
@@ -24,10 +35,19 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         public double TimebaseRateHz { get; set; } = 100e6;
 
         // ── 카운터 배정 ───────────────────────────────────────────────────────
-        // ※ 원본 VI 는 ctr0/ctr1/ctr3 을 쓰며 LED = ctr0 만 확인됨.
-        //   Divider/Cam 의 정확한 배정은 블록다이어그램으로 확인 필요.
-        public string DividerCounter { get; set; } = "Dev1/ctr1";
-        public string LedCounter     { get; set; } = "Dev1/ctr0";
+        // 랩뷰 구성(2026-08-07 공유): CO Pulse 채널은 ctr0 / ctr1 / ctr3 세 개이고, 배선 주석은
+        // "PFI13(ctr1 out) → DWC LED, PFI14(ctr2 out) → GVC LED".
+        //
+        // X-Series 기본 라우팅은 ctr0→PFI12, ctr1→PFI13, ctr2→PFI14, ctr3→PFI15 다. 여기서
+        // PFI13 이 DWC LED 로 확정이므로 <b>LED 카운터는 ctr1</b> 이고, 남는 ctr0 이 분주기다.
+        // (이전 기본값은 LED=ctr0 이었는데, 그러면 발광 펄스가 PFI12 로 나가 아무 데도 안 연결된다)
+        //
+        // ★미확인 — GVC LED 쪽: 배선 주석은 ctr2(PFI14) 라는데 CO 채널 목록에는 ctr2 가 없고 ctr3 이
+        //   있다. 둘 중 하나가 어긋난 것이므로 실물에서 확인할 것. ctr3 이면 출력은 PFI15 다.
+        //   또한 랩뷰 목록에는 <b>카메라 트리거 출력이 없다</b> — 스트로브 발광만으로 액적을 얼리고
+        //   카메라는 자유 실행일 가능성이 있다. CamCounter 의 존재 자체가 확인 대상이다.
+        public string DividerCounter { get; set; } = "Dev1/ctr0";
+        public string LedCounter     { get; set; } = "Dev1/ctr1";
         public string CamCounter     { get; set; } = "Dev1/ctr3";
 
         // ── 분주 ──────────────────────────────────────────────────────────────
@@ -59,6 +79,13 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
         /// <summary>토출 펄스의 상승/하강 엣지 선택. true=상승.</summary>
         public bool TriggerOnRisingEdge { get; set; } = true;
+
+        /// <summary>
+        /// JSON 의 미지의 키(_comment 메모 등)를 보존한다.
+        /// 없으면 저장 한 번에 배선 근거·미확인 표시가 전부 사라진다.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public Dictionary<string, System.Text.Json.JsonElement>? ExtraKeys { get; set; }
 
         // ── 환산 헬퍼 (NI 구현과 무관한 순수 계산 — 여기서 검증 가능) ─────────
 

@@ -36,8 +36,10 @@ namespace IJPSystem.Platform.HMI.Nozzle
             if (string.IsNullOrWhiteSpace(input))
                 return new List<int>();
 
-            // 명령 분해 (';')
-            foreach (string rawCmd in input.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            // 명령 분해 — ';' 와 줄바꿈 둘 다 구분자다(LabVIEW 입력창이 여러 줄이라 줄바꿈으로 나눠 쓴다).
+            // ※ 줄바꿈을 안 나누면 "ADD(1~10)\nDEL(5)" 가 한 덩어리로 들어와 TryExtractFunc 가
+            //   마지막 ')' 까지 통째로 집어삼켜 전부 무효 토큰이 된다.
+            foreach (string rawCmd in input.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 string cmd = rawCmd.Trim();
                 if (cmd.Length == 0) continue;

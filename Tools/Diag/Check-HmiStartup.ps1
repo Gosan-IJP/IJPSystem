@@ -1,4 +1,4 @@
-# HMI 기동 실패 진단 — 실장 PC 에서 실행한다.
+﻿# HMI 기동 실패 진단 — 실장 PC 에서 실행한다.
 #
 #   powershell -ExecutionPolicy Bypass -File Check-HmiStartup.ps1
 #   powershell -ExecutionPolicy Bypass -File Check-HmiStartup.ps1 -AppDir "D:\IJPSystem"
@@ -19,19 +19,68 @@ function Ok  ($t) { Write-Host "  [OK] $t" -ForegroundColor Green }
 function Note($t) { Write-Host "      $t" -ForegroundColor DarkGray }
 
 $exeName = 'IJPSystem.Platform.HMI.exe'
+$dllName = 'IJPSystem.Platform.HMI.dll'
 
 # ── 설치 폴더 찾기 ─────────────────────────────────────────────────────────
+# 후보를 전부 나열한다. DLL 을 새로 복사했는데 예전 버전이 실행되는 원인 1순위가
+# "설치본이 두 군데 있고, 고친 쪽과 실행되는 쪽이 다르다" 이기 때문이다(2026-08-07).
 Head "설치 폴더"
-if (-not $AppDir) {
-    $cands = @('C:\IJPSystem', 'D:\IJPSystem', 'C:\Program Files (x86)\IJPSystem', "$env:LOCALAPPDATA\Programs\IJPSystem") |
-             Where-Object { Test-Path (Join-Path $_ $exeName) }
-    if ($cands.Count -gt 0) { $AppDir = $cands[0] }
+$searchDirs = @(
+    'C:\IJPSystem', 'D:\IJPSystem',
+    'C:\Program Files (x86)\IJPSystem', 'C:\Program Files\IJPSystem',
+    "$env:LOCALAPPDATA\Programs\IJPSystem",
+    # UAC 파일 가상화 — 관리자 권한 없이 Program Files 에 복사하면 여기로 새어 들어간다.
+    # 탐색기에서는 복사가 성공한 것처럼 보이지만 실제 폴더의 파일은 그대로다.
+    "$env:LOCALAPPDATA\VirtualStore\Program Files (x86)\IJPSystem",
+    "$env:LOCALAPPDATA\VirtualStore\Program Files\IJPSystem"
+)
+# ※ Join-Path 를 쓰지 않는다 — 없는 드라이브(D:)를 주면 예외가 난다. 후보에는 없는 경로가 섞인다.
+$found = @($searchDirs | Where-Object {
+    $d = $_.TrimEnd('\')
+    (Test-Path ($d + '\' + $exeName)) -or (Test-Path ($d + '\' + $dllName))
+})
+
+if ($found.Count -gt 1) {
+    Bad "설치본이 $($found.Count) 군데 있다 — 고친 폴더와 실행되는 폴더가 다를 수 있다"
+    foreach ($d in $found) {
+        $f = Get-Item (Join-Path $d $dllName) -ErrorAction SilentlyContinue
+        $when = if ($f) { $f.LastWriteTime.ToString('MM-dd HH:mm') } else { '(dll 없음)' }
+        Note ("{0,-60} {1}" -f $d, $when)
+    }
+    Note "바로가기의 '대상' 경로를 확인해 실제 실행되는 폴더를 고칠 것."
 }
+if ($found | Where-Object { $_ -like '*VirtualStore*' }) {
+    Bad "VirtualStore 에 사본이 있다 — 관리자 권한 없이 Program Files 에 복사한 흔적이다"
+    Note "탐색기를 '관리자 권한으로 실행'해서 다시 복사하고, VirtualStore 사본은 지울 것."
+}
+
+if (-not $AppDir) { if ($found.Count -gt 0) { $AppDir = $found[0] } }
 if (-not $AppDir -or -not (Test-Path (Join-Path $AppDir $exeName))) {
     Bad "설치 폴더를 못 찾았다. -AppDir 로 직접 지정할 것 (예: -AppDir `"D:\IJPSystem`")"
     return
 }
 Ok $AppDir
+
+# ── 바로가기가 가리키는 곳 ────────────────────────────────────────────────
+# 폴더를 고쳤는데 바로가기가 다른 설치본을 가리키면 계속 예전 것이 뜬다.
+Head "바로가기 대상"
+$lnkDirs = @("$env:PUBLIC\Desktop", "$env:USERPROFILE\Desktop",
+             "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\IJPSystem")
+$shell = New-Object -ComObject WScript.Shell
+$anyLnk = $false
+foreach ($d in $lnkDirs) {
+    if (-not (Test-Path $d)) { continue }
+    foreach ($lnk in Get-ChildItem $d -Filter *.lnk -File -ErrorAction SilentlyContinue) {
+        try {
+            $target = $shell.CreateShortcut($lnk.FullName).TargetPath
+            if ($target -notmatch 'IJPSystem') { continue }
+            $anyLnk = $true
+            if ($target -like "$AppDir*") { Ok "$($lnk.Name) → $target" }
+            else { Bad "$($lnk.Name) → $target  (점검한 폴더와 다르다)" }
+        } catch { }
+    }
+}
+if (-not $anyLnk) { Note "IJPSystem 바로가기를 찾지 못했다" }
 
 # ── 실행 중인 인스턴스 ────────────────────────────────────────────────────
 # 단일 인스턴스 뮤텍스가 있어, 좀비 프로세스가 남아 있으면 두 번째 실행은 즉시 종료된다.

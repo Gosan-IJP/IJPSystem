@@ -48,8 +48,16 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         public int RoiWidth { get; set; }
         public int RoiHeight { get; set; }
 
-        /// <summary>측정창(Measure Area X) 폭[µm]. 몽타주 컬럼에 측정 ROI 박스로 표시.</summary>
-        public double MeasureAreaXUm { get; set; } = 60.0;
+        /// <summary>
+        /// 측정창(Measure Area X) 폭[µm] — 화면의 분홍 박스 가로 폭.
+        /// <para>
+        /// 액적 직경(수십µm)에 토출 흔들림을 더한 것보다 넉넉해야 한다. 좁으면 옆 노즐을 안 물어
+        /// 좋을 것 같지만, ROI 가 조금만 어긋나도 액적이 창 밖으로 빠져 아예 안 잡힌다
+        /// (60µm 는 4.0X 에서 88px 로 노즐 간격 371px 의 24%였다 — 2026-08-07 정정).
+        /// 간격을 넘는 값은 <see cref="TryBuildWindows"/> 에서 잘리므로 옆 노즐과 겹치지는 않는다.
+        /// </para>
+        /// </summary>
+        public double MeasureAreaXUm { get; set; } = 150.0;
 
         /// <summary>
         /// 노즐면(토출 시작) 의 Y 픽셀 좌표. 다중노즐 프레임에서 액적 낙하거리 = (중심Y − 이 값).
@@ -59,6 +67,94 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
         /// <summary>위상 스윕 캡쳐 프레임 수(몽타주 컬럼 수).</summary>
         public int SweepFrames { get; set; } = 15;
+
+        // ── 노즐 기하 (LabVIEW 'Sample DW' 방식) ──────────────────────────────
+        // 원본 LabVIEW 는 노즐 위치를 미리 알고(피치) 그 자리에만 고정 측정창을 놓는다.
+        // 반면 이미지 전체에서 자유 검출하면, 액적이 아닌 사진에서도 얼룩을 액적으로 세어
+        // "노즐 62개 · 부피 2544pL" 같은 그럴듯한 쓰레기 값이 나온다(실장 2026-08-06).
+        // 고정창 방식은 엉뚱한 이미지에서 '아무것도 안 나오는 것'이 정상 동작이 된다.
+
+        /// <summary>
+        /// 물리 노즐 피치[µm] — 열 내 인접 노즐 간격. 측정창을 놓는 기준이다.
+        /// ※ PCC .cfg 의 Xdpi 는 <b>인쇄 해상도</b>지 노즐 피치가 아니다(600DPI = 인쇄 픽셀 42.3µm).
+        ///   반드시 헤드 사양서 값을 넣을 것.
+        /// </summary>
+        public double NozzlePitchUm { get; set; } = 254.0;
+
+        /// <summary>1번 노즐(화면 최좌측 측정창) 중심의 X 픽셀. 0 이면 검출된 액적에서 위상을 추정한다.</summary>
+        public double NozzleOriginXPx { get; set; } = 0;
+
+        /// <summary>
+        /// 측정창 간격을 <b>픽셀로 직접</b> 고정한다. 0 이면 <see cref="NozzlePitchUm"/> ÷ µm/px 로 계산.
+        /// <para>
+        /// µm 로 계산하면 피치와 스케일 <b>둘 다</b> 맞아야 창이 제자리에 선다. 실장 교정 전이거나
+        /// 다른 카메라 샘플을 볼 때는 그 둘이 안 맞아 창이 통째로 어긋난다(실장 2026-08-06: 371px
+        /// 로 잡혀 실제 간격 113px 와 3배 차이). 화면에서 눈으로 맞출 수 있는 픽셀값을 직접 주면
+        /// 스케일과 무관하게 라인이 고정된다 — LabVIEW 가 ROI 를 픽셀로 들고 있는 것과 같다.
+        /// </para>
+        /// </summary>
+        public double NozzlePitchPx { get; set; } = 0;
+
+        /// <summary>측정창을 픽셀로 줄 때의 창 <b>전체 폭</b>[px] (중심 ±폭/2). 0 이면 MeasureAreaXUm ÷ µm/px 로 계산.</summary>
+        public double MeasureAreaXPx { get; set; } = 0;
+
+        /// <summary>세로 추적 구간을 픽셀로 고정(Top/Bottom). 둘 다 0 이면 MeasureStart/EndUm 을 쓴다.</summary>
+        public int MeasureTopPx { get; set; } = 0;
+        public int MeasureBottomPx { get; set; } = 0;
+
+        /// <summary>
+        /// true 면 노즐 피치 기반 고정 측정창 안에서만 찾는다. false 면 전체 자유 검출.
+        /// <b>기본은 false</b> — 고정창은 피치·µm/px·노즐면이 모두 실측으로 맞춰진 뒤에야 의미가 있어서,
+        /// 그 설정을 갖춘 현장 config(DropWatcherConfig.json)에서 켠다. 실장 9호기는 켜져 있다.
+        /// </summary>
+        public bool UseFixedNozzleRoi { get; set; } = false;
+
+        /// <summary>측정 추적 구간 시작[µm] — 노즐면(NozzleYPixel) 기준 아래로.</summary>
+        public double MeasureStartUm { get; set; } = 130.0;
+
+        /// <summary>측정 추적 구간 끝[µm] — 노즐면 기준. Start 이하면 전체 높이를 쓴다.</summary>
+        public double MeasureEndUm { get; set; } = 910.0;
+
+        // ── 프레임 출처 검증 ──────────────────────────────────────────────────
+        /// <summary>
+        /// 이 카메라가 내놓아야 할 해상도[px]. 0 이면 검사 안 함.
+        /// 다른 카메라·다른 호기에서 찍힌 이미지를 열어 측정하면 µm/px 가 통째로 달라
+        /// 모든 절대값이 틀린다(실장: 1280×1072 이미지를 2856×2848 스케일로 측정).
+        /// </summary>
+        public int ExpectedImageWidth { get; set; } = 0;
+        public int ExpectedImageHeight { get; set; } = 0;
+
+        /// <summary>
+        /// 카메라 시야[µm] — 렌즈·카메라 사양서 값 (FOV = 센서 크기 × 픽셀크기 ÷ 배율). 0 이면 미사용.
+        /// <para>
+        /// <b>이것이 기준이다.</b> 시야는 광학계가 정하는 고정값이고, 프레임 해상도가 얼마든
+        /// µm/px = FOV ÷ 프레임 픽셀수 로 항상 계산된다. µm/px 를 손으로 적어 두면 해상도가
+        /// 달라지는 순간(비닝·크롭·가상 드라이버) 조용히 틀린 채로 남고, 눈금이 실제와 다른
+        /// 크기를 말하게 된다 — 9호기 사양 1.9564 × 1.9509 mm 인데 화면은 1112 × 849 µm 로
+        /// 표시되던 건(2026-08-07)이 그것이다.
+        /// </para>
+        /// </summary>
+        public double FieldOfViewXUm { get; set; } = 0;
+
+        /// <summary>카메라 세로 시야[µm]. 0 이면 가로와 같은 스케일(정사각 픽셀)로 본다.</summary>
+        public double FieldOfViewYUm { get; set; } = 0;
+
+        /// <summary>가로 스케일[µm/px] = 시야 ÷ 프레임 폭. FOV 미설정이면 null.</summary>
+        public double? ScaleFromFov(int frameWidth) =>
+            FieldOfViewXUm > 0 && frameWidth > 0 ? FieldOfViewXUm / frameWidth : (double?)null;
+
+        /// <summary>
+        /// 세로 스케일[µm/px] = 시야 ÷ 프레임 높이. 세로 FOV 가 없으면 null(가로 값을 쓴다).
+        /// <para>
+        /// 눈금 표시 전용이다. 직경·부피·속도는 가로 스케일 하나로 계산한다 — 실장 카메라는
+        /// 픽셀이 정사각이라 두 값이 소수 넷째 자리까지 같고, 축마다 다른 스케일로 물리량을
+        /// 계산하면 어느 쪽이 쓰였는지 알 수 없는 숫자가 나오기 때문이다.
+        /// 두 값이 크게 다르면 그 프레임이 이 카메라의 정상 출력이 아니라는 뜻이고,
+        /// 눈금이 가로·세로를 각각 사실대로 보여 주면 그 사실이 화면에 드러난다.
+        /// </para>
+        /// </summary>
+        public double? ScaleYFromFov(int frameHeight) =>
+            FieldOfViewYUm > 0 && frameHeight > 0 ? FieldOfViewYUm / frameHeight : (double?)null;
 
         // ── 이미지 품질 판정 ──────────────────────────────────────────────────
         // 나쁜 이미지도 "그럴듯한 숫자"를 만들어내는 게 가장 위험하다. 특히 초점 이탈은
@@ -81,6 +177,17 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
         /// <summary>액적과 배경의 최소 명암차(8bit 레벨). 0 이면 대비 검사 비활성.</summary>
         public double MinContrast { get; set; } = 20;
+
+        /// <summary>
+        /// 이 클래스가 모르는 JSON 키를 그대로 담아 두었다가 저장할 때 되돌려 쓴다.
+        /// <para>
+        /// 화면의 [교정값 저장]이 이 객체를 통째로 직렬화하므로, 이게 없으면 설정 파일에 적어 둔
+        /// <c>_comment</c> 설명(스케일 산출 근거·미검증 항목 경고 등)이 저장 한 번에 전부 사라진다.
+        /// 그 메모는 나중에 이 파일만 보고 판단해야 하는 사람에게 필요하다.
+        /// </para>
+        /// </summary>
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public Dictionary<string, System.Text.Json.JsonElement>? ExtraKeys { get; set; }
     }
 
     /// <summary>프레임 품질 측정 결과. 측정을 막지는 않고 결과에 꼬리표를 붙이는 용도.</summary>
@@ -195,6 +302,49 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         /// BlackHat(어두운 액적)/TopHat(밝은 액적)으로 배경 그라디언트를 제거한 뒤 임계를 잡으면
         /// 조명 불균일에 강건해진다(실측 Raw: 전역 Otsu 는 노이즈 2750개 → BlackHat 은 액적 15개만).
         /// </summary>
+        /// <summary>배경 추정 폭[px] 상한 — 이 크기로 줄여서 큰 커널 형태학을 돌린다.</summary>
+        private const int BackgroundWorkLongSide = 720;
+
+        /// <summary>
+        /// 배경(저주파 성분)을 형태학으로 추정한다. 액적이 어두우면 닫힘, 밝으면 열림.
+        ///
+        /// <para>
+        /// <b>축소본에서 계산하는 이유</b>: 형태학 비용은 O(폭×높이×커널²) 다. 실장 프레임
+        /// 2856×2848 에 커널 81 이면 5×10¹⁰ 회 — 분 단위로 멈추고, 32비트 프로세스에서는 내부
+        /// 버퍼까지 겹쳐 네이티브 예외로 죽는다(실장 2026-08-07: [격자 자동 맞춤] 누르자 앱 응답 없음
+        /// → "External component has thrown an exception"). 배경은 <b>정의상 저주파</b>라 축소본에서
+        /// 구해도 같은 그림이 나오고, 커널을 같은 비율로 줄이면 물리적 의미도 그대로다.
+        /// 액적 경계는 원본 해상도의 <c>work</c> 에서 빼기 때문에 선명도를 잃지 않는다.
+        /// </para>
+        /// </summary>
+        private Mat EstimateBackground(Mat work, int kernelSize)
+        {
+            var op = _cfg.DropletsAreDark ? MorphTypes.Close : MorphTypes.Open;
+            int longSide = Math.Max(work.Width, work.Height);
+            double scale = longSide > BackgroundWorkLongSide ? (double)BackgroundWorkLongSide / longSide : 1.0;
+
+            if (scale >= 1.0)
+            {
+                var bgFull = new Mat();
+                using var k = Cv2.GetStructuringElement(MorphShapes.Ellipse, new Size(kernelSize, kernelSize));
+                Cv2.MorphologyEx(work, bgFull, op, k);
+                return bgFull;
+            }
+
+            int ksSmall = Math.Max(3, (int)Math.Round(kernelSize * scale)) | 1;
+
+            using var small = new Mat();
+            Cv2.Resize(work, small, new Size(), scale, scale, InterpolationFlags.Area);
+
+            using var kS = Cv2.GetStructuringElement(MorphShapes.Ellipse, new Size(ksSmall, ksSmall));
+            using var smallBg = new Mat();
+            Cv2.MorphologyEx(small, smallBg, op, kS);
+
+            var bg = new Mat();
+            Cv2.Resize(smallBg, bg, new Size(work.Width, work.Height), 0, 0, InterpolationFlags.Linear);
+            return bg;
+        }
+
         private Mat Segment(Mat work)
         {
             var bin = new Mat();
@@ -204,9 +354,12 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
             {
                 // 배경(저주파)을 제거해 액적만 밝게 남긴다 → 항상 Binary 로 임계.
                 int ks = _cfg.BackgroundKernel | 1;   // 홀수 보정
-                using var k = Cv2.GetStructuringElement(MorphShapes.Ellipse, new Size(ks, ks));
+                using var bg = EstimateBackground(work, ks);
                 using var hat = new Mat();
-                Cv2.MorphologyEx(work, hat, _cfg.DropletsAreDark ? MorphTypes.BlackHat : MorphTypes.TopHat, k);
+                // BlackHat = 닫힘 − 원본, TopHat = 원본 − 열림. 배경을 따로 구해 빼는 형태로 쓰면
+                // 배경만 축소본에서 계산할 수 있다(아래 EstimateBackground 참고).
+                if (_cfg.DropletsAreDark) Cv2.Subtract(bg, work, hat);
+                else                      Cv2.Subtract(work, bg, hat);
 
                 var t = ThresholdTypes.Binary;
                 if (thr <= 0) { t |= ThresholdTypes.Otsu; thr = 0; }
@@ -232,13 +385,225 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         /// 실측 DW Raw 는 한 장에 액적이 가로로 늘어서 있으므로(스트로브 위상별 위치),
         /// 각 액적이 곧 하나의 측정 컬럼(=시간 스텝)이 된다.
         /// </summary>
-        public IReadOnlyList<DropletInfo> DetectDroplets(VisionImage frame)
+        /// <summary>
+        /// 측정 전 프레임이 이 장비의 것인지, 설정이 물리적으로 말이 되는지 확인한다.
+        /// 문제가 없으면 null, 있으면 사유 문자열. <b>측정을 시작하기 전에 부르고, 값이 있으면 측정하지 말 것</b> —
+        /// 스케일이 틀린 채로 계산하면 "그럴듯하지만 전부 틀린 숫자"가 나와 오히려 판단을 망친다.
+        /// </summary>
+        public string? ValidateFrame(VisionImage frame) => ValidateSource(frame) ?? ValidateSetup(frame);
+
+        /// <summary>
+        /// 프레임이 <b>이 카메라</b>에서 나온 것인지. 다르면 사유, 같으면 null.
+        /// <para>
+        /// 라이브 캡쳐가 이걸 어기면 설정이 틀린 것이라 측정을 막아야 한다. 반대로 작업자가
+        /// [이미지 열기]로 <b>일부러 연 파일</b>(0호기 샘플 등)은 막으면 안 된다 — 분석하려고 연 것이다.
+        /// 대신 그 이미지의 µm/px 는 이 카메라 값과 다르므로 호출부가 경고를 남기고,
+        /// 작업자가 CALIBRATION 의 Scale 을 그 이미지에 맞춰 교정한 뒤 측정해야 한다.
+        /// </para>
+        /// </summary>
+        public string? ValidateSource(VisionImage frame)
         {
-            var list = new List<DropletInfo>();
-            if (frame == null || !frame.IsValid) return list;
+            if (frame == null || !frame.IsValid) return "유효하지 않은 프레임";
 
             using var gray = ToGrayMat(frame);
-            if (gray == null || gray.Empty()) return list;
+            if (gray == null || gray.Empty()) return "이미지를 읽지 못했습니다";
+
+            if (_cfg.ExpectedImageWidth > 0 && _cfg.ExpectedImageHeight > 0 &&
+                (gray.Width != _cfg.ExpectedImageWidth || gray.Height != _cfg.ExpectedImageHeight))
+            {
+                return $"이 카메라의 이미지가 아닙니다 — {gray.Width}×{gray.Height} " +
+                       $"(기대 {_cfg.ExpectedImageWidth}×{_cfg.ExpectedImageHeight}). " +
+                       $"현재 스케일 {_cfg.MicronsPerPixel:F3}µm/px 는 이 이미지의 값이 아닙니다.";
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 설정이 물리적으로 말이 되는지(스케일·피치). 이건 이미지 출처와 무관한 설정 오류라
+        /// 파일이든 라이브든 측정을 막아야 한다.
+        /// </summary>
+        public string? ValidateSetup(VisionImage frame)
+        {
+            if (_cfg.MicronsPerPixel <= 0) return "µm/px 스케일이 설정되지 않았습니다";
+            if (!_cfg.UseFixedNozzleRoi) return null;
+            if (_cfg.NozzlePitchUm <= 0) return "노즐 피치가 설정되지 않았습니다";
+
+            using var gray = ToGrayMat(frame);
+            if (gray == null || gray.Empty()) return null;
+
+            // 시야에 노즐이 한 개도 안 들어오면 피치나 스케일이 틀린 것이다.
+            double fovUm = gray.Width * _cfg.MicronsPerPixel;
+            if (fovUm / _cfg.NozzlePitchUm < 1.0)
+            {
+                return $"시야({fovUm:F0}µm)가 노즐 피치({_cfg.NozzlePitchUm:F0}µm)보다 좁습니다 — " +
+                       "피치 또는 µm/px 설정을 확인하세요.";
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 액적 검출. <see cref="DropWatcherProcessorConfig.UseFixedNozzleRoi"/> 가 켜져 있으면
+        /// 노즐 피치 기반 고정 측정창 안에서만 찾고(LabVIEW 방식), 꺼져 있으면 전체 자유 검출.
+        /// </summary>
+        public IReadOnlyList<DropletInfo> DetectDroplets(VisionImage frame)
+        {
+            if (frame == null || !frame.IsValid) return new List<DropletInfo>();
+            using var g = ToGrayMat(frame);
+            if (g == null || g.Empty()) return new List<DropletInfo>();
+
+            return _cfg.UseFixedNozzleRoi ? DetectByNozzleRoi(g) : DetectFree(g);
+        }
+
+        /// <summary>노즐 피치로 자리를 잡은 고정 측정창 안에서만 액적을 찾는다(창당 최대 1개).</summary>
+        private List<DropletInfo> DetectByNozzleRoi(Mat gray)
+        {
+            var list = new List<DropletInfo>();
+            double upp = _cfg.MicronsPerPixel;
+            double pitchPx = EffectivePitchPx();
+            if (pitchPx < 4) return list;                    // 창이 겹칠 정도 — 설정 오류
+
+            double originX = ResolveNozzleOriginX(gray, pitchPx);
+            if (!TryBuildWindows(gray.Width, gray.Height, originX, pitchPx,
+                                 out var centers, out int yTop, out int yBot, out double halfWinPx))
+                return list;
+
+            using var band = new Mat(gray, new Rect(0, yTop, gray.Width, yBot - yTop + 1));
+            using var bin  = Segment(band);
+
+            foreach (double cx in centers)
+            {
+                int x0 = (int)Math.Round(cx - halfWinPx);
+                int x1 = (int)Math.Round(cx + halfWinPx);
+                x0 = Math.Max(0, x0);
+                x1 = Math.Min(bin.Width - 1, x1);
+                if (x1 - x0 < 2) continue;
+
+                using var win = new Mat(bin, new Rect(x0, 0, x1 - x0 + 1, bin.Height));
+                Cv2.FindContours(win, out Point[][] contours, out _,
+                    RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+
+                // 창당 하나 — 가장 큰 것이 주 액적이다(위성 액적은 버린다).
+                Point[]? best = null;
+                double bestArea = 0;
+                foreach (var c in contours)
+                {
+                    double a = Cv2.ContourArea(c);
+                    if (a < _cfg.MinAreaPx || a > _cfg.MaxAreaPx) continue;
+                    if (a > bestArea) { bestArea = a; best = c; }
+                }
+                if (best == null) continue;                  // 이 노즐은 미토출 — 건너뛴다
+
+                var m = Cv2.Moments(best);
+                if (m.M00 <= 0) continue;
+
+                double diaUm = 2.0 * Math.Sqrt(bestArea / Math.PI) * upp;
+                double rUm = diaUm / 2.0;
+                list.Add(new DropletInfo
+                {
+                    CentroidXPixel  = m.M10 / m.M00 + x0,
+                    CentroidYPixel  = m.M01 / m.M00 + yTop,
+                    AreaPx          = bestArea,
+                    DiameterMicron  = diaUm,
+                    VolumePicoLiter = 4.0 / 3.0 * Math.PI * rUm * rUm * rUm * 1e-3,
+                });
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// 1번 측정창의 X 중심. 설정값이 있으면 그대로 쓰고, 없으면 자유 검출 결과에서 위상만 추정한다.
+        /// 위상은 원형 평균으로 낸다 — 단순 나머지의 중앙값은 0/피치 경계에서 무너진다.
+        /// </summary>
+        /// <summary>측정창 간격[px]. 픽셀 지정이 있으면 그것, 없으면 피치[µm] ÷ µm/px.</summary>
+        private double EffectivePitchPx()
+            => _cfg.NozzlePitchPx > 0
+             ? _cfg.NozzlePitchPx
+             : _cfg.NozzlePitchUm / Math.Max(0.0001, _cfg.MicronsPerPixel);
+
+        /// <summary>
+        /// 이미지에서 실제 노즐 격자(1번 중심 X, 간격)를 읽어낸다. 창을 픽셀로 고정할 값을 얻는 용도.
+        /// 이웃 간격의 <b>중앙값</b>을 쓴다 — 평균은 미토출로 한 칸 건너뛴 구간에 끌려간다.
+        /// 액적이 2개 미만이면 null.
+        /// </summary>
+        public (double OriginXPx, double PitchPx, int Count)? EstimateNozzleGrid(VisionImage frame)
+        {
+            if (frame == null || !frame.IsValid) return null;
+            using var gray = ToGrayMat(frame);
+            if (gray == null || gray.Empty()) return null;
+
+            var drops = DetectFree(gray);           // X 오름차순
+            if (drops.Count < 2) return null;
+
+            var gaps = new List<double>(drops.Count - 1);
+            for (int i = 1; i < drops.Count; i++)
+                gaps.Add(drops[i].CentroidXPixel - drops[i - 1].CentroidXPixel);
+            gaps.Sort();
+            double pitch = gaps[gaps.Count / 2];
+            if (pitch < 4) return null;
+
+            return (drops[0].CentroidXPixel, pitch, drops.Count);
+        }
+
+        private double ResolveNozzleOriginX(Mat gray, double pitchPx)
+            => _cfg.NozzleOriginXPx > 0 ? _cfg.NozzleOriginXPx
+                                        : PhaseFromDrops(DetectFree(gray), pitchPx);
+
+        /// <summary>액적 X 들의 피치 위상(원형 평균). 단순 나머지의 중앙값은 0/피치 경계에서 무너진다.</summary>
+        private static double PhaseFromDrops(IReadOnlyList<DropletInfo> drops, double pitchPx)
+        {
+            if (drops == null || drops.Count < 2 || pitchPx <= 0) return double.NaN;
+
+            double sx = 0, sy = 0;
+            foreach (var d in drops)
+            {
+                double th = 2.0 * Math.PI * (d.CentroidXPixel / pitchPx);
+                sx += Math.Cos(th);
+                sy += Math.Sin(th);
+            }
+            double phase = Math.Atan2(sy, sx) / (2.0 * Math.PI) * pitchPx;
+            while (phase < 0) phase += pitchPx;
+            return phase;
+        }
+
+        /// <summary>
+        /// 고정 측정창의 기하(중심 X 목록·세로 밴드·창 반폭). 검출과 오버레이가 같은 값을 써야
+        /// 화면의 분홍 박스와 실제 측정 위치가 일치한다. 설정이 안 맞으면 false.
+        /// </summary>
+        private bool TryBuildWindows(int width, int height, double originX, double pitchPx,
+                                     out List<double> centers, out int yTop, out int yBot, out double halfWinPx)
+        {
+            centers = new List<double>();
+            yTop = 0; yBot = height - 1; halfWinPx = 0;
+            if (pitchPx < 4 || double.IsNaN(originX)) return false;
+
+            double upp = _cfg.MicronsPerPixel;
+
+            // 창 폭 — 픽셀 지정이 있으면 그것이 우선(스케일과 무관하게 고정).
+            double winPx = _cfg.MeasureAreaXPx > 0 ? _cfg.MeasureAreaXPx : _cfg.MeasureAreaXUm / upp;
+            halfWinPx = Math.Min(Math.Max(2.0, winPx / 2.0), pitchPx / 2.0);
+
+            if (_cfg.MeasureTopPx > 0 || _cfg.MeasureBottomPx > 0)
+            {
+                yTop = _cfg.MeasureTopPx;
+                yBot = _cfg.MeasureBottomPx > 0 ? _cfg.MeasureBottomPx : height - 1;
+            }
+            else
+            {
+                yTop = (int)Math.Round(_cfg.NozzleYPixel + _cfg.MeasureStartUm / upp);
+                yBot = (int)Math.Round(_cfg.NozzleYPixel + _cfg.MeasureEndUm   / upp);
+            }
+            yTop = Math.Clamp(yTop, 0, height - 1);
+            yBot = Math.Clamp(yBot, 0, height - 1);
+            if (yBot - yTop < 2) { yTop = 0; yBot = height - 1; }
+
+            for (double cx = originX; cx < width; cx += pitchPx) centers.Add(cx);
+            return centers.Count > 0;
+        }
+
+        /// <summary>이미지 전체에서 액적을 자유 검출(구방식). 위상 추정과 교정에 쓰인다.</summary>
+        private List<DropletInfo> DetectFree(Mat gray)
+        {
+            var list = new List<DropletInfo>();
 
             Rect roi = ClampRoi(new Rect(_cfg.RoiX, _cfg.RoiY, _cfg.RoiWidth, _cfg.RoiHeight), gray.Width, gray.Height);
             using var work = (roi.Width > 0 && roi.Height > 0) ? new Mat(gray, roi) : gray.Clone();
@@ -301,6 +666,29 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
                 int n = drops?.Count ?? 0;
                 int boxW = Math.Max(8, (int)(_cfg.MeasureAreaXUm / Math.Max(0.01, _cfg.MicronsPerPixel)));
+
+                // 고정 측정창 모드면 '노즐 자리'를 먼저 그린다 — 액적이 없는 창도 보여야
+                // 미토출인지 창이 어긋난 것인지 화면에서 바로 구분된다(LabVIEW 의 분홍 박스).
+                if (_cfg.UseFixedNozzleRoi && (_cfg.NozzlePitchPx > 0 || _cfg.NozzlePitchUm > 0))
+                {
+                    double pitchPx = EffectivePitchPx();
+                    double originX = _cfg.NozzleOriginXPx > 0
+                                   ? _cfg.NozzleOriginXPx
+                                   : PhaseFromDrops(drops ?? Array.Empty<DropletInfo>(), pitchPx);
+
+                    if (TryBuildWindows(W, H, originX, pitchPx,
+                                        out var centers, out int wTop, out int wBot, out double halfPx))
+                    {
+                        foreach (double cx in centers)
+                        {
+                            int x0 = Math.Clamp((int)Math.Round(cx - halfPx), 0, W - 1);
+                            int x1 = Math.Clamp((int)Math.Round(cx + halfPx), 0, W - 1);
+                            if (x1 - x0 < 2) continue;
+                            Cv2.Rectangle(canvas,
+                                new Rect(x0, topH + wTop, x1 - x0, Math.Max(2, wBot - wTop)), magenta, 1);
+                        }
+                    }
+                }
 
                 for (int i = 0; i < n; i++)
                 {

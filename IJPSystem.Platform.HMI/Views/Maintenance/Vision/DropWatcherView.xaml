@@ -235,8 +235,17 @@
                     <Grid>
                         <!-- 캡처 이미지 + µm 눈금자 — 한 요소가 같은 사각형으로 그려 항상 정렬된다.
                              이미지는 좌상단 고정(가운데 정렬 안 함) → 이미지가 바뀌어도 원점(0,0)이 안 움직인다. -->
+                        <!-- 노즐 가이드라인 — 분홍 측정창은 항상, 초록 결과는 측정했을 때만.
+                             값은 이미지 픽셀이라 µm/px 교정 상태와 무관하게 같은 자리에 선다. -->
                         <vis:ImageScaleRuler Source="{Binding CurrentFrame}"
                                              MicronsPerPixel="{Binding MicronsPerPixel}"
+                                             MicronsPerPixelY="{Binding MicronsPerPixelY}"
+                                             NozzlePitchPx="{Binding GuidePitchPx}"
+                                             NozzleOriginXPx="{Binding GuideOriginPx}"
+                                             NozzleWindowWidthPx="{Binding GuideWindowPx}"
+                                             BandTopPx="{Binding GuideTopPx}"
+                                             BandBottomPx="{Binding GuideBottomPx}"
+                                             Marks="{Binding MeasureMarks}"
                                              IsHitTestVisible="False"/>
 
                         <!-- 처리 중 오버레이 -->
@@ -595,6 +604,102 @@
                                 </Border>
                             </StackPanel>
                         </Grid>
+
+                        <!-- ── 가이드 격자 (픽셀) ──────────────────────────────────
+                             분홍 가이드라인의 자리. µm 가 아니라 픽셀로 잡는 이유는, µm 로 두면
+                             피치와 µm/px 가 <b>둘 다</b> 맞아야 라인이 제자리에 서기 때문이다
+                             (실장 2026-08-06: 371px 로 잡혀 실제 113px 와 3배 어긋남).
+                             0 이면 마지막 측정에서 실측한 격자를 쓴다. -->
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="가이드 간격" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0F172A" CornerRadius="6" Height="32" BorderBrush="#334155" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="px" Style="{StaticResource DwUnit}"/>
+                                        <TextBox Text="{Binding NozzlePitchPx, StringFormat={}{0:F1}, UpdateSourceTrigger=LostFocus}"
+                                                 Style="{StaticResource DwTextBox}"
+                                                 ToolTip="측정창 간격[px]. 0 이면 마지막 측정에서 실측한 간격을 씁니다."/>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="1번 창 X" Style="{StaticResource DwFieldLabel}"/>
+                                <Border Background="#0F172A" CornerRadius="6" Height="32" BorderBrush="#334155" BorderThickness="1">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="px" Style="{StaticResource DwUnit}"/>
+                                        <TextBox Text="{Binding NozzleOriginXPx, StringFormat={}{0:F1}, UpdateSourceTrigger=LostFocus}"
+                                                 Style="{StaticResource DwTextBox}"
+                                                 ToolTip="맨 왼쪽 측정창의 중심 X[px]."/>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- ── ROI 미세 이동 ──────────────────────────────────────
+                             라이브로 토출을 보면서 액적이 창 한가운데 오도록 맞추는 자리.
+                             값을 계산해 입력하는 대신 화면을 보며 바로 옮길 수 있어야 쓸모가 있다. -->
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="72"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0" Text="ROI 이동" Style="{StaticResource DwFieldLabel}"
+                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <StackPanel.Resources>
+                                    <Style x:Key="NudgeBtn" TargetType="Button" BasedOn="{StaticResource MutedActionButtonStyle}">
+                                        <Setter Property="Width"      Value="34"/>
+                                        <Setter Property="Height"     Value="32"/>
+                                        <Setter Property="Margin"     Value="0,0,4,0"/>
+                                        <Setter Property="Background" Value="#1E293B"/>
+                                    </Style>
+                                </StackPanel.Resources>
+                                <Button Style="{StaticResource NudgeBtn}" Command="{Binding NudgeGuideCommand}"
+                                        CommandParameter="L" ToolTip="ROI 를 왼쪽으로">
+                                    <TextBlock Text="←" Foreground="#EC4099" FontSize="15" FontWeight="Bold"/>
+                                </Button>
+                                <Button Style="{StaticResource NudgeBtn}" Command="{Binding NudgeGuideCommand}"
+                                        CommandParameter="R" ToolTip="ROI 를 오른쪽으로">
+                                    <TextBlock Text="→" Foreground="#EC4099" FontSize="15" FontWeight="Bold"/>
+                                </Button>
+                                <Button Style="{StaticResource NudgeBtn}" Command="{Binding NudgeGuideCommand}"
+                                        CommandParameter="U" Margin="10,0,4,0" ToolTip="측정 구간을 위로">
+                                    <TextBlock Text="↑" Foreground="#EC4099" FontSize="15" FontWeight="Bold"/>
+                                </Button>
+                                <Button Style="{StaticResource NudgeBtn}" Command="{Binding NudgeGuideCommand}"
+                                        CommandParameter="D" ToolTip="측정 구간을 아래로">
+                                    <TextBlock Text="↓" Foreground="#EC4099" FontSize="15" FontWeight="Bold"/>
+                                </Button>
+                            </StackPanel>
+
+                            <Border Grid.Column="2" Background="#0F172A" CornerRadius="6" Height="32"
+                                    BorderBrush="#334155" BorderThickness="1">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Right" Text="px" Style="{StaticResource DwUnit}"/>
+                                    <TextBox Text="{Binding GuideStepPx, StringFormat={}{0:F0}, UpdateSourceTrigger=LostFocus}"
+                                             Style="{StaticResource DwTextBox}" ToolTip="한 번에 옮길 픽셀 수"/>
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- 지금 화면에 서 있는 ROI 요약 — 설정값과 실측 간격이 크게 다르면
+                             피치나 스케일이 틀렸다는 뜻이라, 자동 맞춤을 누를지 여기서 판단한다. -->
+                        <TextBlock Text="{Binding GuideSummary}" Foreground="#64748B" FontSize="10"
+                                   FontFamily="Consolas" TextWrapping="Wrap" Margin="0,8,0,0"/>
+
+                        <Button Height="40" Margin="0,8,0,0" Command="{Binding AutoFitGridCommand}"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E3A8A"
+                                ToolTip="지금 화면의 액적에서 간격과 시작 위치를 읽어 가이드라인을 그 자리에 맞춥니다. 유지하려면 [교정값 저장]을 누르세요.">
+                            <TextBlock Text="격자 자동 맞춤" Foreground="White" FontSize="12" FontWeight="Bold"/>
+                        </Button>
 
                         <!-- 교정 / 저장 버튼 -->
                         <Grid Margin="0,10,0,0">

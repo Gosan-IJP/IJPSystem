@@ -32,11 +32,18 @@ namespace IJPSystem.Platform.HMI.Vision
         private const double LabelPadX    = 3;       // 라벨 배경판 좌우 여백
         private const double LabelPadY    = 1;
 
-        private static readonly Brush TextBrush  = new SolidColorBrush(Color.FromRgb(0xE2, 0xE8, 0xF0));
+        // 눈금도 분홍 — LabVIEW 'Sample DW' 와 같은 그림이 되도록 맞춘다(측정창과 같은 계열).
+        private static readonly Brush TextBrush  = new SolidColorBrush(Color.FromRgb(0xEC, 0x40, 0x99));
         private static readonly Brush LabelBack  = new SolidColorBrush(Color.FromArgb(0xB8, 0x0B, 0x0F, 0x1A));
-        private static readonly Pen   TickPen    = MakePen(0xE2, 0xE8, 0xF0, 1.0, 0xB0);
+        private static readonly Pen   TickPen    = MakePen(0xEC, 0x40, 0x99, 1.0, 0xD0);
         private static readonly Pen   GridPen    = MakePen(0x94, 0xA3, 0xB8, 0.5, 0x55);
         private static readonly Pen   BorderPen  = MakePen(0x47, 0x55, 0x69, 1.0, 0xFF);
+
+        // 가이드라인 — LabVIEW 'Sample DW' 와 같은 색 규약.
+        //   분홍: 노즐 측정창(항상 표시). 초록: 측정 결과(측정했을 때만).
+        private static readonly Pen   GuidePen   = MakePen(0xEC, 0x40, 0x99, 1.0, 0xE0);
+        private static readonly Pen   ResultPen  = MakePen(0x22, 0xC5, 0x5E, 1.0, 0xE0);
+        private static readonly Brush ResultText = new SolidColorBrush(Color.FromRgb(0x4A, 0xDE, 0x80));
 
         private static Pen MakePen(byte r, byte g, byte b, double thickness, byte alpha)
         {
@@ -49,12 +56,76 @@ namespace IJPSystem.Platform.HMI.Vision
         {
             TextBrush.Freeze();
             LabelBack.Freeze();
+            ResultText.Freeze();
+        }
+
+        // ── 노즐 가이드라인 ───────────────────────────────────────────────────
+        // 전부 <b>이미지 픽셀</b> 단위다. µm 로 두면 스케일 교정이 어긋나는 순간 라인이 통째로
+        // 밀려서 "고정 가이드"라는 목적 자체가 깨진다(실장 2026-08-06: 371px 로 잡혀 실제 113px
+        // 와 3배 차이). 픽셀로 두면 교정 상태와 무관하게 같은 자리에 선다.
+
+        private static DependencyProperty Px(string name) =>
+            DependencyProperty.Register(name, typeof(double), typeof(ImageScaleRuler),
+                new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+
+        public static readonly DependencyProperty NozzlePitchPxProperty       = Px(nameof(NozzlePitchPx));
+        public static readonly DependencyProperty NozzleOriginXPxProperty     = Px(nameof(NozzleOriginXPx));
+        public static readonly DependencyProperty NozzleWindowWidthPxProperty = Px(nameof(NozzleWindowWidthPx));
+        public static readonly DependencyProperty BandTopPxProperty           = Px(nameof(BandTopPx));
+        public static readonly DependencyProperty BandBottomPxProperty        = Px(nameof(BandBottomPx));
+
+        /// <summary>측정창 간격[px]. 0 이면 가이드라인을 그리지 않는다.</summary>
+        public double NozzlePitchPx
+        {
+            get => (double)GetValue(NozzlePitchPxProperty);
+            set => SetValue(NozzlePitchPxProperty, value);
+        }
+
+        /// <summary>1번 측정창 중심 X[px].</summary>
+        public double NozzleOriginXPx
+        {
+            get => (double)GetValue(NozzleOriginXPxProperty);
+            set => SetValue(NozzleOriginXPxProperty, value);
+        }
+
+        /// <summary>측정창 폭[px].</summary>
+        public double NozzleWindowWidthPx
+        {
+            get => (double)GetValue(NozzleWindowWidthPxProperty);
+            set => SetValue(NozzleWindowWidthPxProperty, value);
+        }
+
+        /// <summary>측정 구간 윗변 Y[px].</summary>
+        public double BandTopPx
+        {
+            get => (double)GetValue(BandTopPxProperty);
+            set => SetValue(BandTopPxProperty, value);
+        }
+
+        /// <summary>측정 구간 아랫변 Y[px]. 0 이면 이미지 아래끝.</summary>
+        public double BandBottomPx
+        {
+            get => (double)GetValue(BandBottomPxProperty);
+            set => SetValue(BandBottomPxProperty, value);
+        }
+
+        public static readonly DependencyProperty MarksProperty =
+            DependencyProperty.Register(nameof(Marks), typeof(IEnumerable<NozzleMeasureMark>), typeof(ImageScaleRuler),
+                new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
+        /// <summary>측정 결과 마커(초록). null/빈 목록이면 그리지 않는다 — 측정 전에는 분홍 가이드만 보인다.</summary>
+        public IEnumerable<NozzleMeasureMark>? Marks
+        {
+            get => (IEnumerable<NozzleMeasureMark>?)GetValue(MarksProperty);
+            set => SetValue(MarksProperty, value);
         }
 
         public ImageScaleRuler()
         {
-            // 축소 렌더 품질 — 기존 Image 의 RenderOptions.BitmapScalingMode=HighQuality 와 동일.
-            RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.HighQuality);
+            // LowQuality(=쌍선형, GPU) 여야 한다. HighQuality(Fant)는 CPU 소프트웨어 경로라
+            // 라이브에서 2856×2848 프레임을 매 렌더 패스마다 다시 리샘플링해 화면이 통째로 깜빡인다
+            // (글라스뷰에서 같은 원인으로 확인됨). 눈금·ROI 는 벡터라 품질 영향이 없다.
+            RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.LowQuality);
         }
 
         // AffectsMeasure — 이미지가 바뀌면 종횡비가 달라져 필요한 높이도 달라진다(MeasureOverride 참고).
@@ -79,6 +150,21 @@ namespace IJPSystem.Platform.HMI.Vision
         {
             get => (double)GetValue(MicronsPerPixelProperty);
             set => SetValue(MicronsPerPixelProperty, value);
+        }
+
+        public static readonly DependencyProperty MicronsPerPixelYProperty =
+            DependencyProperty.Register(nameof(MicronsPerPixelY), typeof(double), typeof(ImageScaleRuler),
+                new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+
+        /// <summary>
+        /// 세로 눈금 스케일[µm/px]. 0 이면 <see cref="MicronsPerPixel"/> 을 쓴다.
+        /// 시야(FOV)는 가로·세로가 따로 정해지므로, 프레임 종횡비가 시야와 다르면 두 값이 달라진다.
+        /// 그때 한 값으로 양쪽 눈금을 그리면 한 축이 거짓 길이를 말한다.
+        /// </summary>
+        public double MicronsPerPixelY
+        {
+            get => (double)GetValue(MicronsPerPixelYProperty);
+            set => SetValue(MicronsPerPixelYProperty, value);
         }
 
         /// <summary>
@@ -135,8 +221,13 @@ namespace IJPSystem.Platform.HMI.Vision
             bool inMicrons = umPerPx > 0 && !double.IsNaN(umPerPx) && !double.IsInfinity(umPerPx);
             if (!inMicrons) umPerPx = 1.0;
 
+            // 세로 스케일이 따로 주어지면 그것을 쓴다 — 시야가 가로·세로 각각 정해지기 때문이다.
+            double umPerPxY = MicronsPerPixelY;
+            if (!inMicrons || !(umPerPxY > 0) || double.IsNaN(umPerPxY) || double.IsInfinity(umPerPxY))
+                umPerPxY = umPerPx;
+
             double totalX = src.PixelWidth  * umPerPx;
-            double totalY = src.PixelHeight * umPerPx;
+            double totalY = src.PixelHeight * umPerPxY;
 
             double stepX = NiceStep(totalX * (MinLabelSpacing / imgW));
             double stepY = NiceStep(totalY * (MinLabelSpacing / imgH));
@@ -197,6 +288,91 @@ namespace IJPSystem.Platform.HMI.Vision
             // 좌상단 구석의 단위 표기는 두지 않는다(중복 + 폭 낭비).
             DrawFormatted(dc, capFt, x0 + imgW - LabelPadX * 2, labelTop,
                           centerX: false, rightAlign: true, topAligned: true);
+
+            DrawNozzleGuides(dc, src, x0, y0, scale, imgW, imgH, dpi);
+        }
+
+        /// <summary>
+        /// 노즐 측정창(분홍)과 측정 결과(초록)를 그린다.
+        /// 분홍은 이미지가 있으면 <b>항상</b> — 라이브든 불러온 파일이든 같은 자리에 서 있어야
+        /// 액적이 창 안에 드는지 눈으로 바로 확인된다. 초록은 측정했을 때만 나타난다.
+        /// </summary>
+        private void DrawNozzleGuides(DrawingContext dc, BitmapSource src,
+                                      double x0, double y0, double scale, double imgW, double imgH, double dpi)
+        {
+            double pitch = NozzlePitchPx;
+            if (pitch < 2) return;                       // 미설정 — 가이드 없음
+
+            double winW = NozzleWindowWidthPx > 0 ? NozzleWindowWidthPx : pitch * 0.5;
+            winW = Math.Min(winW, pitch);                // 이웃 창과 겹치지 않게
+            double originX = NozzleOriginXPx > 0 ? NozzleOriginXPx : pitch / 2.0;
+
+            double top    = Math.Clamp(BandTopPx, 0, src.PixelHeight);
+            double bottom = BandBottomPx > top ? Math.Min(BandBottomPx, src.PixelHeight) : src.PixelHeight;
+
+            double ToX(double px) => x0 + px * scale;
+            double ToY(double px) => y0 + px * scale;
+
+            double yT = ToY(top), yB = ToY(bottom);
+
+            // 측정창(분홍) — 위/아래 초록 기준선 사이를 채운다.
+            var windows = new List<(double Left, double Right)>();
+            int index = 0;
+            for (double cx = originX; cx < src.PixelWidth; cx += pitch)
+            {
+                index++;
+                double left  = ToX(cx - winW / 2.0);
+                double right = ToX(cx + winW / 2.0);
+                if (right <= x0 || left >= x0 + imgW) continue;
+
+                left  = Math.Max(left,  x0);
+                right = Math.Min(right, x0 + imgW);
+                if (right - left < 1) continue;
+
+                windows.Add((left, right));
+                dc.DrawRectangle(null, GuidePen, new Rect(left, yT, right - left, Math.Max(1, yB - yT)));
+
+                // 창 번호 — 속도 그래프의 X축(노즐 번호)과 화면의 창을 짝지어 읽으려면 필요하다.
+                // 창이 좁으면 숫자끼리 붙어 읽을 수 없으므로 그때는 생략한다.
+                if (right - left < 16) continue;
+                var idxFt = new FormattedText(index.ToString(CultureInfo.InvariantCulture),
+                                              CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                                              new Typeface("Segoe UI"), FontSize - 1, TextBrush, dpi);
+                dc.DrawText(idxFt, new Point((left + right) / 2.0 - idxFt.Width / 2.0,
+                                             Math.Max(y0, yT - idxFt.Height - 1)));
+            }
+
+            var marks = Marks;
+            if (marks == null) return;
+
+            // 측정 구간 경계(초록) — 낙하거리를 재는 기준선이라 결과와 함께 나와야 의미가 있다.
+            dc.DrawLine(ResultPen, new Point(x0, yT), new Point(x0 + imgW, yT));
+            dc.DrawLine(ResultPen, new Point(x0, yB), new Point(x0 + imgW, yB));
+
+            // 속도값은 <b>그 액적이 든 창 안쪽</b> 아래에 적는다 — 창과 값이 짝지어 보여야
+            // 어느 노즐 값인지 헷갈리지 않는다(LabVIEW 도 창마다 숫자를 하나씩 붙인다).
+            foreach (var m in marks)
+            {
+                if (double.IsNaN(m.Velocity)) continue;
+
+                double mx = ToX(m.XPixel);
+                if (mx < x0 || mx > x0 + imgW) continue;
+
+                var ft = new FormattedText(m.Velocity.ToString("F2", CultureInfo.InvariantCulture),
+                                           CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                                           new Typeface("Segoe UI"), FontSize, ResultText, dpi);
+
+                // 액적이 든 창을 찾아 그 안에 넣고, 못 찾으면 액적 중심 기준으로 놓는다.
+                double tx = mx - ft.Width / 2.0;
+                foreach (var w in windows)
+                {
+                    if (mx < w.Left || mx > w.Right) continue;
+                    tx = w.Left + 2;
+                    break;
+                }
+                tx = Math.Clamp(tx, x0, Math.Max(x0, x0 + imgW - ft.Width));
+                dc.DrawText(ft, new Point(tx, Math.Max(y0, yB - ft.Height - 1)));
+            }
         }
 
         /// <summary>

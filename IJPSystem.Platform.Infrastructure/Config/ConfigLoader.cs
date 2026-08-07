@@ -69,7 +69,13 @@ namespace IJPSystem.Platform.Infrastructure.Config
         {
             var dir = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            var options = new JsonSerializerOptions { WriteIndented = true };
+            // 기본 인코더는 비ASCII 를 \uXXXX 로 escape 한다 — 저장 한 번에 설정 파일의 한글 주석이
+            // 읽을 수 없는 문자열로 변해 손으로 열어볼 수 없게 된다.
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            };
             File.WriteAllText(filePath, JsonSerializer.Serialize(cfg, options));
         }
 
@@ -86,7 +92,13 @@ namespace IJPSystem.Platform.Infrastructure.Config
         {
             var dir = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            var options = new JsonSerializerOptions { WriteIndented = true };
+            // 기본 인코더는 비ASCII 를 \uXXXX 로 escape 한다 — 저장 한 번에 설정 파일의 한글 주석이
+            // 읽을 수 없는 문자열로 변해 손으로 열어볼 수 없게 된다.
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            };
             File.WriteAllText(filePath, JsonSerializer.Serialize(cfg, options));
         }
 
@@ -103,7 +115,13 @@ namespace IJPSystem.Platform.Infrastructure.Config
         {
             var dir = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            var options = new JsonSerializerOptions { WriteIndented = true };
+            // 기본 인코더는 비ASCII 를 \uXXXX 로 escape 한다 — 저장 한 번에 설정 파일의 한글 주석이
+            // 읽을 수 없는 문자열로 변해 손으로 열어볼 수 없게 된다.
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            };
             File.WriteAllText(filePath, JsonSerializer.Serialize(cfg, options));
         }
 
