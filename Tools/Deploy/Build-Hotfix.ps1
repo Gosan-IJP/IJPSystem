@@ -92,6 +92,9 @@ Copy-Item (Join-Path $PSScriptRoot 'Apply-Hotfix.ps1') $outDir -Force
 Head "완료"
 Ok "$outDir"
 Write-Host ""
+# 설정을 넣지 않았으면 -Config 를 붙이라고 안내하면 안 된다 — 현장에서 그대로 복사해 실행하면
+# 있지도 않은 설정을 덮으려 들고, 실제로 축·스트로브 설정이 날아간 적이 있다(2026-08-07).
+$cfgArg = if ($Config) { ' -Config' } else { '' }
 Write-Host "  실장 PC 에서:" -ForegroundColor Yellow
-Write-Host "      powershell -ExecutionPolicy Bypass -File C:\hotfix\Apply-Hotfix.ps1 -Config -Force -Restart" -ForegroundColor White
+Write-Host "      powershell -ExecutionPolicy Bypass -File C:\hotfix\Apply-Hotfix.ps1$cfgArg -Force -Restart" -ForegroundColor White
 Write-Host "  앱 제목이 이렇게 떠야 한다:  Pulse - build $($distinct[0])" -ForegroundColor DarkGray
