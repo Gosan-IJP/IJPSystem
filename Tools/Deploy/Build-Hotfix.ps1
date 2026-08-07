@@ -89,12 +89,26 @@ if ($Config) {
 # ── 적용 스크립트 동봉 ─────────────────────────────────────────────────────
 Copy-Item (Join-Path $PSScriptRoot 'Apply-Hotfix.ps1') $outDir -Force
 
+# 설정을 넣지 않았으면 -Config 를 붙이면 안 된다 — 현장에서 안내문을 그대로 복사해 실행하면
+# 있지도 않은 설정을 덮으려 들고, 실제로 축·스트로브 설정이 날아간 적이 있다(2026-08-07).
+# 그래서 인자를 <b>여기서 확정해</b> .bat 에 박아 넣는다. 현장에서 고를 일이 없어야 한다.
+$cfgArg = if ($Config) { ' -Config' } else { '' }
+
+# 더블클릭 한 번으로 끝나게 한다 — 긴 명령을 옮겨 적다 경로가 깨져 실패한 적이 있다.
+# %~dp0 라서 폴더를 어디에 두든 동작한다(C:\hotfix 일 필요 없음).
+$batLines = @(
+    '@echo off'
+    'chcp 65001 > nul'
+    "powershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0Apply-Hotfix.ps1`"$cfgArg -Force -Restart"
+    'pause'
+)
+# cmd 는 UTF-8 BOM 을 명령으로 읽어 첫 줄에서 깨지고, 줄바꿈은 CRLF 여야 안전하다.
+[IO.File]::WriteAllText((Join-Path $outDir 'Apply-Hotfix.bat'),
+                        ($batLines -join "`r`n") + "`r`n",
+                        (New-Object Text.UTF8Encoding $false))
+
 Head "완료"
 Ok "$outDir"
 Write-Host ""
-# 설정을 넣지 않았으면 -Config 를 붙이라고 안내하면 안 된다 — 현장에서 그대로 복사해 실행하면
-# 있지도 않은 설정을 덮으려 들고, 실제로 축·스트로브 설정이 날아간 적이 있다(2026-08-07).
-$cfgArg = if ($Config) { ' -Config' } else { '' }
-Write-Host "  실장 PC 에서:" -ForegroundColor Yellow
-Write-Host "      powershell -ExecutionPolicy Bypass -File C:\hotfix\Apply-Hotfix.ps1$cfgArg -Force -Restart" -ForegroundColor White
+Write-Host "  실장 PC 에서: 폴더째 복사한 뒤 Apply-Hotfix.bat 더블클릭" -ForegroundColor Yellow
 Write-Host "  앱 제목이 이렇게 떠야 한다:  Pulse - build $($distinct[0])" -ForegroundColor DarkGray
