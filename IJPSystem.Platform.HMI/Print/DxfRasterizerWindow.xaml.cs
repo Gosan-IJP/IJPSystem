@@ -43,5 +43,19 @@ namespace IJPSystem.Platform.HMI.Print
 
             DataContext = vm;
         }
+
+        /// <summary>
+        /// 패턴 미리보기 — 지금 선택된 노즐과 변환된 BMP 로 발사 지도를 만들어 보여 준다.
+        /// BMP 가 아직 없으면 창에서 직접 이미지를 고를 수 있다.
+        /// </summary>
+        private void PatternPreview_Click(object sender, RoutedEventArgs e)
+        {
+            var vm = DataContext as DxfRasterizerViewModel;
+            new PatternPreviewWindow(vm?.BmpPath,
+                                     NozzleControlGlobal.Instance.UsingNozzle.UsingNozzles)
+            {
+                Owner = this
+            }.ShowDialog();
+        }
     }
 }

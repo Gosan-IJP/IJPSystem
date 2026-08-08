@@ -284,6 +284,8 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="6"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Button Grid.Column="0" Style="{StaticResource NavyBtn}" Height="48" Content="📦  Convert"
                                 Command="{Binding ConvertCommand}"/>
@@ -291,6 +293,10 @@
                                 Command="{Binding CreateEmptyLayerCommand}"/>
                         <Button Grid.Column="4" Style="{StaticResource NavyBtn}" Height="48" Content="Open BMP"
                                 Command="{Binding OpenBmpCommand}"/>
+                        <!-- 찍기 전에 발사 지도를 눈으로 확인한다. 노즐 배열 값이 아직 실물로
+                             확인되지 않아, 그 값을 바꿔 가며 대조할 수 있는 별도 창으로 띄운다. -->
+                        <Button Grid.Column="6" Style="{StaticResource NavyBtn}" Height="48" Content="🔎  패턴 미리보기"
+                                Click="PatternPreview_Click"/>
                     </Grid>
                     <ListBox ItemsSource="{Binding Layers}" BorderBrush="#CBD5E1" BorderThickness="1" Background="White">
                         <ListBox.ItemTemplate>
