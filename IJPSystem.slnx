@@ -25,9 +25,7 @@
   </Folder>
   <!-- 런타임 계층(1~3) 밖의 프로젝트 모음.
        - Tests : 개발 전용, 배포 안 됨 -->
-  <Folder Name="/9.Tools/">
-    <Project Path="IJPSystem.Tests/IJPSystem.Tests.csproj" />
-  </Folder>
+  <Folder Name="/9.Tools/" />
   <Folder Name="/5.Installer/">
     <File Path="Installer/IJPSystem.iss" />
     <File Path="Installer/build-installer.ps1" />

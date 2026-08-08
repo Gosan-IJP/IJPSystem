@@ -25,6 +25,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\IJPSystem.Drivers.IO\IJPSystem.Drivers.IO.csproj" />
+    <!-- Motion·Machines.Pulse 는 App.xaml.cs / MainViewModel / PnidViewModel 이 직접 쓰는데도
+         참조가 빠져 있었다. 지워지지 않은 obj\project.assets.json 이 옛 참조를 들고 있어서
+         빌드가 통과했고, obj 를 지우는 순간 드러났다(2026-08-08). 캐시가 가려 준 것이라
+         새로 받은 PC 나 CI 에서는 처음부터 실패한다. -->
+    <ProjectReference Include="..\IJPSystem.Drivers.Motion\IJPSystem.Drivers.Motion.csproj" />
     <ProjectReference Include="..\IJPSystem.Drivers.Vision\IJPSystem.Drivers.Vision.csproj" />
     <ProjectReference Include="..\IJPSystem.Machines.Pulse\IJPSystem.Machines.Pulse.csproj" />
     <ProjectReference Include="..\IJPSystem.Platform.Application\IJPSystem.Platform.Application.csproj" />
