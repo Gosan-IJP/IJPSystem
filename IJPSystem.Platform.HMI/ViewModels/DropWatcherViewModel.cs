@@ -40,6 +40,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private bool _liveFirstFrameLogged;
         private bool _liveGrabbing;                     // 캡쳐 중복 방지
 
+        // 라이브 표시용 재사용 버퍼. DW 프레임은 8.1MB 라 매번 새로 만들면 32비트 주소공간이
+        // 몇 분 만에 마른다. [[project-dw-live-memory]]
+        private readonly Vision.LiveFrameBuffer _liveBuffer = new();
+
         // OpenCV 액적 분석기. 파라미터는 Config/DropWatcherConfig.json 에서 로드(없으면 기본값).
         // MicronsPerPixel 은 실장 교정값 — 부피/직경/속도 절대값이 여기 비례.
         // _procCfg 는 _proc 와 같은 인스턴스를 공유하므로, 캘리브레이션에서 값을 바꾸면 즉시 분석에 반영된다.
@@ -480,21 +484,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         // ── 측정 그래프 (노즐별 Velocity / Drop Position / Volume) ─────────────
         // 측정 전에는 비어 있고, 측정하면 BuildDropletCharts 가 오버레이와 같은 데이터로 채운다.
-        public ISeries[] VelocitySeries { get; private set; } = Array.Empty<ISeries>();
-        public ISeries[] PositionSeries { get; private set; } = Array.Empty<ISeries>();
-        public ISeries[] SpitRateSeries { get; private set; } = Array.Empty<ISeries>();
+        // 값만 넘기고 그리는 것은 CategoryLineChart(WPF) 가 한다 — 제어 PC 는 Skia 텍스트 렌더가
+        // 깨져 축 숫자가 통째로 사라진다. [[project-control-pc-skia-font]]
+        public double[] VelocityValues { get; private set; } = Array.Empty<double>();
+        public double[] PositionValues { get; private set; } = Array.Empty<double>();
+        public double[] VolumeValues   { get; private set; } = Array.Empty<double>();
 
-        public Axis[] VelocityXAxes { get; private set; } = Array.Empty<Axis>();
-        public Axis[] VelocityYAxes { get; private set; } = Array.Empty<Axis>();
-        public Axis[] PositionXAxes { get; private set; } = Array.Empty<Axis>();
-        public Axis[] PositionYAxes { get; private set; } = Array.Empty<Axis>();
-        public Axis[] SpitRateXAxes { get; private set; } = Array.Empty<Axis>();
-        public Axis[] SpitRateYAxes { get; private set; } = Array.Empty<Axis>();
+        /// <summary>X 축 라벨(노즐 번호) — 세 차트가 같은 축을 쓴다.</summary>
+        public string[] ChartLabels { get; private set; } = Array.Empty<string>();
 
         // 한 프레임에 노즐들이 가로로 늘어선 구조 → X축은 항상 노즐 번호(시간축 아님).
         private const string XAxisName = "Nozzle #";
 
-        // 차트 헤더 제목 — LiveCharts 축 이름은 화면에서 눈에 잘 안 띄어(실장 피드백 2026-07-23)
+        // 차트 헤더 제목 — 축 이름만으로는 무슨 그래프인지 안 보인다(실장 피드백 2026-07-23).
         // 각 차트 위에 명시적인 제목을 표시한다. 가운데 차트는 측정 방식에 따라 의미가 바뀐다.
         public string VelocityChartTitle => "토출 속도 Velocity (m/s) — X: 노즐 번호";
         public string VolumeChartTitle   => "액적 부피 Volume (pL) — X: 노즐 번호";
@@ -506,22 +508,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
             private set => SetProperty(ref _positionChartTitle, value);
         }
 
-        private static readonly SKColor AxisText = new SKColor(0x94, 0xA3, 0xB8);
-        private static readonly SKColor AxisGrid = new SKColor(0x33, 0x41, 0x55);
-
-        // 축 글자 글꼴 — 제어 PC 는 Skia 의 시스템 글꼴 <b>조회</b>가 깨져 축 숫자가 통째로 안 나온다
-        // (격자선은 그려지고 WPF 한글은 멀쩡하다 → OS 글꼴이 아니라 Skia 글꼴 관리자 문제).
-        //
-        // 2026-07-23 에 SKTypeface.FromFamilyName("맑은 고딕") 으로 지정했다가 제어 PC 첫 렌더에서
-        // 네이티브 즉사한 것이 바로 그 관리자 경로다. ChartFont 는 글꼴 <b>파일</b>을 직접 읽어
-        // 관리자를 건너뛴다. 실패하면 null → 예전 동작(글꼴 미지정)으로 떨어지므로 더 나빠지지 않는다.
-        // 그래도 문제가 생기면 AppConfig.json 의 ChartFontFile="none" 으로 DLL 교체 없이 끌 수 있다.
-        private static SolidColorPaint TextPaint()
+        // 가운데 차트의 Y 축 이름 — 단일프레임은 '낙하 위치', 2점 측정은 'Δt 낙하거리'라 바뀐다.
+        private string _positionYAxisTitle = "Drop Position (um)";
+        public string PositionYAxisTitle
         {
-            var paint = new SolidColorPaint(AxisText);
-            var tf = Common.ChartFont.Typeface;
-            if (tf != null) paint.SKTypeface = tf;
-            return paint;
+            get => _positionYAxisTitle;
+            private set => SetProperty(ref _positionYAxisTitle, value);
         }
 
         // ── 커맨드 ────────────────────────────────────────────────────────────
@@ -1108,26 +1100,17 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                  string posAxisTitle, string posChartTitle)
         {
             PositionChartTitle = posChartTitle;
-            VelocitySeries = new ISeries[] { MakeLine("Drop", SKColors.LimeGreen, vel) };
-            PositionSeries = new ISeries[] { MakeLine("Drop", SKColors.DodgerBlue, posUm) };
-            SpitRateSeries = new ISeries[] { MakeLine("Drop", SKColors.Orange, volPl) };
+            PositionYAxisTitle = posAxisTitle;
 
-            VelocityXAxes = MakeXAxes(labels, XAxisName);
-            PositionXAxes = MakeXAxes(labels, XAxisName);
-            SpitRateXAxes = MakeXAxes(labels, XAxisName);
-            VelocityYAxes = MakeYAxes("Velocity (m/s)");
-            PositionYAxes = MakeYAxes(posAxisTitle);
-            SpitRateYAxes = MakeYAxes("Volume (pL)");
+            ChartLabels    = labels;
+            VelocityValues = vel;
+            PositionValues = posUm;
+            VolumeValues   = volPl;
 
-            OnPropertyChanged(nameof(VelocitySeries));
-            OnPropertyChanged(nameof(PositionSeries));
-            OnPropertyChanged(nameof(SpitRateSeries));
-            OnPropertyChanged(nameof(VelocityXAxes));
-            OnPropertyChanged(nameof(PositionXAxes));
-            OnPropertyChanged(nameof(SpitRateXAxes));
-            OnPropertyChanged(nameof(VelocityYAxes));
-            OnPropertyChanged(nameof(PositionYAxes));
-            OnPropertyChanged(nameof(SpitRateYAxes));
+            OnPropertyChanged(nameof(ChartLabels));
+            OnPropertyChanged(nameof(VelocityValues));
+            OnPropertyChanged(nameof(PositionValues));
+            OnPropertyChanged(nameof(VolumeValues));
         }
 
         // ── Time Interval Measure — 2점 지연 측정 ──────────────────────────────
@@ -1288,7 +1271,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
                             $"[DW] Live 첫 프레임 수신 ({image.Width}x{image.Height}, {image.PixelData?.Length ?? 0} bytes)");
                     }
                     _liveInvalidCount = 0;
-                    var frame = Vision.VisionDriverImageSource.FromPixels(image);
+
+                    // 같은 버퍼에 덮어쓴다 — 프레임마다 BitmapSource 를 새로 만들면 DW 해상도
+                    // (2856×2848 = 8.1MB)가 초당 5장씩 대형 객체 힙에 쌓인다. 32비트 프로세스라
+                    // 주소공간이 2분 만에 말라 "Insufficient memory" 로 라이브가 죽었다(실장 2026-08-08).
+                    // 글라스뷰는 처음부터 이 버퍼를 썼는데 드랍와처만 빠져 있었다.
+                    var frame = _liveBuffer.Write(image);
                     if (frame != null)
                     {
                         CurrentFrame       = frame;
@@ -1308,6 +1296,17 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 }
                 CamStatus = _vision.GetStatus(CamId);
             }
+            catch (OutOfMemoryException)
+            {
+                // 32비트 프로세스라 주소공간이 마르면 이후 모든 작업(측정·자동맞춤)이 알 수 없는
+                // 네이티브 예외로 실패한다 — "External component has thrown an exception" 이 그것이다.
+                // 원인을 알려주고, 대형 객체 힙을 한 번 정리해 화면이라도 살려 둔다.
+                _liveTimer.Stop();
+                IsLiveView = false;
+                _mainVM.AddLog("[VISION] DropWatcher: 메모리 부족으로 라이브를 정지했습니다 — " +
+                               "정리 후 다시 시작하세요.", LogLevel.Error);
+                ReclaimMemory();
+            }
             catch (Exception ex)
             {
                 _mainVM.AddLog($"[VISION] DropWatcher: Live 캡쳐 실패: {ex.Message}", LogLevel.Error);
@@ -1315,6 +1314,27 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 IsLiveView = false;
             }
             finally { _liveGrabbing = false; }
+        }
+
+        /// <summary>
+        /// 대형 객체 힙을 압축해 8MB 짜리 프레임이 들어갈 <b>연속</b> 공간을 되찾는다.
+        ///
+        /// <para>
+        /// 평소에 부를 것은 아니다(멈춤이 길다). 32비트에서 주소공간이 마르면 전체 여유가 있어도
+        /// 8MB 연속 블록이 없어 실패하는데, LOH 는 기본적으로 압축하지 않아 스스로 낫지 않는다.
+        /// 메모리 부족을 실제로 만난 자리에서만 한 번 부른다.
+        /// </para>
+        /// </summary>
+        private static void ReclaimMemory()
+        {
+            try
+            {
+                System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+                    System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+                GC.WaitForPendingFinalizers();
+            }
+            catch { /* 회복 시도라 실패해도 원래 오류를 덮지 않는다 */ }
         }
 
         // ── 이미지 파일 열기 ──────────────────────────────────────────────────
@@ -1461,6 +1481,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             IsBusy = true;
             RaiseMeasureCanExecute();
+            bool failed = false;
             try
             {
                 VisionImage frame;
@@ -1486,13 +1507,23 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
             catch (Exception ex)
             {
-                _mainVM.AddLog($"[VISION] DropWatcher: 격자 자동 맞춤 실패: {ex.Message}", LogLevel.Error);
+                failed = true;
+
+                // 8.1MB 프레임을 다루는 32비트 프로세스라, 주소공간이 마르면 OpenCV 네이티브가
+                // "External component has thrown an exception" 으로 튄다 — 메시지만 보면 원인을
+                // 알 수 없어 실장에서 시간을 버렸다(2026-08-08). 짚어주고 힙을 정리한다.
+                _mainVM.AddLog($"[VISION] DropWatcher: 격자 자동 맞춤 실패: {ex.Message} " +
+                               "(라이브를 오래 켜 뒀다면 메모리 부족일 수 있습니다 — 정리 후 다시 시도하세요)",
+                               LogLevel.Error);
+                ReclaimMemory();
             }
             finally
             {
                 IsBusy = false;
                 RaiseMeasureCanExecute();
-                if (wasLive) ToggleLiveView();   // 보고 있던 라이브는 되돌려 준다
+                // 실패했으면 라이브를 되살리지 않는다 — 메모리 부족이 원인일 때 다시 켜면
+                // 초당 5장씩 8.1MB 를 더 요구해 상황을 악화시킨다(실장 로그 2026-08-08).
+                if (wasLive && !failed) ToggleLiveView();   // 보고 있던 라이브는 되돌려 준다
             }
         }
 
@@ -1528,66 +1559,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 측정하면 BuildDropletCharts 가 시리즈/축을 채운다.
         private void BuildCharts()
         {
-            VelocitySeries = Array.Empty<ISeries>();
-            PositionSeries = Array.Empty<ISeries>();
-            SpitRateSeries = Array.Empty<ISeries>();
-
             // 축 이름은 측정 후와 동일하게 유지 → 측정 전후로 라벨이 바뀌지 않는다.
-            VelocityXAxes = MakeXAxes(Array.Empty<string>(), XAxisName);
-            PositionXAxes = MakeXAxes(Array.Empty<string>(), XAxisName);
-            SpitRateXAxes = MakeXAxes(Array.Empty<string>(), XAxisName);
-            VelocityYAxes = MakeYAxes("Velocity (m/s)");
-            PositionYAxes = MakeYAxes("Drop Position (um)");
-            SpitRateYAxes = MakeYAxes("Volume (pL)");
+            PositionYAxisTitle = "Drop Position (um)";
 
-            OnPropertyChanged(nameof(VelocitySeries));
-            OnPropertyChanged(nameof(PositionSeries));
-            OnPropertyChanged(nameof(SpitRateSeries));
-            OnPropertyChanged(nameof(VelocityXAxes));
-            OnPropertyChanged(nameof(PositionXAxes));
-            OnPropertyChanged(nameof(SpitRateXAxes));
-            OnPropertyChanged(nameof(VelocityYAxes));
-            OnPropertyChanged(nameof(PositionYAxes));
-            OnPropertyChanged(nameof(SpitRateYAxes));
+            ChartLabels    = Array.Empty<string>();
+            VelocityValues = Array.Empty<double>();
+            PositionValues = Array.Empty<double>();
+            VolumeValues   = Array.Empty<double>();
+
+            OnPropertyChanged(nameof(ChartLabels));
+            OnPropertyChanged(nameof(VelocityValues));
+            OnPropertyChanged(nameof(PositionValues));
+            OnPropertyChanged(nameof(VolumeValues));
         }
-
-        private static ISeries MakeLine(string name, SKColor color, double[] values) =>
-            new LineSeries<double>
-            {
-                Name           = name,
-                Values         = values,
-                Stroke         = new SolidColorPaint(color, 1.6f),
-                Fill           = null,
-                GeometrySize   = 5,
-                GeometryStroke = new SolidColorPaint(color, 1.6f),
-                GeometryFill   = new SolidColorPaint(SKColors.White),
-                LineSmoothness = 0.2,
-            };
-
-        private static Axis[] MakeXAxes(string[] labels, string name) => new[]
-        {
-            new Axis
-            {
-                Labels          = labels,
-                Name            = name,
-                TextSize        = 10,
-                NamePaint       = TextPaint(),
-                LabelsPaint     = TextPaint(),
-                SeparatorsPaint = new SolidColorPaint(AxisGrid) { StrokeThickness = 0.5f },
-            }
-        };
-
-        private static Axis[] MakeYAxes(string name) => new[]
-        {
-            new Axis
-            {
-                Name            = name,
-                TextSize        = 10,
-                NamePaint       = TextPaint(),
-                LabelsPaint     = TextPaint(),
-                SeparatorsPaint = new SolidColorPaint(AxisGrid) { StrokeThickness = 0.5f },
-            }
-        };
 
         public void Dispose()
         {

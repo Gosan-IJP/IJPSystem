@@ -33,7 +33,15 @@ namespace IJPSystem.Platform.HMI.Vision
     /// </summary>
     public sealed class LiveFrameBuffer
     {
-        private WriteableBitmap? _bmp;
+        // 버퍼 2장을 번갈아 쓴다.
+        //   ① 재사용이 목적이므로 장수는 고정이어야 한다(1장이든 2장이든 프레임 수와 무관).
+        //   ② 그런데 <b>같은 인스턴스</b>를 계속 돌려주면, 값이 안 바뀌었다고 판단하는 쪽
+        //      (DependencyProperty·SetProperty)은 다시 그리지 않는다. Image 컨트롤은 WriteableBitmap
+        //      변경을 스스로 반영하지만, 프레임을 직접 그리는 요소(ImageScaleRuler)는 참조가
+        //      그대로면 OnRender 가 다시 불리지 않아 화면이 멈춘 것처럼 보인다.
+        //   번갈아 쓰면 참조가 매번 바뀌어 ②가 사라지고, 장수는 여전히 2장으로 고정된다.
+        private readonly WriteableBitmap?[] _bmp = new WriteableBitmap?[2];
+        private int _next;
         private int _w, _h, _bpp;
 
         /// <summary>픽셀을 써 넣고 화면에 바인딩할 소스를 돌려준다. 버퍼/포맷이 맞지 않으면 null.</summary>
@@ -53,15 +61,19 @@ namespace IJPSystem.Platform.HMI.Vision
             int stride = img.Width * (img.BitsPerPixel / 8);
             if (img.PixelData.Length < stride * img.Height) return null;   // 버퍼 부족 — 포맷 불일치
 
-            // 해상도나 포맷이 바뀌면(ROI 변경 등) 새로 만든다.
-            if (_bmp == null || _w != img.Width || _h != img.Height || _bpp != img.BitsPerPixel)
+            // 해상도나 포맷이 바뀌면(ROI 변경 등) 둘 다 버리고 새로 만든다.
+            if (_w != img.Width || _h != img.Height || _bpp != img.BitsPerPixel)
             {
-                _bmp = new WriteableBitmap(img.Width, img.Height, 96, 96, fmt, null);
+                _bmp[0] = _bmp[1] = null;
                 _w = img.Width; _h = img.Height; _bpp = img.BitsPerPixel;
             }
 
-            _bmp.WritePixels(new Int32Rect(0, 0, img.Width, img.Height), img.PixelData, stride, 0);
-            return _bmp;
+            int i = _next;
+            _next = 1 - _next;
+            var bmp = _bmp[i] ??= new WriteableBitmap(img.Width, img.Height, 96, 96, fmt, null);
+
+            bmp.WritePixels(new Int32Rect(0, 0, img.Width, img.Height), img.PixelData, stride, 0);
+            return bmp;
         }
     }
 

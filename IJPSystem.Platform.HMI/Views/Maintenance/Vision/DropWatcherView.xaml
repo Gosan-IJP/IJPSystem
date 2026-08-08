@@ -4,8 +4,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:cvts="clr-namespace:IJPSystem.Platform.HMI.Common.Converters"
-             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
              xmlns:vis="clr-namespace:IJPSystem.Platform.HMI.Vision"
+             xmlns:cmn="clr-namespace:IJPSystem.Platform.HMI.Common"
              mc:Ignorable="d" d:DesignHeight="780" d:DesignWidth="1400"
              Background="#0B0F1A">
 
@@ -798,11 +798,10 @@
                         <TextBlock Text="{Binding VelocityChartTitle}" Foreground="#CBD5E1"
                                    FontSize="12" FontWeight="Bold" Margin="6,0,0,0"/>
                     </StackPanel>
-                    <lvc:CartesianChart Series="{Binding VelocitySeries}"
-                                        XAxes="{Binding VelocityXAxes}"
-                                        YAxes="{Binding VelocityYAxes}"
-                                        LegendPosition="Hidden"
-                                        Background="Transparent"/>
+                    <cmn:CategoryLineChart Values="{Binding VelocityValues}"
+                                           Labels="{Binding ChartLabels}"
+                                           LineBrush="#32CD32"
+                                           YAxisTitle="Velocity (m/s)" XAxisTitle="Nozzle #"/>
                 </DockPanel>
             </Border>
 
@@ -815,11 +814,10 @@
                         <TextBlock Text="{Binding PositionChartTitle}" Foreground="#CBD5E1"
                                    FontSize="12" FontWeight="Bold" Margin="6,0,0,0"/>
                     </StackPanel>
-                    <lvc:CartesianChart Series="{Binding PositionSeries}"
-                                        XAxes="{Binding PositionXAxes}"
-                                        YAxes="{Binding PositionYAxes}"
-                                        LegendPosition="Hidden"
-                                        Background="Transparent"/>
+                    <cmn:CategoryLineChart Values="{Binding PositionValues}"
+                                           Labels="{Binding ChartLabels}"
+                                           LineBrush="#1E90FF"
+                                           YAxisTitle="{Binding PositionYAxisTitle}" XAxisTitle="Nozzle #"/>
                 </DockPanel>
             </Border>
 
@@ -832,11 +830,10 @@
                         <TextBlock Text="{Binding VolumeChartTitle}" Foreground="#CBD5E1"
                                    FontSize="12" FontWeight="Bold" Margin="6,0,0,0"/>
                     </StackPanel>
-                    <lvc:CartesianChart Series="{Binding SpitRateSeries}"
-                                        XAxes="{Binding SpitRateXAxes}"
-                                        YAxes="{Binding SpitRateYAxes}"
-                                        LegendPosition="Hidden"
-                                        Background="Transparent"/>
+                    <cmn:CategoryLineChart Values="{Binding VolumeValues}"
+                                           Labels="{Binding ChartLabels}"
+                                           LineBrush="#FFA500"
+                                           YAxisTitle="Volume (pL)" XAxisTitle="Nozzle #"/>
                 </DockPanel>
             </Border>
         </Grid>
