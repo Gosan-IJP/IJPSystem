@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -5,74 +6,192 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using IJPSystem.Platform.Common.Constants;
 using IJPSystem.Platform.Domain.Common;
+using IJPSystem.Platform.Infrastructure.Print;
 
 namespace IJPSystem.Platform.HMI.Nozzle
 {
     /// <summary>
-    /// LabVIEW "20_Screen_Nozzle Select.vi" 화면 로직 변환 (MVVM ViewModel).
-    /// "Set Use Nozzle" 버튼 → 입력 문자열 파싱(ADD/DEL DSL) → control global 의 Using Nozzle 갱신.
+    /// 노즐 선택 화면 로직. (LabVIEW "20_Screen_Nozzle Select.vi" 대응)
+    ///
+    /// <para>
+    /// 선택 상태는 <b>여기 있는 집합 하나</b>가 기준이고, 막대 드래그·빠른 버튼·명령어 입력
+    /// 셋 다 같은 집합을 고친다. 무엇으로 바꿨든 결과가 즉시 전역(Using Nozzle)에 반영된다 —
+    /// "적용을 눌렀는지" 를 기억해야 하는 화면은 실수를 부른다.
+    /// </para>
+    /// <para>
+    /// 명령어 입력만 [적용]이 필요하다. 타이핑 도중의 미완성 문자열이 그대로 적용되면 안 되기 때문.
+    /// 대신 치는 동안 막대에 결과를 미리 칠해 준다.
+    /// </para>
     /// </summary>
     public sealed class NozzleSelectViewModel : INotifyPropertyChanged
     {
         // 헤드별 노즐 범위 — 헤드 사양 하나만 보고 판단하도록 AppConstants 를 쓴다.
         // (이전엔 여기만 1~999 였고 스핏 패턴은 1~128 이라, 129~999 를 선택하면 "적용 완료" 라고
         //  표시된 뒤 토출 단계에서 조용히 빠지는 어긋남이 있었다.)
-        private const int MinNozzle = AppConstants.FirstNozzleNumber;
-        private const int MaxNozzle = AppConstants.HeadNozzleCount;
+        public const int MinNozzle = AppConstants.FirstNozzleNumber;
+        public const int MaxNozzle = AppConstants.HeadNozzleCount;
+
+        private readonly SortedSet<int> _selected = new();
 
         public NozzleSelectViewModel()
         {
-            SetUseNozzleCommand = new RelayCommand(_ => SetUseNozzle());
+            ApplyCommand   = new RelayCommand(_ => ApplyInput());
+            SelectAllCommand = new RelayCommand(_ => Replace(AllNozzles(), "전체"));
+            SelectOddCommand  = new RelayCommand(_ => Replace(AllNozzles().Where(n => n % 2 == 1), "홀수"));
+            SelectEvenCommand = new RelayCommand(_ => Replace(AllNozzles().Where(n => n % 2 == 0), "짝수"));
+            InvertCommand  = new RelayCommand(_ => Replace(AllNozzles().Where(n => !_selected.Contains(n)), "반전"));
+            ClearCommand   = new RelayCommand(_ => Replace(Array.Empty<int>(), "해제"));
 
-            // 현재 전역 Using Nozzle 로 초기 표시
-            var cur = NozzleControlGlobal.Instance.UsingNozzle;
-            _usingNozzleText = string.Join(",", cur.UsingNozzles);
-            if (cur.Count > 0) _statusText = $"현재 사용 노즐 {cur.Count}개";
+            // 전역에 범위 밖 번호가 들어 있을 수 있다(헤드 사양이 바뀌었거나 옛 레시피).
+            // 그대로 받으면 "사용 152 / 128" 같은 표시가 나오고, 토출 단계에서 조용히 빠진다.
+            var stored = NozzleControlGlobal.Instance.UsingNozzle.UsingNozzles;
+            int dropped = 0;
+            foreach (int n in stored)
+            {
+                if (n >= MinNozzle && n <= MaxNozzle) _selected.Add(n);
+                else dropped++;
+            }
+
+            RefreshSelection(
+                dropped > 0 ? $"저장된 선택 중 범위({MinNozzle}~{MaxNozzle}) 밖 {dropped}개를 뺐습니다 — 사용 {_selected.Count}개"
+                : _selected.Count > 0 ? $"현재 사용 노즐 {_selected.Count}개"
+                : null);
         }
 
+        public int FirstNozzle  => MinNozzle;
+        public int TotalNozzles => MaxNozzle - MinNozzle + 1;
+
+        // ── 선택 상태 ─────────────────────────────────────────────────────
+        private IReadOnlyCollection<int> _selectedView = Array.Empty<int>();
+        /// <summary>막대가 그릴 현재 선택.</summary>
+        public IReadOnlyCollection<int> Selected
+        {
+            get => _selectedView;
+            private set { _selectedView = value; OnPropertyChanged(); }
+        }
+
+        private IReadOnlyCollection<int>? _preview;
+        /// <summary>입력 중인 명령의 결과 미리보기. null 이면 미리보기 없음.</summary>
+        public IReadOnlyCollection<int>? PreviewSelection
+        {
+            get => _preview;
+            private set { _preview = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>선택을 구간으로 접은 표기 — <c>1~100, 150, 200~250</c>.</summary>
+        public string UsingNozzleText => _selected.Count == 0
+            ? "(선택 없음)"
+            : NozzleRangeText.Summarize(_selected);
+
+        public string CountText => $"사용 {_selected.Count} / {TotalNozzles}";
+
+        // ── 입력 ──────────────────────────────────────────────────────────
         private string _inputText = "";
         /// <summary>노즐 지정 입력창 (예: "ADD(1~100); DEL(40~45)").</summary>
         public string InputText
         {
             get => _inputText;
-            set { _inputText = value; OnPropertyChanged(); }
+            set
+            {
+                if (_inputText == value) return;
+                _inputText = value;
+                OnPropertyChanged();
+                UpdatePreview();
+            }
         }
 
-        private string _statusText = "노즐을 입력하고 [Set Use Nozzle]을 누르세요.";
+        private string _statusText = "막대를 드래그하거나 명령을 입력하세요.";
         public string StatusText
         {
             get => _statusText;
-            set { _statusText = value; OnPropertyChanged(); }
+            private set { _statusText = value; OnPropertyChanged(); }
         }
 
-        private string _usingNozzleText = "";
-        /// <summary>현재 사용 노즐 표시(상단 박스, 콤마 구분 목록).</summary>
-        public string UsingNozzleText
+        private string _hoverText = "";
+        /// <summary>마우스가 가리키는 노즐 — 800개 막대에서 몇 번인지 알려면 필요하다.</summary>
+        public string HoverText
         {
-            get => _usingNozzleText;
-            set { _usingNozzleText = value; OnPropertyChanged(); }
+            get => _hoverText;
+            private set { _hoverText = value; OnPropertyChanged(); }
         }
 
-        /// <summary>"Set Use Nozzle" 버튼 커맨드.</summary>
-        public ICommand SetUseNozzleCommand { get; }
+        public ICommand ApplyCommand      { get; }
+        public ICommand SelectAllCommand  { get; }
+        public ICommand SelectOddCommand  { get; }
+        public ICommand SelectEvenCommand { get; }
+        public ICommand InvertCommand     { get; }
+        public ICommand ClearCommand      { get; }
 
-        /// <summary>버튼 클릭 시 실제 동작 (원본 이벤트 케이스에 대응).</summary>
-        private void SetUseNozzle()
+        /// <summary>막대 드래그 결과 반영.</summary>
+        public void ToggleRange(int from, int to, bool add)
         {
-            // 1) 입력 문자열 파싱 (ADD/DEL DSL)
-            List<int> nozzles = NozzleParser.Parse(InputText, MinNozzle, MaxNozzle, out var invalid);
+            from = Math.Max(MinNozzle, from);
+            to   = Math.Min(MaxNozzle, to);
+            if (to < from) return;
 
-            // 2) Selected Nozzle info 생성
-            var info = new SelectedNozzleInfo(nozzles, InputText);
+            for (int n = from; n <= to; n++)
+                if (add) _selected.Add(n); else _selected.Remove(n);
 
-            // 3) control global 의 Using Nozzle 갱신 → (Rasterizer/RIP 가 이 값을 사용)
-            NozzleControlGlobal.Instance.UsingNozzle = info;
+            string what = from == to ? $"{from}번" : $"{from}~{to}";
+            RefreshSelection($"{what} {(add ? "선택" : "해제")} — 사용 {_selected.Count}개");
+        }
 
-            // 4) UI 피드백
-            UsingNozzleText = string.Join(",", nozzles);
-            StatusText = invalid.Count == 0
-                ? $"적용 완료: {info.Count}개 노즐 (범위 {MinNozzle}~{MaxNozzle})"
-                : $"적용({info.Count}개). 무시된 토큰: {string.Join(", ", invalid)}";
+        public void SetHover(int? nozzle) => HoverText = nozzle == null ? "" : $"노즐 {nozzle}";
+
+        private IEnumerable<int> AllNozzles() => Enumerable.Range(MinNozzle, TotalNozzles);
+
+        private void Replace(IEnumerable<int> nozzles, string what)
+        {
+            var next = nozzles.ToList();       // _selected 를 읽는 중에 지우면 안 된다(반전)
+            _selected.Clear();
+            foreach (int n in next) _selected.Add(n);
+            RefreshSelection($"{what} — 사용 {_selected.Count}개");
+        }
+
+        /// <summary>입력창 명령을 적용. 파싱 결과가 곧 새 선택이다(누적 아님).</summary>
+        private void ApplyInput()
+        {
+            if (string.IsNullOrWhiteSpace(InputText))
+            {
+                StatusText = "입력이 비어 있습니다.";
+                return;
+            }
+
+            var nozzles = NozzleParser.Parse(InputText, MinNozzle, MaxNozzle, out var invalid);
+            _selected.Clear();
+            foreach (int n in nozzles) _selected.Add(n);
+
+            PreviewSelection = null;
+            RefreshSelection(invalid.Count == 0
+                ? $"적용 완료 — 사용 {_selected.Count}개 (범위 {MinNozzle}~{MaxNozzle})"
+                : $"적용({_selected.Count}개). 무시된 토큰: {string.Join(", ", invalid)}");
+        }
+
+        /// <summary>타이핑 중 결과를 막대에 미리 칠한다 — [적용] 전에 틀린 걸 알 수 있게.</summary>
+        private void UpdatePreview()
+        {
+            if (string.IsNullOrWhiteSpace(InputText)) { PreviewSelection = null; return; }
+            try
+            {
+                var parsed = NozzleParser.Parse(InputText, MinNozzle, MaxNozzle, out _);
+                PreviewSelection = parsed.Count > 0 ? parsed : null;
+            }
+            catch
+            {
+                // 치는 도중에는 문법이 깨져 있는 것이 정상이다 — 미리보기만 끄고 조용히 넘어간다.
+                PreviewSelection = null;
+            }
+        }
+
+        /// <summary>선택이 바뀌었을 때 화면과 전역을 한 번에 맞춘다.</summary>
+        private void RefreshSelection(string? status)
+        {
+            Selected = _selected.ToList();
+            NozzleControlGlobal.Instance.UsingNozzle = new SelectedNozzleInfo(_selected, InputText);
+
+            OnPropertyChanged(nameof(UsingNozzleText));
+            OnPropertyChanged(nameof(CountText));
+            if (status != null) StatusText = status;
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

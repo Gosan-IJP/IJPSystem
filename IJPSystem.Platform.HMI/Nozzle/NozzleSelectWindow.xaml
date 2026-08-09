@@ -1,12 +1,12 @@
 <Window x:Class="IJPSystem.Platform.HMI.Nozzle.NozzleSelectWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Nozzle Select" Height="780" Width="430"
+        xmlns:nz="clr-namespace:IJPSystem.Platform.HMI.Nozzle"
+        Title="Nozzle Select" Height="440" Width="900"
         WindowStartupLocation="CenterOwner"
         Background="#0F172A" Foreground="#E2E8F0"
         FontFamily="Segoe UI">
     <Window.Resources>
-        <!-- 입력/표시 박스 (밝은 배경) -->
         <Style x:Key="LightBox" TargetType="TextBox">
             <Setter Property="Background"      Value="#E5E7EB"/>
             <Setter Property="Foreground"      Value="#111827"/>
@@ -16,27 +16,28 @@
             <Setter Property="FontSize"        Value="14"/>
             <Setter Property="Padding"         Value="6,4"/>
         </Style>
-        <!-- Set Use Nozzle 버튼 -->
-        <Style x:Key="SetBtn" TargetType="Button">
+
+        <!-- 공통 버튼 — 배경을 TemplateBinding 해야 강조색이 실제로 보인다. -->
+        <Style x:Key="NzBtn" TargetType="Button">
             <Setter Property="Foreground"      Value="#E2E8F0"/>
             <Setter Property="Background"      Value="#1E293B"/>
-            <Setter Property="BorderBrush"     Value="#3B82F6"/>
-            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="BorderBrush"     Value="#475569"/>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontWeight"      Value="Bold"/>
-            <Setter Property="FontSize"        Value="15"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Height"          Value="32"/>
             <Setter Property="Cursor"          Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="10,0"/>
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12,0"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#334155"/>
+                                <Setter Property="BorderBrush" Value="#3B82F6"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -45,39 +46,81 @@
         </Style>
     </Window.Resources>
 
-    <Grid Margin="14">
+    <Grid Margin="16">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>   <!-- 제목 -->
-            <RowDefinition Height="170"/>    <!-- 현재 사용 노즐 목록 -->
-            <RowDefinition Height="Auto"/>   <!-- 입력 + 버튼 -->
-            <RowDefinition Height="*"/>      <!-- 도움말 -->
+            <RowDefinition Height="Auto"/>   <!-- 제목 + 개수 + 도움말 -->
+            <RowDefinition Height="Auto"/>   <!-- 노즐 막대 -->
+            <RowDefinition Height="Auto"/>   <!-- 선택 구간 -->
+            <RowDefinition Height="Auto"/>   <!-- 빠른 선택 -->
+            <RowDefinition Height="Auto"/>   <!-- 명령 입력 -->
+            <RowDefinition Height="*"/>      <!-- 도움말(접힘) -->
             <RowDefinition Height="Auto"/>   <!-- 상태 -->
         </Grid.RowDefinitions>
 
-        <!-- 제목 -->
-        <TextBlock Grid.Row="0" Text="Nozzle Select" FontSize="22" FontWeight="Bold"
-                   Foreground="#F1F5F9" Margin="2,0,0,8"/>
+        <!-- ── 머리 ─────────────────────────────────────────────── -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock Text="노즐 선택" FontSize="20" FontWeight="Bold" Foreground="#F1F5F9"/>
+            <ToggleButton x:Name="HelpToggle" DockPanel.Dock="Right" Content="?" Width="28" Height="28"
+                          Foreground="#93C5FD" Background="#1E293B" BorderBrush="#475569"
+                          FontWeight="Bold" Cursor="Hand" ToolTip="입력 문법 도움말"/>
+            <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Foreground="#38BDF8"
+                       FontSize="15" FontWeight="Bold" FontFamily="Consolas"
+                       VerticalAlignment="Center" Margin="0,0,14,0"/>
+            <TextBlock Text="{Binding HoverText}" Foreground="#64748B" FontSize="12" FontFamily="Consolas"
+                       VerticalAlignment="Center" Margin="14,4,0,0"/>
+        </DockPanel>
 
-        <!-- 현재 사용 노즐(읽기 전용, 콤마 목록) -->
-        <TextBox Grid.Row="1" Style="{StaticResource LightBox}"
-                 IsReadOnly="True" TextWrapping="Wrap"
-                 VerticalScrollBarVisibility="Auto"
-                 Text="{Binding UsingNozzleText, Mode=OneWay}"/>
+        <!-- ── 노즐 막대 ────────────────────────────────────────── -->
+        <Border Grid.Row="1" Background="#0D1117" BorderBrush="#1E293B" BorderThickness="1"
+                CornerRadius="6" Padding="10,8">
+            <StackPanel>
+                <nz:NozzleStrip x:Name="Strip"
+                                FirstNozzle="{Binding FirstNozzle}"
+                                TotalNozzles="{Binding TotalNozzles}"
+                                Selected="{Binding Selected}"
+                                PreviewSelection="{Binding PreviewSelection}"/>
+                <TextBlock Text="드래그로 선택 · 선택된 곳을 다시 드래그하면 해제"
+                           Foreground="#475569" FontSize="11" Margin="0,6,0,0"/>
+            </StackPanel>
+        </Border>
 
-        <!-- 입력 + Set Use Nozzle -->
+        <!-- ── 선택 구간 ────────────────────────────────────────── -->
         <Grid Grid.Row="2" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="선택 구간" Foreground="#94A3B8" FontSize="12"
+                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <TextBox Grid.Column="1" Style="{StaticResource LightBox}" IsReadOnly="True"
+                     Height="34" VerticalContentAlignment="Center"
+                     Text="{Binding UsingNozzleText, Mode=OneWay}"
+                     ToolTip="복사해서 기록하거나 아래 입력창에 붙여 쓸 수 있습니다"/>
+        </Grid>
+
+        <!-- ── 빠른 선택 ────────────────────────────────────────── -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,10,0,0">
+            <Button Style="{StaticResource NzBtn}" Content="전체" Margin="0,0,6,0" Command="{Binding SelectAllCommand}"/>
+            <Button Style="{StaticResource NzBtn}" Content="홀수" Margin="0,0,6,0" Command="{Binding SelectOddCommand}"/>
+            <Button Style="{StaticResource NzBtn}" Content="짝수" Margin="0,0,6,0" Command="{Binding SelectEvenCommand}"/>
+            <Button Style="{StaticResource NzBtn}" Content="반전" Margin="0,0,6,0" Command="{Binding InvertCommand}"/>
+            <Button Style="{StaticResource NzBtn}" Content="해제" Command="{Binding ClearCommand}"
+                    Background="#7F1D1D" BorderBrush="#B91C1C"/>
+        </StackPanel>
+
+        <!-- ── 명령 입력 ────────────────────────────────────────── -->
+        <Grid Grid.Row="4" Margin="0,10,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="10"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <!-- 워터마크가 있는 입력창 -->
             <Grid Grid.Column="0">
-                <TextBox x:Name="InputBox" Height="44" VerticalContentAlignment="Center"
+                <TextBox x:Name="InputBox" Height="38" VerticalContentAlignment="Center"
                          Style="{StaticResource LightBox}"
                          Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"/>
-                <TextBlock Text="ADD(0~999)" IsHitTestVisible="False"
+                <TextBlock Text="ADD(1~100); DEL(40~45)" IsHitTestVisible="False"
                            Foreground="#6B7280" FontFamily="Consolas" FontSize="14"
                            VerticalAlignment="Center" Margin="9,0,0,0">
                     <TextBlock.Style>
@@ -93,40 +136,34 @@
                 </TextBlock>
             </Grid>
 
-            <Button Grid.Column="2" Style="{StaticResource SetBtn}" Width="150" Height="44"
-                    Content="Set Use Nozzle" Command="{Binding SetUseNozzleCommand}"
-                    IsDefault="True"/>
+            <Button Grid.Column="2" Style="{StaticResource NzBtn}" Width="120" Height="38"
+                    Content="적용" Command="{Binding ApplyCommand}" IsDefault="True"
+                    Background="#1D4ED8" BorderBrush="#3B82F6"/>
         </Grid>
 
-        <!-- 도움말 패널 -->
-        <Border Grid.Row="3" Margin="0,12,0,0" Background="#33415580" CornerRadius="6"
-                BorderBrush="#1E293B" BorderThickness="1">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,12">
-                <TextBlock Foreground="#CBD5E1" FontSize="13" TextAlignment="Center" LineHeight="22">
-                    <Run FontWeight="Bold" Foreground="#93C5FD">**** 노즐 설정 방법 ****</Run><LineBreak/>
-                    <Run>문법: ADD( ), DEL( )</Run><LineBreak/>
-                    <Run>지원 함수: ODD  EVEN</Run><LineBreak/>
-                    <Run>구분 문자: ;</Run><LineBreak/>
+        <!-- ── 도움말 (기본 접힘) ───────────────────────────────── -->
+        <Border Grid.Row="5" Margin="0,10,0,0" Background="#33415580" CornerRadius="6"
+                BorderBrush="#1E293B" BorderThickness="1"
+                Visibility="{Binding IsChecked, ElementName=HelpToggle,
+                                     Converter={StaticResource BooleanToVisibilityConverter}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="12">
+                <TextBlock Foreground="#CBD5E1" FontSize="13" LineHeight="21">
+                    <Run FontWeight="Bold" Foreground="#93C5FD">입력 문법</Run><LineBreak/>
+                    <Run>ADD( ) 추가 · DEL( ) 제거 · 구분자 ;  · 함수 ODD / EVEN</Run><LineBreak/>
                     <LineBreak/>
-                    <Run FontWeight="Bold">사용 예시</Run><LineBreak/>
-                    <Run Foreground="#64748B">--------- EX 1 ---------</Run><LineBreak/>
-                    <Run>1,2,3,4,5,10,11,12,13,14번 노즐 사용</Run><LineBreak/>
-                    <Run Foreground="#93C5FD">→ ADD(1,2,3,4,5,10,11,12,13,14)</Run><LineBreak/>
-                    <Run>1~100까지 노즐 추가</Run>  <Run Foreground="#93C5FD">→ ADD(1~100)</Run><LineBreak/>
-                    <Run>20~30 노즐 제거</Run>  <Run Foreground="#93C5FD">→ DEL(20~30)</Run><LineBreak/>
-                    <Run>응용) 1~100 사용, 단 40~45 제외</Run><LineBreak/>
-                    <Run Foreground="#93C5FD">→ ADD(1~100); DEL(40~45)</Run><LineBreak/>
+                    <Run>1~100 사용</Run>  <Run Foreground="#93C5FD">→ ADD(1~100)</Run><LineBreak/>
+                    <Run>1~100 중 40~45 제외</Run>  <Run Foreground="#93C5FD">→ ADD(1~100); DEL(40~45)</Run><LineBreak/>
+                    <Run>1~100 중 홀수만</Run>  <Run Foreground="#93C5FD">→ ADD(ODD:1~100)</Run><LineBreak/>
+                    <Run>전체 중 짝수만</Run>  <Run Foreground="#93C5FD">→ ADD(EVEN)</Run><LineBreak/>
                     <LineBreak/>
-                    <Run Foreground="#64748B">--------- EX 2 ---------</Run><LineBreak/>
-                    <Run>1~100 중 홀수만 추가</Run><LineBreak/>
-                    <Run Foreground="#93C5FD">→ ADD(ODD:1~100)</Run><LineBreak/>
-                    <Run>전체 노즐 중 짝수만 사용</Run>  <Run Foreground="#93C5FD">→ ADD(EVEN)</Run><LineBreak/>
+                    <Run Foreground="#94A3B8">※ [적용]은 입력한 명령으로 선택을 새로 만듭니다 — 기존 선택에 더하지 않습니다.</Run><LineBreak/>
+                    <Run Foreground="#94A3B8">※ 위 [선택 구간] 표기를 그대로 복사해 ADD( ) 안에 붙여 쓸 수 있습니다.</Run>
                 </TextBlock>
             </ScrollViewer>
         </Border>
 
-        <!-- 상태 -->
-        <TextBlock Grid.Row="4" Margin="2,10,0,0" Text="{Binding StatusText}"
+        <!-- ── 상태 ─────────────────────────────────────────────── -->
+        <TextBlock Grid.Row="6" Margin="2,10,0,0" Text="{Binding StatusText}"
                    Foreground="#94A3B8" FontSize="12" TextWrapping="Wrap"/>
     </Grid>
 </Window>
