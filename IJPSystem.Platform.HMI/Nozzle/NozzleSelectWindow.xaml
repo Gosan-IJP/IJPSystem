@@ -2,10 +2,12 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:nz="clr-namespace:IJPSystem.Platform.HMI.Nozzle"
-        Title="Nozzle Select" Height="440" Width="900"
+        Title="Nozzle Select" Height="440" MinHeight="380" Width="900" MinWidth="700"
         WindowStartupLocation="CenterOwner"
         Background="#0F172A" Foreground="#E2E8F0"
         FontFamily="Segoe UI">
+    <!-- Height 는 2열(BaselineRows) 기준값이다. 열이 더 많으면 코드비하인드가 줄 수만큼 늘린다 —
+         4열 헤드에서 창이 잘려 열 때마다 손으로 늘려 잡아야 했다. -->
     <Window.Resources>
         <Style x:Key="LightBox" TargetType="TextBox">
             <Setter Property="Background"      Value="#E5E7EB"/>
@@ -77,9 +79,10 @@
                 <nz:NozzleStrip x:Name="Strip"
                                 FirstNozzle="{Binding FirstNozzle}"
                                 TotalNozzles="{Binding TotalNozzles}"
+                                Rows="{Binding Rows}"
                                 Selected="{Binding Selected}"
                                 PreviewSelection="{Binding PreviewSelection}"/>
-                <TextBlock Text="드래그로 선택 · 선택된 곳을 다시 드래그하면 해제"
+                <TextBlock Text="드래그로 선택 · 선택된 곳을 다시 드래그하면 해제 · 줄을 넘겨 끌면 그 사이 번호가 모두 잡힙니다"
                            Foreground="#475569" FontSize="11" Margin="0,6,0,0"/>
             </StackPanel>
         </Border>

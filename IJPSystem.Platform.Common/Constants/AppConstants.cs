@@ -30,10 +30,14 @@ namespace IJPSystem.Platform.Common.Constants
         // ── 프린트 헤드 ───────────────────────────────────────────────────────
         // 노즐 번호 규약: 화면·레시피·파서 모두 1번부터 센다(0번 없음).
         // 패턴 배열은 0부터이므로 변환은 SpitPatternBuilder.FirstNozzleIndex 가 담당한다.
-        // ※ HeadNozzleCount 는 아직 실측 미확인 placeholder. 실장 헤드 사양으로 반드시 교체할 것 —
+        // ※ 노즐 수는 <b>HeadSpec</b>(Infrastructure.Config)에서 읽는다 — 장비 설정에 값이 있으면
+        //   그것을, 없으면 아래 기본값을 쓴다. 여기 상수를 직접 보지 말 것.
         //   이 값이 실제보다 작으면 뒤쪽 노즐 선택이 무시되고, 크면 없는 노즐에 패턴이 잡힌다.
+        //   (Common 은 Infrastructure 를 참조하지 않으므로 기본값만 여기 둔다)
         public const int FirstNozzleNumber = 1;
-        public const int HeadNozzleCount   = 128;
+
+        /// <summary>헤드 노즐 수 <b>기본값</b>. 실제 값은 HeadSpec.Count 로 읽을 것. S800 = 2열 × 400.</summary>
+        public const int HeadNozzleCount   = 800;
 
         // ── 모션 ──────────────────────────────────────────────────────────────
         public const int MotionPollIntervalMs    = 100;  // 축 상태 폴링 주기

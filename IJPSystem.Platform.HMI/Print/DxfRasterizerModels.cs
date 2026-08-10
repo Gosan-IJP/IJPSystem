@@ -22,25 +22,6 @@ namespace IJPSystem.Platform.HMI.Print
         public IReadOnlyList<int> UsingNozzles { get; set; } = new List<int>();
     }
 
-    /// <summary>Using Nozzles 표시용 셀 하나(노즐 1개). Row 스트립에서 사용 여부를 색으로 표시.</summary>
-    public sealed class NozzleCell : INotifyPropertyChanged
-    {
-        /// <summary>노즐 번호(1부터).</summary>
-        public int Index { get; set; }
-
-        private bool _isUsed;
-        /// <summary>사용 노즐이면 true(초록 표시).</summary>
-        public bool IsUsed
-        {
-            get => _isUsed;
-            set { _isUsed = value; OnPropertyChanged(); }
-        }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string? n = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
-    }
-
     /// <summary>Layer Select 목록 항목. 체크 토글 가능.</summary>
     public sealed class LayerItem : INotifyPropertyChanged
     {

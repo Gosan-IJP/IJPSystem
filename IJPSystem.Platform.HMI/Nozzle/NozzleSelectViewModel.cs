@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using IJPSystem.Platform.Common.Constants;
 using IJPSystem.Platform.Domain.Common;
+using IJPSystem.Platform.Infrastructure.Config;
 using IJPSystem.Platform.Infrastructure.Print;
 
 namespace IJPSystem.Platform.HMI.Nozzle
@@ -25,11 +26,11 @@ namespace IJPSystem.Platform.HMI.Nozzle
     /// </summary>
     public sealed class NozzleSelectViewModel : INotifyPropertyChanged
     {
-        // 헤드별 노즐 범위 — 헤드 사양 하나만 보고 판단하도록 AppConstants 를 쓴다.
-        // (이전엔 여기만 1~999 였고 스핏 패턴은 1~128 이라, 129~999 를 선택하면 "적용 완료" 라고
-        //  표시된 뒤 토출 단계에서 조용히 빠지는 어긋남이 있었다.)
-        public const int MinNozzle = AppConstants.FirstNozzleNumber;
-        public const int MaxNozzle = AppConstants.HeadNozzleCount;
+        // 헤드별 노즐 범위 — HeadSpec 하나만 본다. 화면마다 다른 숫자를 들고 있으면
+        // 여기서 "적용 완료" 라고 표시된 뒤 토출 단계에서 조용히 빠진다.
+        // const 가 아닌 이유: 헤드가 바뀌면 장비 설정에서 값이 바뀐다.
+        public static int MinNozzle => HeadSpec.FirstNozzle;
+        public static int MaxNozzle => HeadSpec.LastNozzle;
 
         private readonly SortedSet<int> _selected = new();
 
@@ -60,6 +61,9 @@ namespace IJPSystem.Platform.HMI.Nozzle
 
         public int FirstNozzle  => MinNozzle;
         public int TotalNozzles => MaxNozzle - MinNozzle + 1;
+
+        /// <summary>막대를 몇 줄로 나눌지 — 헤드 열 수와 맞춘다(S800 = 2열 × 400).</summary>
+        public int Rows => HeadSpec.Rows;
 
         // ── 선택 상태 ─────────────────────────────────────────────────────
         private IReadOnlyCollection<int> _selectedView = Array.Empty<int>();

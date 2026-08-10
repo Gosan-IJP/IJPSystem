@@ -58,24 +58,26 @@ namespace IJPSystem.Platform.HMI.Print
         public double RealXLengthMm { get => _realX; set { _realX = value; OnPropertyChanged(); } }
         public double RealYLengthMm { get => _realY; set { _realY = value; OnPropertyChanged(); } }
 
-        // ---- Using Nozzles / Row 표시 ----
-        /// <summary>한 줄(Row)당 노즐 수.</summary>
-        public const int NozzlesPerRow = 400;
+        // ---- Using Nozzles 표시 ----
+        // 줄 수·노즐 수는 헤드 사양(HeadSpec, 레시피의 노즐 정보)에서만 온다.
+        // 예전에는 여기서 "Row 1 / Row 2" 두 줄을 만들고 화면에는 한 줄 400칸을 박아 놨었다.
+        // 4열 헤드로 바꾸자 한 줄이 200개가 되어 막대가 절반만 차고 401~800 은 아예 사라졌다.
+        // 인스턴스 속성인 이유: WPF 바인딩은 DataContext 의 정적 속성을 찾지 못한다.
+        /// <summary>막대를 몇 줄로 그릴지 = 헤드 열 수.</summary>
+        public int NozzleRows   => Platform.Infrastructure.Config.HeadSpec.Rows;
+        public int FirstNozzle  => Platform.Infrastructure.Config.HeadSpec.FirstNozzle;
+        public int TotalNozzles => Platform.Infrastructure.Config.HeadSpec.Count;
 
         private int _usingNozzleCount;
         public int UsingNozzleCount { get => _usingNozzleCount; set { _usingNozzleCount = value; OnPropertyChanged(); } }
         private IReadOnlyList<int> _usingNozzles = new List<int>();
 
-        /// <summary>Row 1 = 노즐 1~400, Row 2 = 노즐 401~800. 사용 노즐은 초록 표시.</summary>
-        public ObservableCollection<NozzleCell> Row1Nozzles { get; } = BuildRow(1);
-        public ObservableCollection<NozzleCell> Row2Nozzles { get; } = BuildRow(NozzlesPerRow + 1);
-
-        private static ObservableCollection<NozzleCell> BuildRow(int firstIndex)
+        private IReadOnlyCollection<int> _usingNozzleSet = Array.Empty<int>();
+        /// <summary>막대가 초록으로 칠할 사용 노즐.</summary>
+        public IReadOnlyCollection<int> UsingNozzleSet
         {
-            var row = new ObservableCollection<NozzleCell>();
-            for (int i = 0; i < NozzlesPerRow; i++)
-                row.Add(new NozzleCell { Index = firstIndex + i });
-            return row;
+            get => _usingNozzleSet;
+            private set { _usingNozzleSet = value; OnPropertyChanged(); }
         }
 
         /// <summary>외부(전역 선택)에서 사용 노즐을 초기화한다(창 열 때).</summary>
@@ -83,15 +85,7 @@ namespace IJPSystem.Platform.HMI.Print
         {
             _usingNozzles = nozzles ?? new List<int>();
             UsingNozzleCount = _usingNozzles.Count;
-            RefreshNozzleRows();
-        }
-
-        /// <summary>_usingNozzles 기준으로 두 Row 셀의 사용 여부(색)를 갱신.</summary>
-        private void RefreshNozzleRows()
-        {
-            var used = new HashSet<int>(_usingNozzles);
-            foreach (var cell in Row1Nozzles) cell.IsUsed = used.Contains(cell.Index);
-            foreach (var cell in Row2Nozzles) cell.IsUsed = used.Contains(cell.Index);
+            UsingNozzleSet = new HashSet<int>(_usingNozzles);
         }
 
         // ---- Length Measure ----
@@ -158,9 +152,7 @@ namespace IJPSystem.Platform.HMI.Print
 
         private void NozzleSelect()
         {
-            _usingNozzles = NozzleSelectAction?.Invoke() ?? _usingNozzles;
-            UsingNozzleCount = _usingNozzles.Count;
-            RefreshNozzleRows();
+            InitUsingNozzles(NozzleSelectAction?.Invoke() ?? _usingNozzles);
             StatusText = $"사용 노즐 {UsingNozzleCount}개";
         }
 
