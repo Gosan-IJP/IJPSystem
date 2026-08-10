@@ -24,6 +24,9 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         // 축별 방향 부호(+1 정상 / -1 반전). MotorConfig.json 의 InvertDirection 에서 채운다.
         // 지령과 피드백에 같은 부호를 곱해 좌표계 전체를 미러링한다(한쪽만 뒤집으면 절대이동이 발산).
         private readonly Dictionary<string, double> _signMap = new();
+
+        // 상/하한 리밋 표시를 서로 바꿀 축. MotorConfig.json 의 SwapLimitSensors 에서 채운다.
+        private readonly HashSet<string> _swapLimits = new();
         private List<AxisDeviceInfo> _configs = new();
 
         // 원점복귀 완료를 소프트웨어로 래치한다.
@@ -157,6 +160,7 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             _axisStates.Clear();
             _axisMap.Clear();
             _signMap.Clear();
+            _swapLimits.Clear();
             _configs = axisConfigs;
 
             int idx = 0;
@@ -174,9 +178,12 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 int hw = cfg.HwAxis ?? idx;
                 _axisMap[cfg.AxisNo] = (AxisId)hw;
                 _signMap[cfg.AxisNo] = cfg.InvertDirection ? -1.0 : +1.0;
+                if (cfg.SwapLimitSensors) _swapLimits.Add(cfg.AxisNo);
                 LoggerService.WriteToFile("INFO",
                     $"[Comizoa Motion] 축 매핑: {cfg.AxisNo}({cfg.Name}) → HwAxis {hw}" +
-                    (cfg.InvertDirection ? " · 방향 반전(InvertDirection=true)" : ""));
+                    (cfg.InvertDirection  ? " · 방향 반전(InvertDirection=true)" : "") +
+                    (cfg.SwapLimitSensors ? " · 상/하한 교체(SwapLimitSensors=true)" : "") +
+                    (cfg.TeachLimit != null ? $" · 티칭 저장 범위 {cfg.TeachLimitText}" : ""));
                 idx++;
             }
         }
@@ -225,8 +232,10 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 lock (_homedSync) homed = _homedAxes.Contains(ax);
                 s.IsHomeDone   = homed;
                 s.IsAlarm      = alarm;
-                s.UpperLimit   = st.UpperLimit;       // 상한 하드리밋(+EL)
-                s.LowerLimit   = st.LowerLimit;       // 하한 하드리밋(-EL)
+                // 배선이 반대로 물린 축은 여기서 바꿔 준다(표시 전용 — 실제 정지는 드라이브가 건다).
+                bool swap = _swapLimits.Contains(axisNo);
+                s.UpperLimit   = swap ? st.LowerLimit : st.UpperLimit;   // 상한 하드리밋(+EL)
+                s.LowerLimit   = swap ? st.UpperLimit : st.LowerLimit;   // 하한 하드리밋(-EL)
                 s.HomeSensor   = st.HomeSensor;       // 원점(HOME) 센서
                 s.IsInPosition = !st.IsMoving;
             }

@@ -20,6 +20,7 @@ using IJPSystem.Platform.HMI.Views;
 using IJPSystem.Platform.Infrastructure.Config;
 using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -277,6 +278,14 @@ namespace IJPSystem.Platform.HMI
             if (motionConfig?.MotionAxisList != null)
             {
                 motionDriver.Initialize(motionConfig.MotionAxisList);
+
+                // 티칭 저장 범위를 드라이버와 무관하게 남긴다. Comizoa 드라이버 로그에만 있으면
+                // Virtual 모드에서 설정이 빠진 걸 알 길이 없다 — 실제로 MotorConfig.json 에서
+                // TeachLimit 줄이 사라진 채 범위 밖 값이 저장됐다(2026-08-10).
+                var limits = motionConfig.MotionAxisList.Where(a => a.TeachLimit != null).ToList();
+                LoggerService.WriteToFile("INFO", limits.Count == 0
+                    ? $"[Config] 티칭 저장 범위 설정 없음 — {path}"
+                    : $"[Config] 티칭 저장 범위: {string.Join(", ", limits.Select(a => $"{a.Name} {a.TeachLimitText}"))}");
             }
 
             return motionDriver;

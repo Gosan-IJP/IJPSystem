@@ -382,6 +382,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             Machine.Set(MachineKeys.NozzleRowPitchUm, NozzleRowPitchUm);
             Machine.Set(MachineKeys.NozzleDiameterUm, NozzleDiameterUm);
             Machine.Set(MachineKeys.NozzleCount,      NozzleCount);
+
+            // HeadSpec 은 값을 캐시한다 — 여기서 버려 주지 않으면 노즐 선택 화면·패턴 생성이
+            // 앱을 다시 켤 때까지 옛 노즐 수를 계속 쓴다. 저장했는데 안 바뀌는 것으로 보인다.
+            IJPSystem.Platform.Infrastructure.Config.HeadSpec.Reload();
         }
 
         // ── 글라스 정보 ───────────────────────────────────────────────────────
@@ -969,6 +973,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     Dialogs.Show(warnMsg, "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
+            }
+
+            // 1-2. 티칭 좌표 범위 검사 (MotorConfig.json 의 축별 TeachLimit — 예: T축 0~30°).
+            // 이동은 막지 않는다. 값이 공정 좌표로 굳어지는 이 지점에서만 막는다.
+            var outOfRange = TeachLimitCheck.Find(
+                TeachingPoints.Select(p => (p.PointName,
+                                            (IReadOnlyDictionary<string, double>)p.Positions,
+                                            (IReadOnlyDictionary<string, bool>)p.AxisUsed)),
+                AxisList.Select(a => a.Info));
+            if (outOfRange.Count > 0)
+            {
+                Dialogs.Show(TeachLimitCheck.Message(outOfRange, CurrentLanguage == "EN"),
+                             "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
             }
 
             // 2. 데이터베이스 저장 로직

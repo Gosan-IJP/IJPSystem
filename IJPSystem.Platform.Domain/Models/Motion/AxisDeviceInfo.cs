@@ -38,12 +38,46 @@ namespace IJPSystem.Platform.Domain.Models.Motion
         // 드라이브 파라미터(회전방향/Polarity)로 잡을 수 있으면 그쪽이 더 깔끔하다(피드백까지 드라이브에서 함께 반전).
         public bool InvertDirection { get; set; }
 
+        // 상한(+EL)/하한(-EL) 하드리밋 센서 표시를 서로 바꾼다. 배선이 반대로 물린 축을 교정한다.
+        // InvertDirection 과 일부러 분리했다: 기구 방향 반전과 리밋 배선 뒤바뀜은 원인이 다르고,
+        //   실장에서 "이 축만 리밋 LED가 반대"인 경우가 따로 나온다.
+        //   → 방향을 뒤집었으면 대개 이 값도 같이 true 이지만, 자동으로 묶지 않는다.
+        //   ※ 표시(LED)만 바뀐다. 실제 정지는 드라이브가 EL 입력으로 직접 걸므로 이 값과 무관하다.
+        public bool SwapLimitSensors { get; set; }
+
+        // 티칭 좌표로 '저장'할 수 있는 값의 범위. null 이면 제한 없음(현행 동작).
+        //   ※ 이동은 막지 않는다. 조그·수동이동은 어디든 갈 수 있어야 정비·복구가 된다.
+        //      공정 좌표로 굳어지는 순간(레시피 저장)만 막는 것이 이 값의 목적이다(예: T축 0~30°).
+        //   ※ 단위·부호는 화면에 보이는 좌표 그대로다(InvertDirection 적용 후).
+        public TeachLimitConfig? TeachLimit { get; set; }
+
+        /// <summary>그 값이 티칭 저장 범위 안인가. 미설정이면 항상 true.</summary>
+        public bool IsWithinTeachLimit(double pos)
+        {
+            var l = TeachLimit;
+            if (l == null) return true;
+            if (l.Min is double lo && pos < lo) return false;
+            if (l.Max is double hi && pos > hi) return false;
+            return true;
+        }
+
+        /// <summary>티칭 저장 범위 표기 — 로그·안내문에 쓴다. 미설정이면 빈 문자열.</summary>
+        public string TeachLimitText =>
+            TeachLimit == null ? "" : $"{TeachLimit.Min?.ToString("0.###") ?? "-∞"}~{TeachLimit.Max?.ToString("0.###") ?? "+∞"}{Unit}";
+
         // 원점복귀 속도 패턴. null이면 드라이브 기본값 사용(현행 동작).
         // 설정하면 Connect 시 드라이브에 다운로드(ecmHomeCfg_SetSpeedPatt) → 콜드부팅 후 첫 실행에도 정상.
         // LabVIEW Set Home Parameters.vi 와 동일하게 '속도 패턴만' 설정(모드/방향/오프셋은 미변경 → 안전).
         public HomeConfig? Home { get; set; }
 
         public MotionDetailConfig MotionConfig { get; set; } = new();
+    }
+
+    // 티칭 저장 범위(JSON). 한쪽만 넣어도 된다 — 넣지 않은 쪽은 제한 없음.
+    public class TeachLimitConfig
+    {
+        public double? Min { get; set; }
+        public double? Max { get; set; }
     }
 
     // 원점복귀 속도 패턴(JSON). LabVIEW 클러스터 순서 Vel/Acc/Dec/HomeSpecVel 에 대응.

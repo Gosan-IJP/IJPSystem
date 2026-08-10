@@ -222,6 +222,23 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private void SaveToDatabase()
         {
             string name = _mainVM.RecipeVM.SelectedRecipeName;
+
+            // 티칭 좌표 범위 검사 (MotorConfig.json 의 축별 TeachLimit — 예: T축 0~30°).
+            // 확인창보다 먼저 본다 — "저장할까요? → 예 → 못 저장합니다" 는 헛걸음이다.
+            var outOfRange = Domain.Models.Motion.TeachLimitCheck.Find(
+                TeachingPoints.Select(p => (p.PointName,
+                                            (IReadOnlyDictionary<string, double>)p.Positions,
+                                            (IReadOnlyDictionary<string, bool>)p.AxisUsed)),
+                AxisList.Select(a => a.Info));
+            if (outOfRange.Count > 0)
+            {
+                Dialogs.Show(Domain.Models.Motion.TeachLimitCheck.Message(outOfRange, _mainVM.RecipeVM.CurrentLanguage == "EN"),
+                             "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                _mainVM.AddLog($"[MOTION] Teach [{name}] 저장 거부 — 허용 범위 밖 {outOfRange.Count}건",
+                               LogLevel.Warning);
+                return;
+            }
+
             var result = Dialogs.Show(
                 Loc.T("Msg_TeachSaveConfirm", name),
                 Loc.T("Msg_TeachSaveTitle"),
