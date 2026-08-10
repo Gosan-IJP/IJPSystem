@@ -33,12 +33,20 @@ namespace IJPSystem.Platform.Domain.Models.Config
         // true 면 가동 전 도어 잠금 체크 활성 / false 면 우회 (현장 안전키 미연결 환경)
         public bool   IsDoorCheckEnabled { get; set; } = true;
 
-        // ── 메니스커스 DMD(Modbus RTU / 시리얼) 압력 모듈 연결 설정 ──
-        // Enabled=false 면 연결 시도하지 않고 UI 는 mock 으로 동작.
+        // ── 메니스커스 DMD — 옛 위치(하위호환 전용) ────────────────────────────
+        // ★새 설정은 Config/MeniscusConfig.json + DriverMode.Meniscus 다. 여기 값은 쓰지 말 것.
+        //
+        // 남겨 둔 이유: 제어 PC 의 AppConfig.json 에 이미 이 키들이 들어 있다. MeniscusConfig.json
+        //   이 없을 때만 읽어 그대로 동작시키고 경고를 남긴다 — 없으면 배포 직후 현장에서 맞춘
+        //   COM 포트가 조용히 기본값으로 돌아간다.
+        // 현장 파일이 모두 옮겨진 뒤 삭제할 것.
         public bool   MeniscusEnabled  { get; set; } = false;
         public string MeniscusComPort  { get; set; } = "COM3";
         public int    MeniscusBaudRate { get; set; } = 9600;
         public byte   MeniscusUnitId   { get; set; } = 1;
+
+        /// <summary>옛 메니스커스 키가 AppConfig 에 남아 있는가 — 폴백 경고를 낼지 판단한다.</summary>
+        public bool HasLegacyMeniscusKeys => MeniscusEnabled;
 
         // ── 드라이버 선택 (디바이스별) ──────────────────────────────
         // 시뮬레이션은 "Virtual", 실장비는 벤더명. 값이 인식되지 않으면 Virtual 로 동작.
@@ -51,12 +59,20 @@ namespace IJPSystem.Platform.Domain.Models.Config
     ///   Motion : Virtual | Comizoa | Acs
     ///   Vision : Virtual | Imaqdx | Ebus
     ///   Head   : None | Meteor
+    ///   Meniscus : Virtual | Dmd
     /// </summary>
     public class DriverModeSettings
     {
         public string IO     { get; set; } = "Virtual";
         public string Motion { get; set; } = "Virtual";
         public string Vision { get; set; } = "Virtual";
+
+        // 메니스커스 압력 컨트롤러. "Dmd" 면 MeniscusConfig.json 으로 Modbus RTU 연결,
+        // 그 외("Virtual")면 연결하지 않고 화면만 mock 으로 동작한다.
+        //   여기 둔 이유: "실물이 달렸나" 판정은 IO/Motion/Vision/Head 와 같은 성격이다.
+        //   장치 설정 파일에 Enabled 를 또 두면 가상↔실장 전환 때 볼 곳이 둘로 갈라진다.
+        //   ※ 값이 비어 있으면 옛 AppConfig 의 MeniscusEnabled 를 따른다(하위호환).
+        public string Meniscus { get; set; } = "";
 
         // 프린트 헤드(Meteor PCC). "None" 이면 스플래시 확인·상태바 폴링을 아예 하지 않는다
         // — 헤드가 없는 장비에서 불필요한 PiOpenPrinter 점유/지연을 막기 위함.

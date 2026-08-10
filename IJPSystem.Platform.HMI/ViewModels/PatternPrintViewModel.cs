@@ -694,22 +694,25 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
 
         // ── 메니스커스 장치 연결 / 폴링(상태머신) ─────────────────────
-        /// <summary>설정(AppConfig)에 따라 DMD Modbus RTU 상태머신을 백그라운드로 연결·폴링 시작.</summary>
+        /// <summary>
+        /// 설정에 따라 DMD Modbus RTU 상태머신을 백그라운드로 연결·폴링 시작.
+        ///
+        /// <para>
+        /// 실물 여부는 <c>DriverMode.Meniscus</c>("Dmd"), 배선·레지스터는 <c>MeniscusConfig.json</c> 이
+        /// 정한다. 둘 다 없으면 옛 AppConfig 키로 폴백한다 — 자세한 규칙은
+        /// <see cref="MeniscusEnabled"/> / <see cref="LoadMeniscusConfig"/> 참고.
+        /// </para>
+        /// </summary>
         private void InitMeniscusDevice()
         {
             var cfg = IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Current;
-            if (cfg == null || !cfg.MeniscusEnabled) return;
+            if (!MeniscusEnabled(cfg)) return;
 
             System.Threading.Tasks.Task.Run(() =>
             {
                 try
                 {
-                    var dmdCfg = new IJPSystem.Platform.Infrastructure.Devices.Meniscus.DmdConfig
-                    {
-                        ComPort  = cfg.MeniscusComPort,
-                        BaudRate = cfg.MeniscusBaudRate,
-                        UnitId   = cfg.MeniscusUnitId
-                    };
+                    var dmdCfg = LoadMeniscusConfig(cfg);
                     var sm = new IJPSystem.Platform.Infrastructure.Devices.Meniscus.MeniscusStateMachine(dmdCfg);
                     sm.StateChanged += OnMeniscusStateChanged;
                     _meniscus = sm;
@@ -717,12 +720,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     sm.Init();                       // 시리얼 Modbus 연결
                     if (sm.State.Connected)
                     {
-                        _mainVM.AddLog($"[MENISCUS] DMD 연결됨 — {cfg.MeniscusComPort} @ {cfg.MeniscusBaudRate}", LogLevel.Info);
+                        _mainVM.AddLog($"[MENISCUS] DMD 연결됨 — {dmdCfg.ComPort} @ {dmdCfg.BaudRate} " +
+                                       $"(UnitId {dmdCfg.UnitId})", LogLevel.Info);
                         sm.StartRead();              // 백그라운드 압력 폴링
                     }
                     else
                     {
-                        _mainVM.AddLog($"[MENISCUS] DMD 미연결(mock) — {sm.State.ErrorMessage}", LogLevel.Warning);
+                        _mainVM.AddLog($"[MENISCUS] DMD 미연결(mock) — {dmdCfg.ComPort}: {sm.State.ErrorMessage}",
+                                       LogLevel.Warning);
                     }
                 }
                 catch (Exception ex)
@@ -731,6 +736,54 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     _mainVM.AddLog($"[MENISCUS] 연결 실패(mock 전환): {ex.Message}", LogLevel.Warning);
                 }
             });
+        }
+
+        /// <summary>
+        /// 메니스커스 실물을 붙일지 판정. <c>DriverMode.Meniscus = "Dmd"</c> 가 기준이고,
+        /// 비어 있으면 옛 <c>AppConfig.MeniscusEnabled</c> 를 따른다(현장 파일 하위호환).
+        /// </summary>
+        private bool MeniscusEnabled(IJPSystem.Platform.Domain.Models.Config.AppSettings? cfg)
+        {
+            if (cfg == null) return false;
+
+            string mode = cfg.DriverMode?.Meniscus ?? "";
+            if (!string.IsNullOrWhiteSpace(mode))
+                return mode.Trim().Equals("Dmd", StringComparison.OrdinalIgnoreCase);
+
+            if (cfg.HasLegacyMeniscusKeys)
+                _mainVM.AddLog("[MENISCUS] DriverMode.Meniscus 가 없어 옛 AppConfig 의 MeniscusEnabled 를 씁니다 — " +
+                               "AppConfig 에 \"Meniscus\": \"Dmd\" 를 넣으세요.", LogLevel.Warning);
+            return cfg.MeniscusEnabled;
+        }
+
+        /// <summary>
+        /// MeniscusConfig.json 로드. 파일이 없으면 옛 AppConfig 키 3개로 만들어 쓴다.
+        ///
+        /// <para>
+        /// 폴백이 필요한 이유: 제어 PC 의 AppConfig.json 에는 이미 COM 포트가 현장 값으로 들어 있다.
+        /// 파일이 없다고 기본값(COM3)을 쓰면 배포 직후 조용히 연결이 끊긴다 — 로그만 보고는
+        /// "장비가 안 붙네" 로만 보인다. 그래서 폴백하고, 옮기라고 경고한다.
+        /// </para>
+        /// </summary>
+        private IJPSystem.Platform.Infrastructure.Devices.Meniscus.DmdConfig LoadMeniscusConfig(
+            IJPSystem.Platform.Domain.Models.Config.AppSettings cfg)
+        {
+            string path = IJPSystem.Platform.Common.Utilities.PathUtils.GetConfigPath(
+                              IJPSystem.Platform.Common.Constants.AppConstants.MeniscusConfigFile);
+
+            var loaded = new IJPSystem.Platform.Infrastructure.Config.ConfigLoader().LoadMeniscusConfig(path);
+            if (loaded != null) return loaded;
+
+            _mainVM.AddLog($"[MENISCUS] {IJPSystem.Platform.Common.Constants.AppConstants.MeniscusConfigFile} " +
+                           $"이 없어 AppConfig 의 옛 값으로 연결합니다 ({cfg.MeniscusComPort} @ {cfg.MeniscusBaudRate}) — " +
+                           "레지스터 주소·스케일은 코드 기본값입니다. 파일로 옮기세요.", LogLevel.Warning);
+
+            return new IJPSystem.Platform.Infrastructure.Devices.Meniscus.DmdConfig
+            {
+                ComPort  = cfg.MeniscusComPort,
+                BaudRate = cfg.MeniscusBaudRate,
+                UnitId   = cfg.MeniscusUnitId,
+            };
         }
 
         /// <summary>상태머신 상태 변경 알림 → 연결 플래그 갱신 + 현재 압력(Pa) UI 반영.</summary>

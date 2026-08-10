@@ -15,6 +15,7 @@ namespace IJPSystem.Platform.Common.Constants
         public const string MotorConfigFile       = "MotorConfig.json";
         public const string IoConfigFile          = "IO.json";
         public const string VisionConfigFile      = "VisionConfig.json";
+        public const string MeniscusConfigFile    = "MeniscusConfig.json";
         public const string AlarmSystemDb         = "AlarmSystem.db";
         public const string AlarmHistoryDb        = "AlarmHistory.db";
         public const string SystemLogDb           = "SystemLog.db";

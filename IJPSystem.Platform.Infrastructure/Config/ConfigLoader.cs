@@ -79,6 +79,22 @@ namespace IJPSystem.Platform.Infrastructure.Config
             File.WriteAllText(filePath, JsonSerializer.Serialize(cfg, options));
         }
 
+        /// <summary>
+        /// 메니스커스 압력 컨트롤러(DMD, Modbus RTU) 설정 로드. 파일 없으면 null.
+        ///
+        /// <para>
+        /// null 을 돌려주는 이유: 파일이 없을 때 호출부가 <b>AppConfig 의 옛 키로 폴백</b>해야 한다.
+        /// 여기서 기본값을 만들어 주면 그 폴백이 조용히 죽어, 현장에서 맞춰 둔 COM 포트가
+        /// 배포 직후 기본값(COM3)으로 바뀐다. 다른 로더들과 다른 점이므로 주의.
+        /// </para>
+        /// </summary>
+        public Devices.Meniscus.DmdConfig? LoadMeniscusConfig(string filePath)
+        {
+            if (!File.Exists(filePath)) return null;
+            string json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<Devices.Meniscus.DmdConfig>(json, _options);
+        }
+
         /// <summary>iCore 스트로브(Modbus RTU) 설정 로드. 파일 없으면 기본값(가상 모드에선 미사용).</summary>
         public StrobeConfig LoadStrobeConfig(string filePath)
         {
