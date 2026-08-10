@@ -174,6 +174,11 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
             if (d1.Count != d2.Count)
                 warnings.Add($"두 프레임 검출 수 불일치({d1.Count} vs {d2.Count}) — 짝지어진 {nozzles.Count}개만 반영");
 
+            // 측정창에 걸린 액적 — 면적이 잘려 직경·부피가 작게 나온다. 속도(ΔY)는 덜 영향받지만
+            // 같은 프레임의 부피를 함께 읽으므로 두 값을 나란히 보는 사람이 오해한다.
+            if (DropWatcherProcessor.ClippedWarning(d1) is string c1) warnings.Add($"Delay1 프레임: {c1}");
+            if (DropWatcherProcessor.ClippedWarning(d2) is string c2) warnings.Add($"Delay2 프레임: {c2}");
+
             // ── 노즐 번호 매핑 — 리스트 순번이 아니라 실제 노즐 번호를 배정 ──
             NozzleGridResult? grid = null;
             if (ExpectedNozzles.Count > 0 && NozzlePitchUm > 0)

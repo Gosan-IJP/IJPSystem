@@ -39,15 +39,18 @@ namespace IJPSystem.Tests
             MinAreaPx         = 20,
         };
 
-        /// <summary>노즐이 가로로 늘어선 프레임. <paramref name="xShiftPx"/> 로 격자에서 어긋나게 둘 수 있다.</summary>
-        private static VisionImage SynthFrame(int xShiftPx = 0)
+        /// <summary>
+        /// 노즐이 가로로 늘어선 프레임.
+        /// <paramref name="xShiftPx"/> 로 격자에서 어긋나게, <paramref name="centerY"/> 로 세로 위치를 옮길 수 있다.
+        /// </summary>
+        private static VisionImage SynthFrame(int xShiftPx = 0, int? centerY = null)
         {
             const byte bg = 205, drop = 35;
             var buf = new byte[Width * Height];
             for (int i = 0; i < buf.Length; i++) buf[i] = bg;
 
             for (int n = 0; n < NozzleCount; n++)
-                FillDisk(buf, FirstXPx + n * PitchPx + xShiftPx, DropCenterY, RadiusPx, drop);
+                FillDisk(buf, FirstXPx + n * PitchPx + xShiftPx, centerY ?? DropCenterY, RadiusPx, drop);
 
             return new VisionImage
             {
@@ -283,6 +286,55 @@ namespace IJPSystem.Tests
             cfg.ExpectedImageHeight = Height;
 
             Assert.Null(new DropWatcherProcessor(cfg).ValidateFrame(SynthFrame()));
+        }
+
+        // ── 측정창 경계 걸침 ──────────────────────────────────────────────────
+        // 검출은 측정창으로 이미지를 잘라낸 뒤 하므로, 경계에 걸친 액적은 면적이 잘린다.
+        // 직경은 √면적, 부피는 직경³ 이라 오차가 증폭된다 — 실장에서 직경 26.9µm(실제 35.1) ·
+        // 부피 10.4pL(실제 22.6)로 나왔다(2026-08-10). 조용히 넘어가면 안 되는 값이다.
+
+        /// <summary>창 한가운데 있는 액적은 걸림으로 표시되지 않는다(오경보 방지).</summary>
+        [Fact]
+        public void Clipping_NotFlagged_WhenDropletIsInsideWindow()
+        {
+            var drops = new DropWatcherProcessor(FixedRoiConfig()).DetectDroplets(SynthFrame());
+
+            Assert.Equal(NozzleCount, drops.Count);
+            Assert.All(drops, d => Assert.False(d.ClippedByWindow));
+            Assert.Null(DropWatcherProcessor.ClippedWarning(drops));
+        }
+
+        /// <summary>창 아래 경계에 걸친 액적은 걸림으로 표시된다.</summary>
+        [Fact]
+        public void Clipping_Flagged_WhenDropletStraddlesWindowBottom()
+        {
+            var cfg = FixedRoiConfig();
+            int yBot = (int)(cfg.MeasureEndUm / UmPerPx);        // 400px
+            var frame = SynthFrame(centerY: yBot);               // 반은 창 밖
+
+            var drops = new DropWatcherProcessor(cfg).DetectDroplets(frame);
+
+            Assert.Equal(NozzleCount, drops.Count);
+            Assert.All(drops, d => Assert.True(d.ClippedByWindow));
+
+            string? warn = DropWatcherProcessor.ClippedWarning(drops);
+            Assert.NotNull(warn);
+            Assert.Contains($"{NozzleCount}개", warn);
+        }
+
+        /// <summary>걸린 액적은 실제보다 작게 나온다 — 경고가 필요한 이유 자체를 고정한다.</summary>
+        [Fact]
+        public void Clipping_UnderreportsDiameterAndVolume()
+        {
+            var cfg = FixedRoiConfig();
+            var inside  = new DropWatcherProcessor(cfg).DetectDroplets(SynthFrame());
+            var clipped = new DropWatcherProcessor(cfg)
+                          .DetectDroplets(SynthFrame(centerY: (int)(cfg.MeasureEndUm / UmPerPx)));
+
+            // 위 절반만 남으므로 면적도 대략 절반, 직경은 √2 배 작아진다.
+            Assert.InRange(clipped[0].AreaPx / inside[0].AreaPx, 0.35, 0.65);
+            Assert.True(clipped[0].DiameterMicron  < inside[0].DiameterMicron);
+            Assert.True(clipped[0].VolumePicoLiter < inside[0].VolumePicoLiter * 0.6);
         }
     }
 }

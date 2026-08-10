@@ -1045,14 +1045,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 XPixel   = d.CentroidXPixel,
                 YPixel   = d.CentroidYPixel,
                 Velocity = i < vel.Length ? vel[i] : double.NaN,
+                Clipped  = d.ClippedByWindow,
             }).ToList();
             var okVel = vel.Where(v => !double.IsNaN(v)).ToArray();
             double avgDia = drops.Average(d => d.DiameterMicron);
             double avgVol = drops.Average(d => d.VolumePicoLiter);
 
+            // 측정창에 걸린 액적은 면적이 잘려 직경·부피가 작게 나온다 — 요약에 붙이지 않으면
+            // 화면만 보고는 알 수 없다(실측 26.9µm/10.4pL ↔ 창을 내리면 35.1µm/22.6pL, 2026-08-10).
+            string? clip = Platform.Infrastructure.Devices.DropWatcher.DropWatcherProcessor.ClippedWarning(drops);
+
             LastResultText = okVel.Length > 0
                 ? $"노즐 {drops.Count}개 · 직경 {avgDia:F1}µm · 부피 {avgVol:F1}pL · 속도 {okVel.Average():F2}m/s (편차 {okVel.Max() - okVel.Min():F2})"
                 : $"노즐 {drops.Count}개 · 직경 {avgDia:F1}µm · 부피 {avgVol:F1}pL";
+            if (clip != null) LastResultText += $" ※{clip}";
 
             ResultNozzles  = drops.Count.ToString();
             ResultDiameter = $"{avgDia:F1}";
@@ -1060,7 +1066,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ResultVelocity = okVel.Length > 0 ? $"{okVel.Average():F2}" : "-";
             ResultSpread   = okVel.Length > 0 ? $"{okVel.Max() - okVel.Min():F2}" : "-";
             HasResult      = true;
-            _mainVM.AddLog($"[VISION] DropWatcher: {action}({src}) — {LastResultText}", LogLevel.Info);
+            _mainVM.AddLog($"[VISION] DropWatcher: {action}({src}) — {LastResultText}",
+                           clip == null ? LogLevel.Info : LogLevel.Warning);
 
             BuildDropletCharts(drops, vel);
         }

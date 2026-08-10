@@ -44,6 +44,8 @@ namespace IJPSystem.Platform.HMI.Vision
         private static readonly Pen   GuidePen   = MakePen(0xEC, 0x40, 0x99, 1.0, 0xE0);
         private static readonly Pen   ResultPen  = MakePen(0x22, 0xC5, 0x5E, 1.0, 0xE0);
         private static readonly Brush ResultText = new SolidColorBrush(Color.FromRgb(0x4A, 0xDE, 0x80));
+        /// <summary>측정창에 걸린 액적의 값 — 잘린 면적으로 낸 값이라 초록과 구분한다.</summary>
+        private static readonly Brush ClippedText = new SolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24));
 
         private static Pen MakePen(byte r, byte g, byte b, double thickness, byte alpha)
         {
@@ -57,6 +59,7 @@ namespace IJPSystem.Platform.HMI.Vision
             TextBrush.Freeze();
             LabelBack.Freeze();
             ResultText.Freeze();
+            ClippedText.Freeze();
         }
 
         // ── 노즐 가이드라인 ───────────────────────────────────────────────────
@@ -358,9 +361,11 @@ namespace IJPSystem.Platform.HMI.Vision
                 double mx = ToX(m.XPixel);
                 if (mx < x0 || mx > x0 + imgW) continue;
 
+                // 걸린 액적은 값 자체를 못 믿으므로 색을 바꿔 표시한다(면적이 잘려 부피가 작게 나온다).
                 var ft = new FormattedText(m.Velocity.ToString("F2", CultureInfo.InvariantCulture),
                                            CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                                           new Typeface("Segoe UI"), FontSize, ResultText, dpi);
+                                           new Typeface("Segoe UI"), FontSize,
+                                           m.Clipped ? ClippedText : ResultText, dpi);
 
                 // 액적이 든 창을 찾아 그 안에 넣고, 못 찾으면 액적 중심 기준으로 놓는다.
                 double tx = mx - ft.Width / 2.0;

@@ -228,6 +228,18 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         public double AreaPx          { get; set; }
         public double DiameterMicron  { get; set; }
         public double VolumePicoLiter { get; set; }
+
+        /// <summary>
+        /// 액적이 측정창 경계에 닿았다 = 면적이 잘렸다.
+        ///
+        /// <para>
+        /// 검출은 측정창으로 이미지를 <b>잘라낸 뒤</b> 수행하므로, 창 밖으로 나간 부분은 아예
+        /// 존재하지 않는 픽셀이 된다. 직경은 √면적, 부피는 직경³ 이라 오차가 증폭된다 —
+        /// 실측에서 창 아래끝에 걸린 액적이 직경 26.9µm(실제 35.1) · 부피 10.4pL(실제 22.6)로
+        /// 나왔다(2026-08-10). 화면만 보고는 알 수 없어 조용히 절반짜리 값이 남는다.
+        /// </para>
+        /// </summary>
+        public bool ClippedByWindow { get; set; }
     }
 
     /// <summary>
@@ -244,6 +256,17 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
         public DropWatcherProcessor(DropWatcherProcessorConfig? cfg = null)
             => _cfg = cfg ?? new DropWatcherProcessorConfig();
+
+        /// <summary>
+        /// 측정창에 걸린 액적이 있으면 경고 문구, 없으면 null.
+        /// 단일프레임 측정과 2점 측정이 같은 문구를 쓰도록 여기 둔다.
+        /// </summary>
+        public static string? ClippedWarning(IReadOnlyList<DropletInfo>? drops)
+        {
+            int n = drops?.Count(d => d.ClippedByWindow) ?? 0;
+            return n == 0 ? null
+                 : $"액적 {n}개가 측정창 경계에 걸림 — 직경·부피가 실제보다 작게 나옵니다(측정창 조정 필요)";
+        }
 
         public DwReading Measure(VisionImage frame)
         {
@@ -496,6 +519,12 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
                 var m = Cv2.Moments(best);
                 if (m.M00 <= 0) continue;
 
+                // 창 경계에 닿았으면 면적이 잘린 것이다 — 값 자체는 그대로 두되 표시해 둔다.
+                // 여기서 버리면 "노즐이 사라지는" 더 나쁜 증상이 되므로 판단은 화면에 맡긴다.
+                var bb = Cv2.BoundingRect(best);
+                bool clipped = bb.Y <= 0 || bb.Y + bb.Height >= win.Height
+                            || bb.X <= 0 || bb.X + bb.Width  >= win.Width;
+
                 double diaUm = 2.0 * Math.Sqrt(bestArea / Math.PI) * upp;
                 double rUm = diaUm / 2.0;
                 list.Add(new DropletInfo
@@ -505,6 +534,7 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
                     AreaPx          = bestArea,
                     DiameterMicron  = diaUm,
                     VolumePicoLiter = 4.0 / 3.0 * Math.PI * rUm * rUm * rUm * 1e-3,
+                    ClippedByWindow = clipped,
                 });
             }
             return list;
