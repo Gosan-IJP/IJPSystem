@@ -27,21 +27,56 @@ namespace IJPSystem.Drivers.Vision
         public bool   IsConnected   { get; private set; } = false;
         public string ImageSavePath { get; set; } = @"C:\Logs\Vision";
 
-        /// <summary>
-        /// 가상 드랍와쳐 합성 프레임의 노즐 수. 실측 Raw 샘플(Config/Samples/DropWatcher_Raw.png)이
-        /// 15개라 기본값을 맞춰 둔다 — 가상/실측 결과를 바로 비교할 수 있어야 한다.
-        /// </summary>
-        public int VirtualNozzleCount { get; set; } = 15;
+        // ── 가상 드랍와쳐 합성 프레임 ─────────────────────────────────────────
+        // 크기·위치를 전부 <b>µm 로</b> 정하고 프레임 폭으로 픽셀 환산한다.
+        //   화면 비율(예전의 height/40)로 잡으면 해상도에 따라 액적이 터무니없이 커진다 —
+        //   2856×2848 프레임에서 반경 71px = 지름 97µm 가 되어 배경억제 커널(81px)보다 커졌고,
+        //   그러면 닫힘 연산이 그 구멍을 못 메워 배경에도 액적이 남는다. 결과가 대비 3 —
+        //   즉 액적이 통째로 사라져 2점 측정이 노이즈만 짝짓고 있었다(2026-08-10).
 
         /// <summary>
-        /// 가상 스트로브 지연[µs]. 액적 낙하거리를 이 값에 비례시켜, 지연을 바꾸며 두 번 찍는
-        /// 2점 측정(<c>DropVelocitySequence</c>)이 가상 모드에서도 실제처럼 ΔY 를 만들게 한다.
-        /// 0 이면 지연 무시(기존 고정 프레임) — Live View 는 이 경로를 쓴다.
+        /// 가상 드랍와쳐 합성 프레임의 노즐 수. <b>0 이면 피치로 화면을 채운다</b>(실장과 같은 모습).
+        /// 실측 Raw 샘플(Config/Samples/DropWatcher_Raw.png)과 맞춰 보려면 15 로 둔다.
+        /// </summary>
+        public int VirtualNozzleCount { get; set; } = 0;
+
+        /// <summary>
+        /// 광학 시야 가로[µm]. µm/px = 이 값 ÷ 프레임 폭 — 검출기(DropWatcherProcessor)와 같은 규칙이라
+        /// 해상도를 바꿔도 합성 프레임과 검출이 같은 스케일을 본다.
+        /// (GOX-8105M-PGE + VS-TCH4-65 4.0X = 1.9564mm)
+        /// </summary>
+        public double VirtualFieldOfViewXUm { get; set; } = 1956.4;
+
+        /// <summary>합성 액적의 지름[µm]. 실장 실측이 26~35µm 대다.</summary>
+        public double VirtualDropDiameterUm { get; set; } = 30.0;
+
+        /// <summary>합성 노즐 피치[µm]. 헤드 사양값(S800 = 84.7µm).</summary>
+        public double VirtualNozzlePitchUm { get; set; } = 84.7;
+
+        /// <summary>토출 속도[m/s] = µm/µs. 2점 측정이 되돌려 줘야 하는 정답값이다.</summary>
+        public double VirtualDropVelocityMps { get; set; } = 5.0;
+
+        /// <summary>
+        /// 트리거에서 실제 토출까지의 시간[µs]. 낙하거리 = 속도 × (지연 − 이 값).
+        ///
+        /// <para>
+        /// 왜 필요한가: 스트로브 지연은 <b>트리거 체인 시작</b> 기준이지 토출 순간 기준이 아니다.
+        /// 이 값이 0 이면 화면 기본 지연(890µs)에서 5m/s 액적이 4450µm 아래 — 프레임 밖이라
+        /// 아무것도 안 보인다. 770 은 890/920µs 에서 낙하거리가 600/750µm 가 되어
+        /// 측정창(130~910µm) 한가운데 들어오도록 잡은 값이다.
+        /// </para>
+        /// </summary>
+        public double VirtualFireDelayUs { get; set; } = 770.0;
+
+        /// <summary>
+        /// 가상 스트로브 지연[µs]. 지연을 바꾸며 두 번 찍는 2점 측정(<c>DropVelocitySequence</c>)이
+        /// 가상 모드에서도 실제처럼 ΔY 를 만들게 한다.
+        /// 0 이면 기준 지연(<see cref="VirtualNominalDelayUs"/>)에서 찍은 것으로 본다 — Live View 경로.
         /// </summary>
         public double VirtualStrobeDelayUs { get; set; } = 0;
 
-        /// <summary>기준 지연[µs] — 이 지연에서 액적이 기존 위치(프레임 높이의 62%)에 온다.</summary>
-        public double VirtualNominalDelayUs { get; set; } = 910.0;
+        /// <summary>Live View 처럼 지연이 지정되지 않았을 때 쓸 기준 지연[µs].</summary>
+        public double VirtualNominalDelayUs { get; set; } = 890.0;
 
         // ────────────────────────────────────────────────
         // 1. 연결 / 초기화
@@ -135,7 +170,7 @@ namespace IJPSystem.Drivers.Vision
                 imgW = cfg.PixelWidth  > 0 ? cfg.PixelWidth  : 1280;
                 imgH = cfg.PixelHeight > 0 ? cfg.PixelHeight : 512;
                 bpp  = 8;
-                pixels = GenerateDropletMono8(imgW, imgH, seq);
+                pixels = GenerateDropletMono8(imgW, imgH);
                 // saveToDisk=false(라이브 미리보기)면 파일을 남기지 않는다 — PixelData 로 화면 표시/분석 모두 가능.
                 if (saveToDisk) filePath = SaveMono8Image(cameraId, now, pixels, imgW, imgH);
             }
@@ -318,8 +353,10 @@ namespace IJPSystem.Drivers.Vision
         /// ※ 액적 위치는 <b>프레임마다 고정</b>이어야 한다. 노즐별 편차도 seq/난수가 아니라
         ///   결정적 함수로 준다 — 매 프레임 흔들리면 Live View 에서 화면이 출렁이는 것처럼 보인다.
         ///   (배경 노이즈만 프레임마다 변해 '라이브' 느낌을 준다)
+        ///
+        /// ※ 크기·위치는 전부 µm 로 정하고 프레임 폭으로 환산한다 — 이유는 위 Virtual* 속성 주석 참고.
         /// </summary>
-        private byte[] GenerateDropletMono8(int width, int height, int seq)
+        private byte[] GenerateDropletMono8(int width, int height)
         {
             const byte bg   = 205;   // 밝은 배경(백라이트) — 중앙 기준
             const byte drop = 35;    // 어두운 액적(실루엣)
@@ -341,22 +378,41 @@ namespace IJPSystem.Drivers.Vision
                 }
             }
 
-            int n     = VirtualNozzleCount;              // 노즐 수 — 실측 샘플과 맞춘다
-            int pitch = width / (n + 1);                 // 노즐 피치
-            int r     = Math.Max(5, height / 40);        // 액적 반경
-            // 기준 낙하거리(노즐면=상단 가정). 스트로브 지연이 주어지면 낙하거리를 지연에 비례시켜
-            // 2점 측정이 두 지연에서 서로 다른 Y 를 보게 한다(등속 낙하 가정).
-            int baseY = (int)(height * 0.62);
-            if (VirtualStrobeDelayUs > 0 && VirtualNominalDelayUs > 0)
-                baseY = (int)Math.Clamp(height * 0.62 * (VirtualStrobeDelayUs / VirtualNominalDelayUs),
-                                        r + 1, height - r - 1);
+            // µm → px. 검출기와 같은 규칙(시야 ÷ 프레임 폭)이라 해상도가 달라도 서로 어긋나지 않는다.
+            double upp = VirtualFieldOfViewXUm / Math.Max(1, width);
+            if (upp <= 0) return buf;
+
+            double pitchPx = Math.Max(4.0, VirtualNozzlePitchUm / upp);
+            double rPx     = Math.Max(2.0, VirtualDropDiameterUm / 2.0 / upp);
+
+            // 노즐 수를 안 정했으면 피치로 화면을 채운다 — 실장 카메라가 헤드의 한 구간을 보는 모습.
+            // 창 중심 규약(originX = pitch/2)은 검출기 기본값과 같게 맞춘다.
+            double originX = pitchPx / 2.0;
+            int n = VirtualNozzleCount > 0
+                  ? VirtualNozzleCount
+                  : Math.Max(1, (int)((width - originX) / pitchPx) + 1);
+
+            // 낙하거리 = 속도 × 비행시간. 지연은 트리거 기준이라 토출까지의 시간을 빼야 한다.
+            // 등속 가정(공기저항·중력 무시) — 2점 측정이 되돌려 주는 속도가 설정값과 같아야 검증이 된다.
+            double delayUs  = VirtualStrobeDelayUs > 0 ? VirtualStrobeDelayUs : VirtualNominalDelayUs;
+            double flightUs = delayUs - VirtualFireDelayUs;
+            if (flightUs <= 0) return buf;              // 아직 토출 전 — 액적이 없는 것이 맞다
+
+            double fallUm = VirtualDropVelocityMps * flightUs;   // m/s × µs = µm
+            double baseY  = fallUm / upp;
 
             for (int i = 0; i < n; i++)
             {
-                int cx = pitch * (i + 1);
-                // 노즐별 속도 편차 → 낙하거리 편차. 결정적(sin)이라 프레임 간 고정.
-                int cy = baseY + (int)(Math.Sin(i * 1.7) * r * 0.9);
-                FillDisk(buf, width, height, cx, cy, r, drop);
+                double cx = originX + i * pitchPx;
+                if (cx - rPx > width) break;
+
+                // 노즐별 속도 편차 → 낙하거리 편차. 결정적(sin)이라 프레임 간 고정이고,
+                // 낙하거리의 5% 로 두어 측정에서 편차가 보이되 창을 벗어나지는 않게 한다.
+                double cy = baseY * (1.0 + 0.05 * Math.Sin(i * 1.7));
+                if (cy - rPx < 0 || cy + rPx > height - 1) continue;   // 프레임 밖은 안 그린다
+
+                FillDisk(buf, width, height, (int)Math.Round(cx), (int)Math.Round(cy),
+                         (int)Math.Round(rPx), drop);
             }
             return buf;
         }
