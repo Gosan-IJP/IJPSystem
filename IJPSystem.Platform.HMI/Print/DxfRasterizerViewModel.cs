@@ -44,11 +44,33 @@ namespace IJPSystem.Platform.HMI.Print
 
         // ---- Convert Parameters ----
         private double _dpiX = 600, _dpiY = 600;
-        public double DropPerInchX { get => _dpiX; set { _dpiX = value; OnPropertyChanged(); } }
-        public double DropPerInchY { get => _dpiY; set { _dpiY = value; OnPropertyChanged(); } }
+        public double DropPerInchX { get => _dpiX; set { _dpiX = value; OnPropertyChanged(); UpdateMeasuredLength(); } }
+        public double DropPerInchY { get => _dpiY; set { _dpiY = value; OnPropertyChanged(); UpdateMeasuredLength(); } }
 
+        /// <summary>
+        /// 방울 간격 분할 수. 1 = 노즐 간격 그대로, 2 = ½(2패스).
+        /// 값의 뜻은 <see cref="ConvertParameters.Interval"/> 참고.
+        /// </summary>
         private int _interval = 1;
-        public int Interval { get => _interval; set { _interval = value; OnPropertyChanged(); } }
+        public int Interval
+        {
+            get => _interval;
+            set
+            {
+                _interval = Math.Max(1, value);
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IntervalCaption));
+                OnPropertyChanged(nameof(IntervalText));
+            }
+        }
+
+        /// <summary>버튼 글자 — 지금 누르면 어떻게 되는지를 보여준다.</summary>
+        public string IntervalCaption => _interval == 1 ? "½↓   Interval Change" : "×2↑   Interval Change";
+
+        /// <summary>버튼 아래 설명 — 지금 어떤 상태인지.</summary>
+        public string IntervalText => _interval == 1
+            ? "방울 간격 = 노즐 간격 (1패스)"
+            : $"방울 간격 = 노즐 간격 ÷ {_interval} ({_interval}패스)";
 
         // ---- 읽기 표시값 ----
         private int _lineCount;
@@ -91,14 +113,55 @@ namespace IJPSystem.Platform.HMI.Print
         // ---- Length Measure ----
         private bool _lengthMeasure = true;
         public bool LengthMeasureEnabled { get => _lengthMeasure; set { _lengthMeasure = value; OnPropertyChanged(); } }
-        private double _measuredLength = 53.207;
-        public double MeasuredLengthMm { get => _measuredLength; set { _measuredLength = value; OnPropertyChanged(); } }
+
+        /// <summary>
+        /// 화면에 그려진 대각선의 실제 길이 [mm].
+        ///
+        /// <para>
+        /// 예전에는 상수 53.207 을 박아 두고 320×320 고정 격자에 선을 그었다. 그림도 숫자도
+        /// 실제 도면과 무관해서, 11×7mm 를 변환해도 53.207mm 라고 나왔다.
+        /// 지금은 미리보기 픽셀 수 ÷ DPI 로 계산한다 — 화면에 보이는 그 선의 길이다.
+        /// </para>
+        /// </summary>
+        private double _measuredLength;
+        public double MeasuredLengthMm { get => _measuredLength; private set { _measuredLength = value; OnPropertyChanged(); } }
+
+        private void UpdateMeasuredLength()
+        {
+            double xMm = _dpiX > 0 ? PreviewWidthPx  / _dpiX * 25.4 : 0;
+            double yMm = _dpiY > 0 ? PreviewHeightPx / _dpiY * 25.4 : 0;
+            MeasuredLengthMm = Math.Sqrt(xMm * xMm + yMm * yMm);
+        }
 
         // ---- 미리보기 ----
         private bool _showGrid;
         public bool ShowGrid { get => _showGrid; set { _showGrid = value; OnPropertyChanged(); } }
+
         private object? _previewImage;
-        public object? PreviewImage { get => _previewImage; set { _previewImage = value; OnPropertyChanged(); } }
+        public object? PreviewImage
+        {
+            get => _previewImage;
+            set
+            {
+                _previewImage = value;
+
+                // 측정선을 이미지와 같은 좌표계에 두려면 픽셀 크기를 화면이 알아야 한다.
+                var src = value as BitmapSource;
+                PreviewWidthPx  = src?.PixelWidth  ?? 0;
+                PreviewHeightPx = src?.PixelHeight ?? 0;
+                UpdateMeasuredLength();
+
+                // ★ 알림은 맨 마지막이다. 화면은 이 알림을 받고 Zoom To Fit 을 하는데,
+                //   먼저 알리면 그때 크기가 아직 0 이라 맞출 것이 없다고 보고 그냥 빠져나간다.
+                //   (그러면 첫 변환 결과가 100% 배율로 왼쪽 위에 붙어서 나온다)
+                OnPropertyChanged();
+            }
+        }
+
+        /// <summary>미리보기 이미지의 픽셀 크기. 측정선이 이미지 모서리를 정확히 잇도록 화면이 쓴다.</summary>
+        private double _previewW, _previewH;
+        public double PreviewWidthPx  { get => _previewW; private set { _previewW = value; OnPropertyChanged(); } }
+        public double PreviewHeightPx { get => _previewH; private set { _previewH = value; OnPropertyChanged(); } }
 
         // ---- 레이어 ----
         public ObservableCollection<LayerItem> Layers { get; } = new ObservableCollection<LayerItem>();
@@ -134,20 +197,40 @@ namespace IJPSystem.Platform.HMI.Print
         {
             var dlg = new OpenFileDialog { Title = "Load DXF", Filter = "DXF (*.dxf)|*.dxf|All (*.*)|*.*" };
             if (dlg.ShowDialog() != true) return;
+            LoadDxfFrom(dlg.FileName);
+        }
 
-            DxfPath = dlg.FileName;
-            Layers.Clear();
-            foreach (string name in _rip.LoadDxf(DxfPath))
-                Layers.Add(new LayerItem { Name = name, IsSelected = true });
-            LoadingProgress = 1.0;
-            StatusText = $"DXF 로드: 레이어 {Layers.Count}개";
+        /// <summary>
+        /// 파일 대화상자 없이 DXF 를 연다. 창을 열 때 넘겨받은 경로에도 쓴다 —
+        /// 경로만 칸에 채워 두면 레이어가 비어 Convert 가 잠긴 채로 남아, 왜 안 되는지 알 수 없다.
+        /// </summary>
+        public void LoadDxfFrom(string path)
+        {
+            try
+            {
+                var names = _rip.LoadDxf(path);
+                DxfPath = path;
+                Layers.Clear();
+                foreach (string name in names)
+                    Layers.Add(new LayerItem { Name = name, IsSelected = true });
+                LoadingProgress = 1.0;
+                StatusText = $"DXF 로드: 레이어 {Layers.Count}개";
+            }
+            catch (Exception ex)
+            {
+                DxfPath = path;
+                StatusText = "DXF 로드 실패: " + ex.Message;
+            }
         }
 
         private void IntervalChange()
         {
-            // 토출/토 간격 토글 (예: 1↔2). 실제 규칙에 맞게 구현.
+            // ½ ↔ 1배 토글. 다시 변환해야 실제로 적용된다 — 값만 바뀌고 끝나면
+            // "눌렀으니 반영됐겠지" 하고 예전 패턴을 그대로 인쇄로 들고 간다.
             Interval = Interval == 1 ? 2 : 1;
-            StatusText = $"Interval = {Interval}";
+            StatusText = _lastResult == null
+                ? IntervalText
+                : IntervalText + " — Convert 를 다시 눌러야 패턴에 반영됩니다.";
         }
 
         private void NozzleSelect()
@@ -224,24 +307,12 @@ namespace IJPSystem.Platform.HMI.Print
             if (dlg.ShowDialog() != true) return;
             try
             {
+                // 미리보기는 래스터라이저가 범례 색으로 칠해서 준다 — 여기서 원본을 따로 읽으면
+                // 열었을 때와 변환했을 때 같은 파일이 다른 색으로 보인다.
                 _lastResult = _rip.OpenBmp(dlg.FileName);
-                PreviewImage = LoadBitmap(dlg.FileName);   // Image Preview 갱신
                 ApplyResult("BMP 열기: " + Path.GetFileName(dlg.FileName));
             }
             catch (Exception ex) { StatusText = "실패: " + ex.Message; }
-        }
-
-        /// <summary>이미지 파일을 잠금 없이 로드(OnLoad+Freeze)하여 미리보기 소스로 반환.</summary>
-        private static BitmapImage LoadBitmap(string path)
-        {
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-            bmp.UriSource = new Uri(path);
-            bmp.EndInit();
-            bmp.Freeze();
-            return bmp;
         }
 
         private void Save()

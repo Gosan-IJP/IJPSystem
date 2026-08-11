@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:nz="clr-namespace:IJPSystem.Platform.HMI.Nozzle"
+        xmlns:local="clr-namespace:IJPSystem.Platform.HMI.Print"
         Title="DXF Rasterizer" Height="940" Width="980"
         WindowStartupLocation="CenterOwner"
         Background="#F1F3F5" FontFamily="Segoe UI">
@@ -51,6 +52,27 @@
             <Setter Property="Foreground" Value="#374151"/>
             <Setter Property="FontSize"   Value="12"/>
         </Style>
+        <!-- 미리보기 좌측 도구 버튼 (원래 그림만 있던 자리) -->
+        <Style x:Key="ToolBtn" TargetType="Button">
+            <Setter Property="FontSize"   Value="12"/>
+            <Setter Property="Cursor"     Value="Hand"/>
+            <Setter Property="Margin"     Value="0,0,0,-1"/>
+            <Setter Property="Foreground" Value="#374151"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="#E5E7EB" BorderBrush="#9CA3AF" BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,3"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#CBD5E1"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -95,29 +117,44 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- 범례 -->
+                    <!-- 범례 — 미리보기 그림과 같은 색이어야 한다. 저장 파일이 흰 바탕·검은 잉크라
+                         화면도 그대로 띄우고, 범례를 파일에 맞췄다. -->
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
-                        <Rectangle Width="34" Height="14" Fill="#111111"/>
+                        <Rectangle Width="34" Height="14" Fill="White" Stroke="#9CA3AF" StrokeThickness="1"/>
                         <TextBlock Text="Non-Printing Area" Margin="6,0,16,0" VerticalAlignment="Center" Foreground="#374151"/>
-                        <Rectangle Width="34" Height="14" Fill="#E03A1E"/>
+                        <Rectangle Width="34" Height="14" Fill="#111111"/>
                         <TextBlock Text="Printing Area" Margin="6,0,0,0" VerticalAlignment="Center" Foreground="#374151"/>
                     </StackPanel>
 
                     <!-- 미리보기 캔버스 -->
                     <Grid>
-                        <!-- 좌측 도구 스트립 -->
+                        <!-- 좌측 도구 스트립. 원래는 그림만 있고 눌러도 아무 일이 없었다.
+                             모드 전환(선택/이동 도구)은 두지 않았다 — 휠로 확대, 끌어서 이동이면
+                             도구를 고를 이유가 없고, 고르게 하면 "지금 무슨 모드인지"를 또 봐야 한다.
+                             연필(그리기)은 Edit Panel 이 하는 일이라 뺐다. -->
                         <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Width="26" Margin="0,2,0,0">
-                            <Border Background="#E5E7EB" BorderBrush="#9CA3AF" BorderThickness="1" Margin="0,0,0,-1"><TextBlock Text="🔍" FontSize="12" HorizontalAlignment="Center" Padding="0,2"/></Border>
-                            <Border Background="#E5E7EB" BorderBrush="#9CA3AF" BorderThickness="1" Margin="0,0,0,-1"><TextBlock Text="➤" FontSize="12" HorizontalAlignment="Center" Padding="0,2"/></Border>
-                            <Border Background="#E5E7EB" BorderBrush="#9CA3AF" BorderThickness="1" Margin="0,0,0,-1"><TextBlock Text="✋" FontSize="12" HorizontalAlignment="Center" Padding="0,2"/></Border>
-                            <Border Background="#E5E7EB" BorderBrush="#9CA3AF" BorderThickness="1"><TextBlock Text="✎" FontSize="12" HorizontalAlignment="Center" Padding="0,2"/></Border>
+                            <Button Style="{StaticResource ToolBtn}" Content="🔍" ToolTip="확대 (휠 위로)"
+                                    Click="ZoomIn_Click"/>
+                            <Button Style="{StaticResource ToolBtn}" Content="🔎" ToolTip="축소 (휠 아래로)"
+                                    Click="ZoomOut_Click"/>
+                            <Button Style="{StaticResource ToolBtn}" Content="1:1" FontSize="10"
+                                    ToolTip="실제 픽셀 크기" Click="ZoomActual_Click"/>
+                            <Button Style="{StaticResource ToolBtn}" Content="✋" ToolTip="가운데로 되돌리기 (그냥 끌어도 이동)"
+                                    Click="ZoomToFit_Click"/>
                         </StackPanel>
 
-                        <!-- 체커보드 배경 + (Printing Area 목업 또는 불러온 이미지) + 길이 측정선 -->
-                        <Border Margin="30,0,0,0" Background="#DDDDDD" BorderBrush="#C7CBD1" BorderThickness="1" ClipToBounds="True">
-                            <Grid>
+                        <!-- 배경 + (Printing Area 목업 또는 불러온 이미지) + 격자 + 길이 측정선 -->
+                        <Border Margin="30,0,0,0" Background="#DDDDDD" BorderBrush="#C7CBD1" BorderThickness="1"
+                                ClipToBounds="True">
+                            <Grid x:Name="PreviewViewport" ClipToBounds="True" Background="Transparent"
+                                  SizeChanged="PreviewViewport_SizeChanged"
+                                  MouseWheel="PreviewViewport_MouseWheel"
+                                  MouseLeftButtonDown="PreviewViewport_MouseLeftButtonDown"
+                                  MouseMove="PreviewViewport_MouseMove"
+                                  MouseLeftButtonUp="PreviewViewport_MouseLeftButtonUp">
+
                                 <!-- 이미지 미로드 시 보이는 Printing Area 목업 -->
-                                <Border Width="320" Height="320" Background="#E03A1E"
+                                <Border Width="320" Height="320" Background="#111111"
                                         HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <Border.Style>
                                         <Style TargetType="Border">
@@ -131,18 +168,43 @@
                                     </Border.Style>
                                 </Border>
 
-                                <!-- Open BMP 등으로 불러온 이미지 -->
-                                <Image Source="{Binding PreviewImage}" Stretch="Uniform" Margin="6"
-                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                <!-- 불러온 이미지. 확대·이동은 이 층에만 건다. -->
+                                <Canvas>
+                                    <Image x:Name="PreviewImg" Source="{Binding PreviewImage}" Stretch="Fill"
+                                           Width="{Binding PreviewWidthPx}" Height="{Binding PreviewHeightPx}">
+                                        <Image.RenderTransform>
+                                            <TransformGroup>
+                                                <ScaleTransform x:Name="PreviewScale"/>
+                                                <TranslateTransform x:Name="PreviewPan"/>
+                                            </TransformGroup>
+                                        </Image.RenderTransform>
+                                    </Image>
+                                </Canvas>
 
-                                <!-- 대각선 길이 측정(Length Measure 켜짐 시) -->
-                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="320" Height="320"
-                                      Visibility="{Binding LengthMeasureEnabled, Converter={StaticResource BoolToVis}}">
-                                    <Line X1="40" Y1="280" X2="280" Y2="40" Stroke="#F59E0B" StrokeThickness="1.5"/>
-                                    <TextBlock Text="{Binding MeasuredLengthMm, StringFormat={}{0:F3}mm}"
-                                               Foreground="#FFF7C0" FontSize="12"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Grid>
+                                <!-- 격자·측정선은 화면 좌표에 그린다 — 이미지와 같이 키우면 선까지 굵어진다 -->
+                                <local:PixelGridOverlay x:Name="GridOverlay" IsHitTestVisible="False"
+                                                        Visibility="{Binding ShowGrid, Converter={StaticResource BoolToVis}}"/>
+
+                                <Line x:Name="MeasureLine" Stroke="#F59E0B" StrokeThickness="1.5" IsHitTestVisible="False">
+                                    <Line.Style>
+                                        <Style TargetType="Line">
+                                            <Setter Property="Visibility"
+                                                    Value="{Binding LengthMeasureEnabled, Converter={StaticResource BoolToVis}}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding PreviewImage}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Line.Style>
+                                </Line>
+
+                                <!-- 배율·길이 읽음표. 확대해도 글자 크기가 변하면 안 되므로 구석에 고정한다. -->
+                                <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="6"
+                                        Background="#CC1F2937" CornerRadius="3" Padding="6,2" IsHitTestVisible="False">
+                                    <TextBlock x:Name="ZoomBadge" Foreground="#F9FAFB" FontSize="11"
+                                               FontFamily="Consolas" Text=""/>
+                                </Border>
                             </Grid>
                         </Border>
                     </Grid>
@@ -179,8 +241,10 @@
                         </Border>
                     </Grid>
 
-                    <Button Style="{StaticResource NavyBtn}" Height="44" Margin="0,0,0,8" FontSize="16"
-                            Content="½↓   Interval Change" Command="{Binding IntervalChangeCommand}"/>
+                    <Button Style="{StaticResource NavyBtn}" Height="44" FontSize="16"
+                            Content="{Binding IntervalCaption}" Command="{Binding IntervalChangeCommand}"/>
+                    <TextBlock Text="{Binding IntervalText}" Style="{StaticResource SectionLabel}"
+                               HorizontalAlignment="Center" Margin="0,4,0,8"/>
                     <Button Style="{StaticResource NavyBtn}" Height="44" FontSize="16"
                             Content="Nozzle Select" Command="{Binding NozzleSelectCommand}"/>
 
@@ -268,7 +332,7 @@
                                 Command="{Binding OpenBmpCommand}"/>
                         <!-- 찍기 전에 발사 지도를 눈으로 확인한다. 노즐 배열 값이 아직 실물로
                              확인되지 않아, 그 값을 바꿔 가며 대조할 수 있는 별도 창으로 띄운다. -->
-                        <Button Grid.Column="6" Style="{StaticResource NavyBtn}" Height="48" Content="🔎  패턴 미리보기"
+                        <Button Grid.Column="6" Style="{StaticResource NavyBtn}" Height="48" Content="🔎 Preview"
                                 Click="PatternPreview_Click"/>
                     </Grid>
                     <ListBox ItemsSource="{Binding Layers}" BorderBrush="#CBD5E1" BorderThickness="1" Background="White">

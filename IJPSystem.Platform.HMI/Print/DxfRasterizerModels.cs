@@ -15,7 +15,15 @@ namespace IJPSystem.Platform.HMI.Print
         /// <summary>Y 방향 해상도 [DPI] = Drop per Inch Y.</summary>
         public double DropPerInchY { get; set; } = 600;
 
-        /// <summary>토출/토 간격 변경값 (Interval Change). 헤드 사양에 맞게 정의.</summary>
+        /// <summary>
+        /// 방울을 놓는 간격의 <b>분할 수</b> (Interval Change). 1 = 노즐 실효 간격 그대로, 2 = ½.
+        ///
+        /// <para>
+        /// 세로(스캔)는 엔코더를 잘게 쓰면 되므로 스캔 스텝이 그만큼 줄어든다 — 라인 수가 배로 는다.
+        /// 가로(크로스스캔)는 노즐 피치가 하드웨어라 한 번에 못 좁힌다. 헤드를 피치의 1/N 만큼
+        /// 옮겨 <b>N 번 지나간다</b>(멀티패스). 그래서 이 값은 곧 패스 수이기도 하다.
+        /// </para>
+        /// </summary>
         public int Interval { get; set; } = 1;
 
         /// <summary>사용 노즐 목록 (Nozzle Select 결과).</summary>

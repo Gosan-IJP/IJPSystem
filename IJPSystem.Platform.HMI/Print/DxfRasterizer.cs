@@ -96,9 +96,12 @@ namespace IJPSystem.Platform.HMI.Print
             return result;
         }
 
-        /// <summary>마지막 변환의 토출 패턴. 미리보기·전송이 다시 만들지 않고 이걸 쓴다.</summary>
+        /// <summary>마지막 변환의 토출 패턴(1패스). 미리보기·전송이 다시 만들지 않고 이걸 쓴다.</summary>
         public PrintPattern? LastPattern => _lastPattern;
         private PrintPattern? _lastPattern;
+
+        /// <summary>마지막 변환의 모든 패스. Interval 이 1 이면 한 개다.</summary>
+        public IReadOnlyList<PrintPattern> LastPasses { get; private set; } = Array.Empty<PrintPattern>();
 
         /// <summary>변환에서 헤드 범위 밖이라 버려진 노즐 번호. 비어 있지 않으면 번호 기준을 의심할 것.</summary>
         public IReadOnlyList<int> LastIgnoredNozzles { get; private set; } = Array.Empty<int>();
@@ -117,6 +120,7 @@ namespace IJPSystem.Platform.HMI.Print
             patternPath = null;
             steps = 0;
             LastIgnoredNozzles = Array.Empty<int>();
+            LastPasses         = Array.Empty<PrintPattern>();
 
             var used = param.UsingNozzles;
             if (used == null || used.Count == 0)
@@ -131,10 +135,17 @@ namespace IJPSystem.Platform.HMI.Print
                 if (gray == null) { PatternMessage = "변환 결과 이미지를 다시 읽지 못했습니다."; return null; }
 
                 var layout = HeadLayout();
+
+                // Interval Change — 방울을 놓는 간격을 이 수로 나눈다. 1 = 노즐 간격 그대로, 2 = ½.
+                int div = Math.Max(1, param.Interval);
+                double baseStep   = param.ScanStepUm > 0 ? param.ScanStepUm : layout.EffectivePitchUm;
+                double scanStep   = baseStep / div;                     // 스캔 방향은 엔코더만 잘게 쓰면 된다
+                double passOffset = div > 1 ? layout.EffectivePitchUm / div : 0;
+
                 var settings = new RipSettings
                 {
                     DropLevels     = Math.Max(2, param.DropLevels),
-                    ScanStepUm     = param.ScanStepUm,          // 0 이면 Build 가 노즐 실효 간격을 쓴다
+                    ScanStepUm     = scanStep,
                     OriginXUm      = 0,
                     BlendHeadSeams = param.BlendHeadSeams,
                 };
@@ -142,13 +153,30 @@ namespace IJPSystem.Platform.HMI.Print
                 double umPxX = 25400.0 / Math.Max(1e-6, param.DropPerInchX);
                 double umPxY = 25400.0 / Math.Max(1e-6, param.DropPerInchY);
 
-                var pattern = PrintPatternBuilder.Build(gray, umPxX, umPxY, layout, used, settings,
-                                                        out var ignored);
+                // 가로는 노즐 피치가 하드웨어라 한 번 지나가서는 못 좁힌다. 헤드를 피치의 1/div 만큼
+                // 옮겨 div 번 지나간다 — 패스 k 는 자기 노즐 X 에서 k×오프셋 만큼 옆의 화소를 읽는다.
+                // (OriginXUm 은 "이미지 원점" 이라 헤드가 오른쪽으로 가는 것과 부호가 반대다)
+                var passes  = new List<PrintPattern>(div);
+                IReadOnlyList<int> ignored = Array.Empty<int>();
+                for (int k = 0; k < div; k++)
+                {
+                    var s = new RipSettings
+                    {
+                        DropLevels     = settings.DropLevels,
+                        ScanStepUm     = settings.ScanStepUm,
+                        OriginXUm      = -k * passOffset,
+                        BlendHeadSeams = settings.BlendHeadSeams,
+                    };
+                    passes.Add(PrintPatternBuilder.Build(gray, umPxX, umPxY, layout, used, s, out ignored));
+                }
+
+                var pattern = passes[0];
                 LastIgnoredNozzles = ignored;
+                LastPasses = passes;
                 steps = pattern.Steps;
 
                 string folder = Path.Combine(OutputRoot, "IMG_TEMP", stamp);
-                PrintPatternFile.Save(folder, pattern, new PrintPatternFile.PatternMeta
+                PrintPatternFile.Save(folder, passes, new PrintPatternFile.PatternMeta
                 {
                     DropLevels     = settings.DropLevels,
                     SourceImage    = raster.OutputPath,
@@ -156,13 +184,15 @@ namespace IJPSystem.Platform.HMI.Print
                     SourceDpiY     = param.DropPerInchY,
                     CreatedAt      = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                     IgnoredNozzles = ignored,
+                    PassOffsetXUm  = passOffset,
                 });
                 patternPath = folder;
 
-                PatternMessage = ignored.Count == 0
-                    ? $"토출 패턴 {pattern.Steps}스텝 × {pattern.Nozzles}노즐"
-                    : $"토출 패턴 {pattern.Steps}스텝 × {pattern.Nozzles}노즐 " +
-                      $"(헤드 범위 밖 {ignored.Count}개 제외: {string.Join(",", ignored)})";
+                string body = $"토출 패턴 {pattern.Steps}스텝 × {pattern.Nozzles}노즐";
+                if (div > 1) body += $" · 간격 1/{div} ({div}패스, 패스간 {passOffset:0.##}µm)";
+                if (ignored.Count > 0)
+                    body += $" (헤드 범위 밖 {ignored.Count}개 제외: {string.Join(",", ignored)})";
+                PatternMessage = body;
                 return pattern;
             }
             catch (Exception ex)
@@ -255,6 +285,10 @@ namespace IJPSystem.Platform.HMI.Print
             // 다른 경로로 내보내기가 필요하면 여기서 복사한다.
             if (result == null) throw new ArgumentNullException(nameof(result));
         }
+
+        // 미리보기는 저장 파일 그대로다 — 흰 바탕(비인쇄) + 검은 잉크(인쇄).
+        // 색을 바꿔 보여주면 "화면에서 본 것"과 "파일에 든 것"이 달라져, 인쇄가 뒤집혔을 때
+        // 화면을 믿을 수 없게 된다. 범례 쪽을 파일에 맞췄다.
 
         // 파일 잠금을 피하려고 전부 읽어 Freeze — 변환 직후 재변환/삭제가 막히지 않게 한다.
         private static BitmapSource? LoadPreview(string? path)
