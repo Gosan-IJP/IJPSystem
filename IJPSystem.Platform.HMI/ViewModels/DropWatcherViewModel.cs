@@ -893,6 +893,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         "CALIBRATION 의 Scale 을 이 이미지에 맞춰 교정한 뒤 값을 해석하세요.", LogLevel.Warning);
                 }
 
+                // 저장된 픽셀 격자가 다른 해상도의 값이면 창이 액적에서 밀린다 — 막지는 않고 알린다.
+                string? gridWarn = _proc.ValidatePixelGrid(frame);
+                if (gridWarn != null)
+                    _mainVM.AddLog($"[VISION] DropWatcher: {gridWarn}", LogLevel.Warning);
+
                 // 이미지에서 실제로 보이는 노즐 격자 — 측정창을 픽셀로 고정할 값이다.
                 // 창이 액적과 어긋났을 때 "얼마로 넣어야 하는지"를 화면에서 바로 알 수 있어야
                 // 스케일·피치 교정 없이도 라인을 맞출 수 있다.

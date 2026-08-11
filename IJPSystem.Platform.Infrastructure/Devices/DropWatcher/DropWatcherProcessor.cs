@@ -465,6 +465,41 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         }
 
         /// <summary>
+        /// 픽셀로 저장된 격자(<c>NozzlePitchPx</c> 등)가 <b>다른 해상도에서 잰 값</b>인지.
+        /// 문제가 있으면 사유, 없으면 null. 측정을 막지는 않는다 — 값 자체는 나오기 때문이다.
+        ///
+        /// <para>
+        /// 왜 필요한가: 이 값들은 µm 가 아니라 <b>픽셀</b>인데 파일에 저장된다. 프레임 크기가 바뀌면
+        /// (샘플 파일 ↔ 실장 카메라 ↔ 가상 드라이버, 비닝·크롭) 조용히 틀린 격자가 되고, 창이
+        /// 액적에서 조금씩 밀려 부피가 주기적으로 꺼지는 그래프가 나온다. 실제로 1624px 샘플에서
+        /// 잰 113.2px 을 2856px 프레임(실제 123.6px)에 쓰다가 24개 중 10개가 창에 걸렸다(2026-08-11).
+        /// 역추적하기 어려운 증상이라 여기서 한 줄로 알려 준다.
+        /// </para>
+        /// </summary>
+        public string? ValidatePixelGrid(VisionImage frame)
+        {
+            if (frame == null || !frame.IsValid) return null;
+            if (_cfg.ExpectedImageWidth <= 0) return null;
+
+            bool pixelGrid = _cfg.NozzlePitchPx  > 0 || _cfg.NozzleOriginXPx > 0
+                          || _cfg.MeasureAreaXPx > 0 || _cfg.MeasureTopPx    > 0 || _cfg.MeasureBottomPx > 0;
+            if (!pixelGrid) return null;                      // µm 기준이면 해상도와 무관하다
+
+            int w = frame.Width;
+            if (w <= 0 || w == _cfg.ExpectedImageWidth) return null;
+
+            // 지금 프레임 기준으로 환산하면 얼마여야 하는지 같이 알려 준다 — 바로 고칠 수 있게.
+            double scale = w / (double)_cfg.ExpectedImageWidth;
+            string hint = _cfg.NozzlePitchPx > 0
+                ? $" NozzlePitchPx {_cfg.NozzlePitchPx:F1} → 이 프레임에서는 {_cfg.NozzlePitchPx * scale:F1} 이어야 합니다."
+                : "";
+
+            return $"저장된 픽셀 격자가 다른 해상도({_cfg.ExpectedImageWidth}px)에서 잰 값입니다 — " +
+                   $"지금 프레임은 {w}px 입니다.{hint} " +
+                   "[격자 자동 맞춤] → [교정값 저장] 을 다시 하거나, NozzlePitchPx 를 0 으로 두어 µm 에서 계산하게 하세요.";
+        }
+
+        /// <summary>
         /// 액적 검출. <see cref="DropWatcherProcessorConfig.UseFixedNozzleRoi"/> 가 켜져 있으면
         /// 노즐 피치 기반 고정 측정창 안에서만 찾고(LabVIEW 방식), 꺼져 있으면 전체 자유 검출.
         /// </summary>

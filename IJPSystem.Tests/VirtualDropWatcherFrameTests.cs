@@ -158,6 +158,63 @@ namespace IJPSystem.Tests
             Assert.False(string.IsNullOrEmpty(q.Summary), "품질 경고가 없습니다.");
         }
 
+        // ── 다른 해상도에서 잰 픽셀 격자 ──────────────────────────────────────
+        // 1624px 샘플에서 잰 113.2px 을 2856px 프레임(실제 123.6px)에 쓰면 창이 액적에서 밀려
+        // 24개 중 10개가 창에 걸린다(2026-08-11). 값은 나오는데 부피만 주기적으로 꺼져
+        // 역추적이 어려운 증상이라, 경고로 잡아야 한다.
+
+        [Fact]
+        public void 다른_해상도의_픽셀_격자는_액적을_창_밖으로_민다()
+        {
+            var cfg = ProcConfig();
+            cfg.ExpectedImageWidth  = Width;
+            cfg.ExpectedImageHeight = Height;
+            cfg.NozzlePitchPx = 113.2;                 // 1624px 샘플에서 잰 값
+
+            var drops = new DropWatcherProcessor(cfg).DetectDroplets(Grab(Driver(), Delay1Us));
+
+            Assert.NotEmpty(drops);
+            Assert.True(drops.Count(x => x.ClippedByWindow) > 0, "격자가 어긋났는데 걸린 액적이 없습니다.");
+        }
+
+        [Fact]
+        public void 픽셀_격자가_다른_해상도에서_왔으면_경고한다()
+        {
+            var cfg = ProcConfig();
+            cfg.ExpectedImageWidth  = 1624;            // 샘플 파일 크기로 저장돼 있는 상태
+            cfg.ExpectedImageHeight = 1240;
+            cfg.NozzlePitchPx = 113.2;
+
+            string? warn = new DropWatcherProcessor(cfg).ValidatePixelGrid(Grab(Driver(), Delay1Us));
+
+            Assert.NotNull(warn);
+            Assert.Contains("1624", warn);
+            Assert.Contains(Width.ToString(), warn);
+            Assert.Contains("199", warn);              // 113.2 × (2856/1624) = 199.1 — 고쳐야 할 값
+        }
+
+        [Fact]
+        public void 픽셀_격자를_안_쓰면_해상도가_달라도_경고하지_않는다()
+        {
+            var cfg = ProcConfig();
+            cfg.ExpectedImageWidth  = 1624;
+            cfg.ExpectedImageHeight = 1240;
+            // NozzlePitchPx = 0 → µm 에서 계산하므로 해상도와 무관하다
+
+            Assert.Null(new DropWatcherProcessor(cfg).ValidatePixelGrid(Grab(Driver(), Delay1Us)));
+        }
+
+        [Fact]
+        public void 해상도가_같으면_픽셀_격자를_써도_경고하지_않는다()
+        {
+            var cfg = ProcConfig();
+            cfg.ExpectedImageWidth  = Width;
+            cfg.ExpectedImageHeight = Height;
+            cfg.NozzlePitchPx = 123.6;
+
+            Assert.Null(new DropWatcherProcessor(cfg).ValidatePixelGrid(Grab(Driver(), Delay1Us)));
+        }
+
         /// <summary>해상도를 바꿔도 µm 기준이라 같은 크기·같은 속도가 나온다(비닝/크롭 대비).</summary>
         [Fact]
         public void 해상도가_절반이어도_같은_결과가_나온다()

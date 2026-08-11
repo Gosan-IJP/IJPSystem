@@ -188,6 +188,10 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
             if (DropWatcherProcessor.ClippedWarning(d1) is string c1) warnings.Add($"Delay1 프레임: {c1}");
             if (DropWatcherProcessor.ClippedWarning(d2) is string c2) warnings.Add($"Delay2 프레임: {c2}");
 
+            // 걸림의 흔한 원인이 이것이다 — 다른 해상도에서 잰 픽셀 격자를 그대로 쓰는 경우.
+            // 사유를 함께 띄우지 않으면 "왜 부피가 작지" 를 처음부터 역추적해야 한다.
+            if (_proc.ValidatePixelGrid(f2) is string gridWarn) warnings.Add(gridWarn);
+
             // ── 노즐 번호 매핑 — 리스트 순번이 아니라 실제 노즐 번호를 배정 ──
             NozzleGridResult? grid = null;
             if (ExpectedNozzles.Count > 0 && NozzlePitchUm > 0)
