@@ -161,8 +161,20 @@ namespace IJPSystem.Platform.HMI.Print
             DropPerInchX = DropPerInchX,
             DropPerInchY = DropPerInchY,
             Interval = Interval,
-            UsingNozzles = _usingNozzles
+            UsingNozzles = _usingNozzles,
+            DropLevels   = DropLevels,
         };
+
+        /// <summary>
+        /// 방울 크기 단계 수. 2 = 찍/안찍(이진), 그 이상이면 그레이스케일 토출.
+        /// 헤드가 실제로 낼 수 있는 단계보다 크게 두면 패턴에 못 쏘는 값이 들어간다.
+        /// </summary>
+        private int _dropLevels = 2;
+        public int DropLevels
+        {
+            get => _dropLevels;
+            set { _dropLevels = Math.Max(2, value); OnPropertyChanged(); }
+        }
 
         private void Convert()
         {
@@ -171,7 +183,13 @@ namespace IJPSystem.Platform.HMI.Print
                 var progress = new Progress<double>(p => LoadingProgress = p);
                 var selected = Layers.Where(l => l.IsSelected).Select(l => l.Name).ToList();
                 _lastResult = _rip.Convert(selected, BuildParams(), progress);
-                ApplyResult("변환 완료");
+
+                // 패턴 생성 결과를 함께 띄운다 — 노즐 미선택 등으로 패턴만 빠져도 화면에는
+                // "변환 완료"로만 보여, 인쇄 직전에야 패턴이 없다는 걸 알게 된다.
+                string msg = (_rip as DxfRasterizer)?.PatternMessage is string p and { Length: > 0 }
+                           ? $"변환 완료 — {p}"
+                           : "변환 완료";
+                ApplyResult(msg);
             }
             catch (Exception ex) { StatusText = "변환 실패: " + ex.Message; }
         }

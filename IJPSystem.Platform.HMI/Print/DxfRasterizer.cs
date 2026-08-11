@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Windows.Media.Imaging;
 using IJPSystem.Platform.Application.Printing;
+using IJPSystem.Platform.Infrastructure.Config;
+using IJPSystem.Platform.Infrastructure.Print;
 
 namespace IJPSystem.Platform.HMI.Print
 {
@@ -13,8 +15,12 @@ namespace IJPSystem.Platform.HMI.Print
     /// 변환 코어는 HW 무관한 <see cref="DxfToBitmap"/>(Platform.Application) 이고,
     /// 여기서는 WPF 미리보기(BitmapSource) 생성과 파일 배치만 담당한다.
     ///
-    /// ※ 아직 미구현: 하프톤 디더링, 노즐별 토출 패턴(Samba12/S800 Pattern GEN) 생성.
-    ///   현재는 "면 채움 비트맵"까지다. 패턴 생성은 헤드 프로토콜이 확정돼야 한다.
+    /// 변환은 두 단계다:
+    ///   ① DXF → 채움 비트맵 (무엇을 찍을 것인가)
+    ///   ② 비트맵 → 노즐 격자 → 하프톤 → 토출 패턴 (어느 노즐이 언제 무엇을 쏘는가)
+    /// ②는 <see cref="PrintPatternBuilder"/> 가 하고 결과는 <see cref="PrintPatternFile"/> 로 남긴다.
+    ///
+    /// ※ 패턴을 PCC 로 보내는 단계는 아직 없다 — 헤드 연결이 필요하다. 지금은 파일까지다.
     /// </summary>
     public sealed class DxfRasterizer : IDxfRasterizer
     {
@@ -64,23 +70,156 @@ namespace IJPSystem.Platform.HMI.Print
 
             progress?.Report(0.4);
             var r = DxfToBitmap.Convert(_dxfPath, outPng, opt);
-            progress?.Report(0.9);
+            progress?.Report(0.7);
 
             if (!r.Success)
                 throw new InvalidOperationException($"DXF 변환 실패: {r.Message}");
 
+            // 채움 비트맵은 "무엇을 찍을 것인가" 일 뿐이다. 실제로 인쇄하려면 그것을 노즐 격자로
+            // 옮기고(어느 노즐이 어느 X 를 맡는가) 헤드가 낼 수 있는 방울 단계로 낮춰야 한다.
+            var pattern = BuildPattern(r, param, stamp, out string? patternPath, out int steps);
+            progress?.Report(0.95);
+
             var result = new RasterizeResult
             {
-                // 인쇄 라인 수 = 세로 픽셀(스캔 라인 1줄 = 1픽셀 행). 패턴 생성 전 근사값.
-                LineCount     = r.HeightPx,
+                // 인쇄 라인 수 = 패턴 스텝 수(엔코더 한 칸에 한 줄). 패턴을 못 만들었으면
+                // 세로 픽셀 수로 대신한다 — 0 을 내보내면 "변환됐는데 0줄"로 보인다.
+                LineCount     = steps > 0 ? steps : r.HeightPx,
                 RealXLengthMm = r.WidthMm,
                 RealYLengthMm = r.HeightMm,
                 BmpPath       = r.OutputPath,
-                PatternPath   = null,   // 토출 패턴 생성은 미구현
+                PatternPath   = patternPath,
                 PreviewImage  = LoadPreview(r.OutputPath),
             };
             progress?.Report(1.0);
+            _lastPattern = pattern;
             return result;
+        }
+
+        /// <summary>마지막 변환의 토출 패턴. 미리보기·전송이 다시 만들지 않고 이걸 쓴다.</summary>
+        public PrintPattern? LastPattern => _lastPattern;
+        private PrintPattern? _lastPattern;
+
+        /// <summary>변환에서 헤드 범위 밖이라 버려진 노즐 번호. 비어 있지 않으면 번호 기준을 의심할 것.</summary>
+        public IReadOnlyList<int> LastIgnoredNozzles { get; private set; } = Array.Empty<int>();
+
+        /// <summary>
+        /// 채움 비트맵 → 노즐 격자 → 하프톤 → 패턴 파일.
+        ///
+        /// <para>
+        /// 실패해도 변환 전체를 깨지 않는다 — 비트맵은 이미 나왔고 화면에서 확인할 수 있다.
+        /// 노즐 미선택처럼 흔한 상황에서 "DXF 변환 실패"가 뜨면 원인을 엉뚱한 데서 찾게 된다.
+        /// </para>
+        /// </summary>
+        private PrintPattern? BuildPattern(DxfRasterResult raster, ConvertParameters param,
+                                           string stamp, out string? patternPath, out int steps)
+        {
+            patternPath = null;
+            steps = 0;
+            LastIgnoredNozzles = Array.Empty<int>();
+
+            var used = param.UsingNozzles;
+            if (used == null || used.Count == 0)
+            {
+                PatternMessage = "사용 노즐이 지정되지 않아 토출 패턴을 만들지 않았습니다 — Nozzle Select 로 지정하세요.";
+                return null;
+            }
+
+            try
+            {
+                var gray = LoadGray(raster.OutputPath!);
+                if (gray == null) { PatternMessage = "변환 결과 이미지를 다시 읽지 못했습니다."; return null; }
+
+                var layout = HeadLayout();
+                var settings = new RipSettings
+                {
+                    DropLevels     = Math.Max(2, param.DropLevels),
+                    ScanStepUm     = param.ScanStepUm,          // 0 이면 Build 가 노즐 실효 간격을 쓴다
+                    OriginXUm      = 0,
+                    BlendHeadSeams = param.BlendHeadSeams,
+                };
+
+                double umPxX = 25400.0 / Math.Max(1e-6, param.DropPerInchX);
+                double umPxY = 25400.0 / Math.Max(1e-6, param.DropPerInchY);
+
+                var pattern = PrintPatternBuilder.Build(gray, umPxX, umPxY, layout, used, settings,
+                                                        out var ignored);
+                LastIgnoredNozzles = ignored;
+                steps = pattern.Steps;
+
+                string folder = Path.Combine(OutputRoot, "IMG_TEMP", stamp);
+                PrintPatternFile.Save(folder, pattern, new PrintPatternFile.PatternMeta
+                {
+                    DropLevels     = settings.DropLevels,
+                    SourceImage    = raster.OutputPath,
+                    SourceDpiX     = param.DropPerInchX,
+                    SourceDpiY     = param.DropPerInchY,
+                    CreatedAt      = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    IgnoredNozzles = ignored,
+                });
+                patternPath = folder;
+
+                PatternMessage = ignored.Count == 0
+                    ? $"토출 패턴 {pattern.Steps}스텝 × {pattern.Nozzles}노즐"
+                    : $"토출 패턴 {pattern.Steps}스텝 × {pattern.Nozzles}노즐 " +
+                      $"(헤드 범위 밖 {ignored.Count}개 제외: {string.Join(",", ignored)})";
+                return pattern;
+            }
+            catch (Exception ex)
+            {
+                PatternMessage = "토출 패턴 생성 실패: " + ex.Message;
+                return null;
+            }
+        }
+
+        /// <summary>마지막 패턴 생성 결과 설명(성공/실패/제외 노즐). 화면 상태줄에 그대로 쓴다.</summary>
+        public string? PatternMessage { get; private set; }
+
+        /// <summary>
+        /// 헤드 노즐 배열. 수량·열 수는 <see cref="HeadSpec"/>(레시피의 노즐 정보)에서 오고,
+        /// 간격은 장비 설정의 노즐 피치를 쓴다 — 화면마다 다른 숫자를 들고 있으면 안 된다.
+        /// </summary>
+        private static NozzleLayout HeadLayout()
+        {
+            int rows    = Math.Max(1, HeadSpec.Rows);
+            int perRow  = Math.Max(1, HeadSpec.NozzlesPerRow);
+            double pitch = MachineSettings.Current.GetDouble(MachineSettingsStore.Keys.NozzlePitchUm);
+            if (pitch <= 0) pitch = DefaultInRowPitchUm;
+
+            // 열 간 오프셋 = 한 열 간격 ÷ 열 수. 열이 엇갈려 실효 간격을 그만큼 좁히는 배열이다.
+            return new NozzleLayout(rows, perRow, pitch, pitch / rows,
+                                    firstNozzleNumber: HeadSpec.FirstNozzle);
+        }
+
+        /// <summary>장비 설정에 노즐 피치가 없을 때 쓸 값 [µm]. S800 한 열 간격.</summary>
+        private const double DefaultInRowPitchUm = 254.1;
+
+        /// <summary>
+        /// PNG/BMP → [y, x] 농담 배열. <b>값이 클수록 진하다</b>(잉크량 기준).
+        /// 도면은 흰 바탕에 검은 잉크라 밝기를 뒤집는다.
+        /// </summary>
+        private static byte[,]? LoadGray(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+
+            var src = LoadPreview(path);
+            if (src == null) return null;
+
+            var gray8 = new FormatConvertedBitmap(src, System.Windows.Media.PixelFormats.Gray8, null, 0);
+            int w = gray8.PixelWidth, h = gray8.PixelHeight;
+            if (w <= 0 || h <= 0) return null;
+
+            int stride = w;
+            var buf = new byte[stride * h];
+            gray8.CopyPixels(buf, stride, 0);
+
+            var g = new byte[h, w];
+            for (int y = 0; y < h; y++)
+            {
+                int row = y * stride;
+                for (int x = 0; x < w; x++) g[y, x] = (byte)(255 - buf[row + x]);   // 어두울수록 진하다
+            }
+            return g;
         }
 
         public RasterizeResult CreateEmptyLayer(ConvertParameters param)

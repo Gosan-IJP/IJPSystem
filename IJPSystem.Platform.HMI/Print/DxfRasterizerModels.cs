@@ -20,6 +20,20 @@ namespace IJPSystem.Platform.HMI.Print
 
         /// <summary>사용 노즐 목록 (Nozzle Select 결과).</summary>
         public IReadOnlyList<int> UsingNozzles { get; set; } = new List<int>();
+
+        /// <summary>
+        /// 방울 크기 단계 수. 2 = 찍거나 안 찍거나(이진), 그 이상이면 그레이스케일 토출.
+        /// 하프톤(오차확산)이 이 단계로 낮춘다.
+        /// </summary>
+        public int DropLevels { get; set; } = 2;
+
+        /// <summary>
+        /// 스캔 방향 한 스텝 이동량 [µm]. 0 이면 노즐 실효 간격과 같게 둬 정사각 격자를 만든다.
+        /// </summary>
+        public double ScanStepUm { get; set; }
+
+        /// <summary>헤드 이음새 섞기. 헤드가 1개면 영향 없다.</summary>
+        public bool BlendHeadSeams { get; set; } = true;
     }
 
     /// <summary>Layer Select 목록 항목. 체크 토글 가능.</summary>
