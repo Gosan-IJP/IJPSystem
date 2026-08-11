@@ -669,6 +669,13 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         /// 액적 사이를 마젠타 분할선으로 나눠 컬럼(=노즐)을 만들고, 각 컬럼에 측정창(시안) ·
         /// 액적 중심(녹색 십자) · 하단 속도(m/s) · 상단 위치 라벨을 얹는다.
         /// 녹색 기준선 = 노즐면(NozzleYPixel). 반환: 저장 경로(실패 시 null).
+        ///
+        /// <para>
+        /// <b>★화면 표시에는 쓰지 말 것 — 파일로 남길 때만.</b> 화면은 ImageScaleRuler 가 같은 선을
+        /// 벡터로 그리므로, 구워 넣은 이미지를 올리면 선이 <b>두 겹</b>으로 보인다. 단일프레임
+        /// 경로에서 한 번(2026-08-06), 2점 측정 경로에서 또 한 번(2026-08-11) 같은 증상이 났다.
+        /// 화면에는 원본 프레임을 그대로 올리고 마커만 벡터로 얹는다.
+        /// </para>
         /// </summary>
         /// <param name="delayUs">스트로브 지연[µs] — 낙하시간. 속도 = 낙하거리/지연.</param>
         public string? SaveAnnotatedFrame(string filePath, VisionImage frame,

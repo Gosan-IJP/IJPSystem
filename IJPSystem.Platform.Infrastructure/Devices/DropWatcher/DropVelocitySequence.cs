@@ -14,6 +14,15 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         public int Index { get; set; }
         /// <summary>두 프레임 액적 중심의 평균 X[px] — 오버레이/차트 정렬용.</summary>
         public double CentroidXPixel { get; set; }
+
+        /// <summary>
+        /// Time2 프레임 액적 중심 Y[px]. 화면에 남는 것이 Time2 프레임이라, 마커를 그 위에 얹으려면
+        /// 평균이 아니라 <b>그 프레임의</b> Y 가 필요하다.
+        /// </summary>
+        public double CentroidY2Pixel { get; set; }
+
+        /// <summary>두 프레임 중 하나라도 측정창 경계에 걸렸다 — 직경·부피를 믿을 수 없다.</summary>
+        public bool ClippedByWindow { get; set; }
         /// <summary>Time1 → Time2 사이 낙하 거리[µm].</summary>
         public double FallDistanceUm { get; set; }
         /// <summary>속도[m/s] (= µm/µs).</summary>
@@ -269,8 +278,10 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
                 list.Add(new NozzleVelocity
                 {
-                    Index          = list.Count,
-                    CentroidXPixel = 0.5 * (a.CentroidXPixel + b.CentroidXPixel),
+                    Index           = list.Count,
+                    CentroidXPixel  = 0.5 * (a.CentroidXPixel + b.CentroidXPixel),
+                    CentroidY2Pixel = b.CentroidYPixel,
+                    ClippedByWindow = a.ClippedByWindow || b.ClippedByWindow,
                     FallDistanceUm = Math.Abs(dyUm),
                     VelocityMps    = vMps,
                     DiameterUm     = diaUm,

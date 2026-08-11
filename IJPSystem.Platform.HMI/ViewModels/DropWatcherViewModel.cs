@@ -1135,18 +1135,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     return;
                 }
 
-                // Time2 프레임에 오버레이를 그려 화면에 표시(측정 대상과 보이는 것을 일치시킨다).
+                // Time2 프레임을 <b>그대로</b> 화면에 올린다(측정 대상과 보이는 것을 일치시킨다).
+                //
+                // 예전에는 SaveAnnotatedFrame 으로 창·분할선을 이미지에 구워 넣었는데, 그 위에
+                // 화면 오버레이(ImageScaleRuler)가 같은 선을 또 그려 두 겹으로 보였다.
+                // 단일프레임 측정은 2026-08-06 에 같은 이유로 벡터 오버레이만 쓰도록 바꿨는데
+                // 2점 측정 경로만 남아 있었다. 파일도 안 남기니 temp 도 안 쌓인다.
                 if (r.Frame2 != null)
                 {
-                    string dir = Path.Combine(Path.GetTempPath(), "IJP_DropWatcher");
-                    Directory.CreateDirectory(dir);
-                    string annPath = Path.Combine(dir, $"twopoint_{DateTime.Now:HHmmss_fff}.png");
-                    string? saved = await Task.Run(() =>
-                        _proc.SaveAnnotatedFrame(annPath, r.Frame2, r.DropsAt2, Delay2Us), cts.Token);
-                    if (!string.IsNullOrEmpty(saved))
+                    var frame = _liveBuffer.Write(r.Frame2);   // 8.1MB 프레임을 새로 할당하지 않는다
+                    if (frame != null)
                     {
-                        CurrentImagePath   = saved;
-                        _measureSourcePath = null;   // 오버레이 결과 → 재측정 대상 아님
+                        CurrentFrame       = frame;
+                        _measureSourcePath = null;   // 측정 결과 화면 → 단일프레임 재측정 대상 아님
                     }
                 }
 
@@ -1189,6 +1190,17 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 _mainVM.AddLog($"[VISION] DropWatcher: 불토출 노즐 — {string.Join(",", r.Grid.MissingNozzles)}" +
                                (r.Grid.AbsoluteMappingConfident ? "" : " (번호 참고값 — 양 끝 불토출 시 밀릴 수 있음)"),
                                LogLevel.Warning);
+
+            // 화면 마커를 이번 결과로 교체한다. 예전에는 2점 측정이 이걸 안 건드려서
+            // 직전 단일프레임 측정의 초록 숫자(0.90, 0.87 …)가 새 프레임 위에 그대로 남아 있었다
+            // — 5m/s 를 쟀는데 화면에는 0.9 가 적혀 있는 상태.
+            MeasureMarks = r.Nozzles.Select(v => new Vision.NozzleMeasureMark
+            {
+                XPixel   = v.CentroidXPixel,
+                YPixel   = v.CentroidY2Pixel,
+                Velocity = v.VelocityMps,
+                Clipped  = v.ClippedByWindow,
+            }).ToList();
 
             int n = r.Nozzles.Count;
             var labels = Enumerable.Range(0, n).Select(i => i.ToString()).ToArray();
