@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using IJPSystem.Platform.Infrastructure.Print;
 using Microsoft.Win32;
 
 namespace IJPSystem.Platform.HMI.Print
@@ -63,6 +64,10 @@ namespace IJPSystem.Platform.HMI.Print
             DrawCanvas.LayoutTransform = _zoomTf;      // Zoom 도구용 스케일 변환
             PreviewKeyDown += EditPanelWindow_PreviewKeyDown;
 
+            // 눈금이 적는 숫자는 화면 크기가 아니라 실제 이미지 픽셀 번호다.
+            CanvasRuler.PixelsX = _pxW;
+            CanvasRuler.PixelsY = _pxH;
+
             UpdateStatus();
             UpdateLineWidthMm();
             UpdateBoundaryMm();
@@ -96,6 +101,58 @@ namespace IJPSystem.Platform.HMI.Print
 
         private double LineWidth => double.TryParse(LineWidthBox.Text, out double v) && v > 0 ? v : 1;
         private int BoundaryThickness => Math.Max(1, int.TryParse(BoundaryBox.Text, out int v) ? v : 1);
+
+        // ── 픽셀 편집 ────────────────────────────────────────────────
+        // 눈금(⊞)을 켜면 그리기가 이미지 픽셀 격자에 딱 맞춰진다. 자유 곡선이 아니라
+        // "이 픽셀을 켠다"가 되고, 저장 때 화면 캔버스를 이미지 크기로 늘려도
+        // 칸 하나가 정확히 픽셀 하나가 된다 — 계단 없이 정확히 맞는다.
+
+        /// <summary>눈금 토글이 곧 픽셀 편집 모드다 — 격자를 보면서 켜고 끄는 것이 목적이다.</summary>
+        private bool PixelEdit => RulerToggle?.IsChecked == true;
+
+        /// <summary>화면 캔버스 좌표에서 이미지 1픽셀이 차지하는 크기.</summary>
+        private double CellW => DrawCanvas.Width  / Math.Max(1, _pxW);
+        private double CellH => DrawCanvas.Height / Math.Max(1, _pxH);
+
+        /// <summary>도형 꼭짓점을 픽셀 경계로 내린다. 픽셀 편집이 아니면 그대로 둔다.</summary>
+        private Point SnapToCell(Point p) => PixelEdit
+            ? new Point(Math.Floor(p.X / CellW) * CellW, Math.Floor(p.Y / CellH) * CellH)
+            : p;
+
+        /// <summary>
+        /// Line Width [이미지 px] 를 화면 캔버스 단위로 바꾼 값.
+        ///
+        /// <para>
+        /// 예전에는 Line Width 를 <b>그대로</b> StrokeThickness 에 넣었다. 화면 캔버스는 실제
+        /// 이미지를 6배쯤 줄인 것이라, 7 이라고 적고 0.2963mm 라고 표시해 놓고 실제로는
+        /// 1.8mm 로 그리고 있었다. 옆에 픽셀 눈금이 생기면 이 어긋남이 바로 보인다.
+        /// </para>
+        /// </summary>
+        private double StrokeUnits => Math.Max(LineWidth * CellW, 0.05);
+
+        private System.Windows.Shapes.Path? _cellPath;   // 픽셀 칠하기 한 획 = 요소 하나(Undo 단위)
+        private GeometryGroup? _cellGeo;
+        private readonly HashSet<long> _cellSeen = new();
+        private Point _lastCellPoint;
+
+        /// <summary>
+        /// (from → to) 구간에서 켜지는 픽셀 칸을 사각형으로 얹는다.
+        /// 어느 칸이 켜지는지는 <see cref="PixelCells"/> 가 정한다 — 화면 없이 검증할 수 있게 떼어 뒀다.
+        /// </summary>
+        private void PaintCellLine(Point from, Point to)
+        {
+            if (_cellGeo == null) return;
+
+            int brush = Math.Max(1, (int)Math.Round(LineWidth));
+            double cw = CellW, ch = CellH;
+
+            foreach (var c in PixelCells.Stroke(from.X, from.Y, to.X, to.Y,
+                                                cw, ch, brush, _pxW, _pxH, _cellSeen))
+            {
+                var (ox, oy) = PixelCells.Origin(c.X, c.Y, cw, ch);
+                _cellGeo.Children.Add(new RectangleGeometry(new Rect(ox, oy, cw, ch)));
+            }
+        }
 
         // ── 캔버스 드로잉 ────────────────────────────────────────────
         private void DrawCanvas_MouseDown(object sender, MouseButtonEventArgs e)
@@ -135,16 +192,32 @@ namespace IJPSystem.Platform.HMI.Print
 
             if (_tool == Tool.None) return;
 
-            _start = e.GetPosition(DrawCanvas);
+            _start = SnapToCell(e.GetPosition(DrawCanvas));
             _drawing = true;
             DrawCanvas.CaptureMouse();
+
+            // 픽셀 편집에서는 획이 선(Polyline)이 아니라 켜진 칸의 모음이다.
+            if (PixelEdit && (_tool == Tool.Pen || _tool == Tool.Eraser))
+            {
+                _cellSeen.Clear();
+                _cellGeo  = new GeometryGroup();
+                _cellPath = new System.Windows.Shapes.Path
+                {
+                    Data = _cellGeo,
+                    Fill = _tool == Tool.Eraser ? Brushes.White : Brushes.Black,
+                };
+                DrawCanvas.Children.Add(_cellPath);
+                _lastCellPoint = e.GetPosition(DrawCanvas);
+                PaintCellLine(_lastCellPoint, _lastCellPoint);   // 찍기만 해도 한 점은 켜진다
+                return;
+            }
 
             if (_tool == Tool.Pen || _tool == Tool.Eraser)
             {
                 _stroke = new Polyline
                 {
                     Stroke = _tool == Tool.Eraser ? Brushes.White : Brushes.Black,
-                    StrokeThickness = _tool == Tool.Eraser ? LineWidth * 3 : LineWidth,
+                    StrokeThickness = _tool == Tool.Eraser ? StrokeUnits * 3 : StrokeUnits,
                     StrokeLineJoin = PenLineJoin.Round,
                     StrokeStartLineCap = PenLineCap.Round,
                     StrokeEndLineCap = PenLineCap.Round
@@ -156,10 +229,10 @@ namespace IJPSystem.Platform.HMI.Print
             {
                 _shape = _tool switch
                 {
-                    Tool.Line => new Line { Stroke = Brushes.Black, StrokeThickness = LineWidth, X1 = _start.X, Y1 = _start.Y, X2 = _start.X, Y2 = _start.Y },
-                    Tool.Diamond => new Polygon { Stroke = Brushes.Black, StrokeThickness = LineWidth, Fill = Brushes.Transparent },
-                    Tool.Ellipse => new Ellipse { Stroke = Brushes.Black, StrokeThickness = LineWidth, Fill = Brushes.Transparent },
-                    _ => new Rectangle { Stroke = Brushes.Black, StrokeThickness = LineWidth, Fill = Brushes.Transparent }
+                    Tool.Line => new Line { Stroke = Brushes.Black, StrokeThickness = StrokeUnits, X1 = _start.X, Y1 = _start.Y, X2 = _start.X, Y2 = _start.Y },
+                    Tool.Diamond => new Polygon { Stroke = Brushes.Black, StrokeThickness = StrokeUnits, Fill = Brushes.Transparent },
+                    Tool.Ellipse => new Ellipse { Stroke = Brushes.Black, StrokeThickness = StrokeUnits, Fill = Brushes.Transparent },
+                    _ => new Rectangle { Stroke = Brushes.Black, StrokeThickness = StrokeUnits, Fill = Brushes.Transparent }
                 };
                 if (_shape is not Line) { Canvas.SetLeft(_shape, _start.X); Canvas.SetTop(_shape, _start.Y); }
                 DrawCanvas.Children.Add(_shape);
@@ -190,6 +263,16 @@ namespace IJPSystem.Platform.HMI.Print
             }
 
             if (!_drawing) return;
+
+            if (_cellGeo != null)
+            {
+                Point raw = e.GetPosition(DrawCanvas);
+                PaintCellLine(_lastCellPoint, raw);
+                _lastCellPoint = raw;
+                return;
+            }
+
+            p = SnapToCell(p);
 
             if (_stroke != null) { _stroke.Points.Add(p); }
             else if (_shape is Line line) { line.X2 = p.X; line.Y2 = p.Y; }
@@ -226,9 +309,13 @@ namespace IJPSystem.Platform.HMI.Print
             _drawing = false;
             DrawCanvas.ReleaseMouseCapture();
 
-            UIElement? el = (UIElement?)_stroke ?? _shape;
+            if (_cellPath != null)
+                StatusInfo.Text = $"픽셀 {_cellSeen.Count}개 " +
+                                  (_tool == Tool.Eraser ? "끔" : "켬") + $" (붓 {Math.Max(1, (int)Math.Round(LineWidth))}px)";
+
+            UIElement? el = (UIElement?)_cellPath ?? (UIElement?)_stroke ?? _shape;
             if (el != null) { _added.Add(el); _redo.Clear(); }
-            _stroke = null; _shape = null;
+            _stroke = null; _shape = null; _cellPath = null; _cellGeo = null;
         }
 
         // ── 액션 버튼 ────────────────────────────────────────────────
@@ -417,20 +504,74 @@ namespace IJPSystem.Platform.HMI.Print
             return rtb;
         }
 
+        // ── 픽셀 눈금 ────────────────────────────────────────────────
+        private void Ruler_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (CanvasRuler == null) return;
+            bool on = RulerToggle.IsChecked == true;
+            CanvasRuler.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            StatusInfo.Text = on ? PixelEditHint() : "픽셀 눈금 꺼짐 — 자유 곡선으로 그립니다.";
+        }
+
+        /// <summary>
+        /// 지금 배율에서 픽셀 하나가 화면 몇 px 인지 알려 준다.
+        /// 이 값이 작으면 격자에 맞춰 그려도 눈으로는 확인할 수 없다 — 그 사실을 숨기면
+        /// "눈금을 켰는데 픽셀처럼 안 보인다"가 된다.
+        /// </summary>
+        private string PixelEditHint()
+        {
+            double onScreen = CellW * _zoomTf.ScaleX;
+            string state = onScreen >= 4
+                ? "픽셀 하나가 보입니다."
+                : $"Ctrl+휠로 {Math.Ceiling(4 / Math.Max(1e-9, CellW)):0}배까지 확대하면 픽셀이 보입니다.";
+            return $"픽셀 편집 — 그린 곳이 ON. 1픽셀 = 화면 {onScreen:0.00}px · {state} (이미지 {_pxW}x{_pxH})";
+        }
+
         // ── 탐색 도구 구현 (Zoom / Pan / Crosshair / Select) ─────────
         private void ApplyZoom(double factor)
         {
-            double z = Math.Clamp(_zoomTf.ScaleX * factor, 0.25, 8.0);
+            double old = _zoomTf.ScaleX;
+            // 상한이 8 이면 200mm 캔버스에서 이미지 1픽셀이 화면 1.3px 밖에 안 돼 픽셀 편집이 불가능하다.
+            double z = Math.Clamp(old * factor, 0.25, 64.0);
+            if (Math.Abs(z - old) < 1e-9) return;
+
+            // 확대 전에 화면 한가운데 있던 지점을 확대 후에도 한가운데 둔다.
+            // 안 그러면 늘 좌상단 기준으로 커져, 확대할수록 보던 곳이 화면 밖으로 밀려난다
+            // (스크롤 막대를 끌어도 엉뚱한 흰 여백만 지나가게 된다).
+            double cx = CanvasScroller.HorizontalOffset + CanvasScroller.ViewportWidth  / 2;
+            double cy = CanvasScroller.VerticalOffset   + CanvasScroller.ViewportHeight / 2;
+            double k  = z / old;
+
             _zoomTf.ScaleX = _zoomTf.ScaleY = z;
-            StatusInfo.Text = $"Zoom {z * 100:0}%";
+            CanvasScroller.UpdateLayout();        // 새 Extent 가 잡힌 뒤에 스크롤해야 한다
+
+            CanvasScroller.ScrollToHorizontalOffset(cx * k - CanvasScroller.ViewportWidth  / 2);
+            CanvasScroller.ScrollToVerticalOffset  (cy * k - CanvasScroller.ViewportHeight / 2);
+
+            StatusInfo.Text = PixelEdit
+                ? $"Zoom {z * 100:0}% · " + PixelEditHint()
+                : $"Zoom {z * 100:0}%";
         }
 
         private void CanvasScroller_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            // Zoom 도구이거나 Ctrl 을 누른 채 휠을 굴리면 확대/축소
-            if (_tool != Tool.Zoom && (Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
-            ApplyZoom(e.Delta > 0 ? 1.1 : 1.0 / 1.1);
-            e.Handled = true;
+            // ★ 그냥 굴린 휠은 절대 가로채지 않는다 — 세로 스크롤이다.
+            //   예전에는 Zoom 도구가 선택돼 있으면 휠까지 확대에 썼다. 그래서 확대하려고
+            //   🔍 를 눌러 둔 채로는 휠을 굴려도 화면이 안 내려가, 세로 스크롤이 죽은 것처럼 보였다.
+            //   확대는 Ctrl+휠(또는 🔍 도구로 클릭)로 한다 — 다른 프로그램과 같은 규칙이다.
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+            {
+                ApplyZoom(e.Delta > 0 ? 1.2 : 1.0 / 1.2);
+                e.Handled = true;
+                return;
+            }
+
+            // Shift+휠 = 가로 스크롤. WPF ScrollViewer 는 기본으로 세로만 굴린다.
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && CanvasScroller.ScrollableWidth > 0)
+            {
+                CanvasScroller.ScrollToHorizontalOffset(CanvasScroller.HorizontalOffset - e.Delta);
+                e.Handled = true;
+            }
         }
 
         private void UpdateCrosshair(Point p)
