@@ -16,6 +16,10 @@ namespace IJPSystem.Platform.Common.Constants
         public const string IoConfigFile          = "IO.json";
         public const string VisionConfigFile      = "VisionConfig.json";
         public const string MeniscusConfigFile    = "MeniscusConfig.json";
+
+        // Meteor PrintEngine 설정(.cfg). PCC 가 읽는 파일이며 우리가 만드는 것이 아니다 —
+        // 제어 PC 의 실제 파일을 Config 폴더에 두거나 여기 이름을 맞출 것.
+        public const string MeteorConfigFile      = "PrintEngine.cfg";
         public const string AlarmSystemDb         = "AlarmSystem.db";
         public const string AlarmHistoryDb        = "AlarmHistory.db";
         public const string SystemLogDb           = "SystemLog.db";

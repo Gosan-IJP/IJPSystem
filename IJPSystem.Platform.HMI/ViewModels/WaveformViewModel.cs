@@ -1,7 +1,9 @@
 using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.HMI.Common;
+using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
 using Microsoft.Win32;
 using System;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -146,8 +148,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             LoadCommand          = new RelayCommand(_ => ExecuteLoad());
             SaveCommand          = new RelayCommand(_ => ExecuteSave(), _ => !string.IsNullOrEmpty(_loadedBase));
             ApplySpitCommand     = new RelayCommand(_ => ExecuteApplySpit());
-            StartSpitCommand     = new RelayCommand(_ => ExecuteStartSpit(), _ => !IsSpitting);
-            AbortSpitCommand     = new RelayCommand(_ => ExecuteAbortSpit(),  _ => IsSpitting);
+            StartSpitCommand     = new RelayCommand(async _ => await ExecuteStartSpitAsync(), _ => !IsSpitting);
+            AbortSpitCommand     = new RelayCommand(async _ => await ExecuteAbortSpitAsync(), _ => IsSpitting);
             HeaterControlCommand = new RelayCommand(_ => ExecuteToggleHeater());
 
             AutoLoadForActiveRecipe();
@@ -272,19 +274,40 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
 
         // ── Start / Abort Spit ────────────────────────────────────────────
-        private void ExecuteStartSpit()
+        // 예전에는 플래그만 뒤집고 로그만 남겼다 — 버튼은 눌리는데 헤드는 아무것도 하지 않았다.
+        // 헤드는 장비에 하나뿐이라 공용 SpitService 를 거친다(드랍와쳐·패턴 인쇄·P&ID 와 같은 것).
+        private async Task ExecuteStartSpitAsync()
         {
-            IsSpitting = true;
+            var settings = new SpitSettings
+            {
+                Nozzles     = Nozzle.NozzleControlGlobal.Instance.UsingNozzle.UsingNozzles,
+                FrequencyHz = JettingFrequency > 0 ? JettingFrequency : DefaultSpitFrequencyHz,
+            };
+            if (!SpitService.TryStart(settings, out string? reason))
+            {
+                _mainVM.AddLog($"[WAVEFORM] Spit — {reason}", LogLevel.Warning);
+                return;
+            }
+
+            IsSpitting = SpitService.IsSpitting;
             RaiseSpitCanExecute();
-            _mainVM.AddLog($"[WAVEFORM] Spit 시작: {JettingDropCount} Drops", LogLevel.Info);
+            _mainVM.AddLog($"[WAVEFORM] Spit 시작: {JettingDropCount} Drops @ {settings.FrequencyHz}Hz", LogLevel.Info);
         }
 
-        private void ExecuteAbortSpit()
+        private async Task ExecuteAbortSpitAsync()
         {
-            IsSpitting = false;
+            bool idle = await SpitService.StopAsync();
+            IsSpitting = SpitService.IsSpitting;
             RaiseSpitCanExecute();
-            _mainVM.AddLog("[WAVEFORM] Spit 중단", LogLevel.Warning);
+
+            // 정지 미확인을 성공처럼 넘기면 헤드가 계속 토출 중일 수 있다.
+            _mainVM.AddLog(idle ? "[WAVEFORM] Spit 중단"
+                                : "[WAVEFORM] Spit 중단 후에도 정지가 확인되지 않았습니다. 헤드 상태를 확인하세요.",
+                           idle ? LogLevel.Warning : LogLevel.Error);
         }
+
+        /// <summary>Jetting Frequency 가 비어 있을 때 쓸 기본 스핏 주파수[Hz].</summary>
+        private const double DefaultSpitFrequencyHz = 1000;
 
         private void RaiseSpitCanExecute()
         {

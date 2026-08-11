@@ -6,6 +6,7 @@ using IJPSystem.Platform.Domain.Enums;
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.HMI.Common;
 using IJPSystem.Platform.HMI.Services;
+using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
 using static IJPSystem.Platform.HMI.Common.Loc;
 using System;
 using System.Collections.Generic;
@@ -38,7 +39,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             SetVacuumCommand              = new RelayCommand(_ => ApplyVacuumSV());
             // 퍼지/스피팅 상호 배제 — 한쪽이 활성일 동안 다른쪽 버튼 비활성화
             TogglePurgeCommand            = new RelayCommand(_ => TogglePurge(),    _ => !IsSpitting);
-            ToggleSpittingCommand         = new RelayCommand(_ => ToggleSpitting(), _ => !IsPurging);
+            ToggleSpittingCommand         = new RelayCommand(async _ => await ToggleSpittingAsync(),
+                                                              _ => !IsPurging);
             TogglePositivePressureCommand = new RelayCommand(_ => TogglePositivePressure());
             ToggleVacuumCommand           = new RelayCommand(_ => ToggleVacuum());
             AutoPurgeCommand              = new RelayCommand(async _ => await RunAutoPurgeAsync(),
@@ -373,13 +375,37 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 LogLevel.Warning);
         }
 
-        private void ToggleSpitting()
+        /// <summary>
+        /// SPITTING — 헤드 토출 ON/OFF. 예전에는 이 화면의 플래그만 뒤집었다.
+        /// 헤드는 장비에 하나뿐이라 공용 <see cref="SpitService"/> 를 거쳐야 드랍와쳐·패턴 인쇄와
+        /// 상태가 어긋나지 않는다. 노즐 애니메이션은 결과를 따라간다.
+        /// </summary>
+        private async Task ToggleSpittingAsync()
         {
-            IsSpitting = !IsSpitting;
-            _mainVM.AddLog(
-                $"[PNID] SPITTING → {(IsSpitting ? "ON (노즐 분사 중)" : "OFF")}",
-                LogLevel.Warning);
+            if (IsSpitting)
+            {
+                await SpitService.StopAsync();
+            }
+            else
+            {
+                var settings = new SpitSettings
+                {
+                    Nozzles     = Nozzle.NozzleControlGlobal.Instance.UsingNozzle.UsingNozzles,
+                    FrequencyHz = SpitFrequencyHz,
+                };
+                if (!SpitService.TryStart(settings, out string? reason))
+                {
+                    _mainVM.AddLog($"[PNID] SPITTING — {reason}", LogLevel.Warning);
+                    return;
+                }
+            }
+
+            IsSpitting = SpitService.IsSpitting;
+            _mainVM.AddLog($"[PNID] SPITTING → {(IsSpitting ? "ON (노즐 분사 중)" : "OFF")}", LogLevel.Warning);
         }
+
+        /// <summary>이 화면의 스핏 주파수[Hz]. 전용 입력이 없어 기본값을 쓴다.</summary>
+        public double SpitFrequencyHz { get; set; } = 1000;
 
         // ── PMC PV / SV / Set 커맨드 ──
         // 양압(P+, Purge)  : PV ← AI X6002, SV ← AO Y7001

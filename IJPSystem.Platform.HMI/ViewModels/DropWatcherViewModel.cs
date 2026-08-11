@@ -61,12 +61,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private bool _strobeReady;
 
         // 헤드 토출(스핏) — 화면의 "Spit DW" 토글 대상.
-        // 실장 Meteor 어댑터가 준비되면 이 생성부만 교체하면 된다.
-        // 패턴 생성기를 함께 넘겨, 시작할 때 노즐 번호 유효성이 실제로 검증되게 한다.
-        private readonly ISpit _spit = new VirtualSpit(
-            new S800SingleSpitPatternBuilder(
-                nozzleCount:      AppConstants.HeadNozzleCount,
-                firstNozzleIndex: AppConstants.FirstNozzleNumber));
+        // 헤드는 장비에 하나뿐이라 SpitService 를 거친다(패턴 인쇄·P&ID·웨이브폼과 같은 것을 쓴다).
+        // 실물/가상 선택과 노즐 범위 검증은 그쪽이 한다.
+        private static ISpit Spit => SpitService.Current;
 
         // 하드웨어 트리거 체인 — 토출 펄스를 분주해 LED/카메라를 동기시킨다.
         // 기동 중에는 측정 촬영이 자유 촬영(CaptureAsync)이 아니라 트리거 동기 프레임을 쓴다.
@@ -733,34 +730,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             if (IsSpitting) { await StopSpitAsync(); return; }
 
             var nozzles = Nozzle.NozzleControlGlobal.Instance.UsingNozzle.UsingNozzles;
-            if (nozzles.Count == 0)
-            {
-                _mainVM.AddLog("[VISION] DropWatcher: Spit — 선택된 노즐이 없습니다. Nozzle Select 로 먼저 지정하세요.",
-                               LogLevel.Warning);
-                return;
-            }
-            if (FrequencyHz <= 0)
-            {
-                _mainVM.AddLog("[VISION] DropWatcher: Spit — Frequency 는 0보다 커야 합니다.", LogLevel.Warning);
-                return;
-            }
-
             var settings = new SpitSettings { Nozzles = nozzles, FrequencyHz = FrequencyHz };
-            try
+
+            // 입력 검사·범위 밖 노즐 경고는 SpitService 가 한다 — 화면마다 되풀이하면 한 곳이 빠진다.
+            if (!SpitService.TryStart(settings, out string? reason))
             {
-                _spit.Start(settings);
-            }
-            catch (Exception ex)
-            {
-                _mainVM.AddLog($"[VISION] DropWatcher: Spit 시작 실패: {ex.Message}", LogLevel.Error);
+                _mainVM.AddLog($"[VISION] DropWatcher: Spit — {reason}", LogLevel.Warning);
                 return;
             }
-
-            // 헤드 범위를 벗어난 노즐은 조용히 버려지면 안 된다 — 번호 기준(0/1 시작) 문제일 수 있다.
-            if (_spit is VirtualSpit vs && vs.IgnoredNozzles.Count > 0)
-                _mainVM.AddLog($"[VISION] DropWatcher: Spit — 헤드 노즐 범위" +
-                               $"({AppConstants.FirstNozzleNumber}~{AppConstants.HeadNozzleCount}) 밖이라 무시된 번호: " +
-                               string.Join(",", vs.IgnoredNozzles), LogLevel.Warning);
 
             // 토출이 돌기 시작해야 분주기가 셀 펄스가 생긴다 → 스핏 다음에 트리거 체인 기동.
             try
@@ -783,7 +760,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
 
             IsSpitting = true;
-            _mainVM.AddLog($"[VISION] DropWatcher: Spit 시작 — 노즐 {nozzles.Count}개 @ {FrequencyHz}Hz", LogLevel.Info);
 
             // Duration 이 설정돼 있으면 그 시간 뒤 자동 정지(잉크 낭비/건조 방지).
             if (DurationSec > 0 && DurationSec < 3600)
@@ -797,21 +773,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             try { _trigger.Stop(); OnPropertyChanged(nameof(IsTriggerSynced)); }
             catch (Exception ex) { _mainVM.AddLog($"[VISION] DropWatcher: 트리거 체인 정지 실패: {ex.Message}", LogLevel.Warning); }
 
-            bool idle;
-            try
-            {
-                idle = await _spit.StopAsync();
-            }
-            catch (Exception ex)
-            {
-                _mainVM.AddLog($"[VISION] DropWatcher: Spit 중단 실패: {ex.Message}", LogLevel.Error);
-                idle = false;
-            }
+            bool idle = await SpitService.StopAsync();
 
-            IsSpitting = _spit.IsSpitting;
-            if (idle)
-                _mainVM.AddLog("[VISION] DropWatcher: Spit 정지", LogLevel.Info);
-            else
+            IsSpitting = Spit.IsSpitting;
+            if (!idle)
                 // 정지 미확인을 성공처럼 넘기면 헤드가 계속 토출 중일 수 있다.
                 _mainVM.AddLog("[VISION] DropWatcher: Spit 중단 후에도 정지가 확인되지 않았습니다. 헤드 상태를 확인하세요.",
                                LogLevel.Error);
@@ -1589,8 +1554,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // 화면을 떠나도 헤드가 계속 토출하면 안 된다. 종료 경로라 무한정 기다리진 않는다.
             try { _trigger.Stop(); } catch { }
             _trigger.Dispose();
-            try { _spit.StopAsync(1_000).Wait(2_000); } catch { }
-            _spit.Dispose();
+            // 토출기는 장비 공용(SpitService)이라 여기서 Dispose 하지 않는다 — 화면을 닫았다고
+            // 다른 화면의 스핏 버튼까지 죽으면 안 된다. 다만 돌고 있으면 멈춘다.
+            try { if (SpitService.IsSpitting) SpitService.StopAsync(1_000).Wait(2_000); } catch { }
             try { _strobe.Enable(false); } catch { /* 이미 끊긴 포트 — 종료 경로라 무시 */ }
             _strobe.Dispose();
         }

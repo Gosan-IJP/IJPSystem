@@ -4,6 +4,7 @@ using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.HMI.Common;
 using IJPSystem.Platform.HMI.Services;
+using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
 using static IJPSystem.Platform.HMI.Common.Loc;
 using System;
 using System.Collections.ObjectModel;
@@ -133,14 +134,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
-        // ── Spit (노즐 토출 애니메이션) ───────────────────────────────
-        // 버튼 클릭 시마다 ON/OFF 토글 → Fluidics Head 노즐 스트림 동작.
-        private bool _isSpitting;
-        public bool IsSpitting
-        {
-            get => _isSpitting;
-            private set => SetProperty(ref _isSpitting, value);
-        }
+        // ── Spit (노즐 토출) ──────────────────────────────────────────
+        // 상태는 장비 공용 SpitService 가 들고 있다 — 이 화면이 따로 기억하면 드랍와쳐에서
+        // 켠 토출과 여기 표시가 어긋난다. 애니메이션은 이 값을 그대로 따라간다.
+        public bool IsSpitting => SpitService.IsSpitting;
         public ICommand SpitCommand { get; private set; } = null!;
 
         // ── Purge 압력 (kPa) ──────────────────────────────────────────
@@ -536,7 +533,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             MovePurgeCommand      = new RelayCommand(async _ => await MoveToPointAsync(PointNames.Purge),
                                                      _ => !IsPointMoving && !IsPrinting);
 
-            SpitCommand = new RelayCommand(_ => ToggleSpit());
+            SpitCommand = new RelayCommand(async _ => await ToggleSpitAsync());
 
             LoadImageCommand = new RelayCommand(_ => ExecuteLoadImage());
 
@@ -631,12 +628,35 @@ namespace IJPSystem.Platform.HMI.ViewModels
             });
         }
 
-        /// <summary>Spit — 클릭할 때마다 노즐 토출 애니메이션을 ON/OFF 토글한다.</summary>
-        private void ToggleSpit()
+        /// <summary>
+        /// Spit — 헤드 토출 ON/OFF. 예전에는 이 화면의 플래그만 뒤집고 로그만 남겨,
+        /// 드랍와쳐에서 켠 토출과 이 버튼의 상태가 서로 달랐다. 지금은 장비 공용
+        /// <see cref="SpitService"/> 를 거쳐 네 화면이 같은 헤드를 본다.
+        /// </summary>
+        private async Task ToggleSpitAsync()
         {
-            IsSpitting = !IsSpitting;
-            _mainVM.AddLog($"[PATTERN] Spit {(IsSpitting ? "ON" : "OFF")}", LogLevel.Info);
+            if (IsSpitting)
+            {
+                await SpitService.StopAsync();
+            }
+            else
+            {
+                var settings = new SpitSettings
+                {
+                    Nozzles     = Nozzle.NozzleControlGlobal.Instance.UsingNozzle.UsingNozzles,
+                    FrequencyHz = SpitFrequencyHz,
+                };
+                if (!SpitService.TryStart(settings, out string? reason))
+                    _mainVM.AddLog($"[PATTERN] Spit — {reason}", LogLevel.Warning);
+            }
+            OnPropertyChanged(nameof(IsSpitting));
         }
+
+        /// <summary>
+        /// 이 화면의 스핏 주파수[Hz]. 전용 입력이 없어 드랍와쳐와 같은 기본값을 쓴다 —
+        /// 값을 화면에 노출할 때 이 속성만 바인딩하면 된다.
+        /// </summary>
+        public double SpitFrequencyHz { get; set; } = 1000;
 
         // ── Purge 압력 ───────────────────────────────────────────────
         /// <summary>Set Value — 입력한 셋팅값을 Purge 압력 명령으로 적용. 출력 ON 상태면 현재값에 즉시 반영.</summary>

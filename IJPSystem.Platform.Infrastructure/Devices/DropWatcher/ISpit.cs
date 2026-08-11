@@ -39,6 +39,17 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
         /// <summary>컨트롤러가 명령을 처리 중인지. (Meteor: PiIsBusy)</summary>
         bool IsBusy { get; }
+
+        /// <summary>
+        /// 마지막 <see cref="Start"/> 에서 헤드 범위를 벗어나 버려진 노즐 번호.
+        ///
+        /// <para>
+        /// 인터페이스에 둔 이유: 조용히 버려지면 안 되는 정보인데, 화면이 구현 타입을 캐스팅해서
+        /// 꺼내면 다른 구현으로 바꾸는 순간 경고가 사라진다. 대개 노즐 번호 기준(0/1 시작)이
+        /// 어긋난 것이라 놓치면 원인을 찾기 어렵다.
+        /// </para>
+        /// </summary>
+        IReadOnlyList<int> IgnoredNozzles { get; }
     }
 
     /// <summary>
@@ -58,6 +69,9 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         public abstract bool   IsBusy      { get; }
 
         public SpitSettings? CurrentSettings { get; protected set; }
+
+        /// <summary>기본은 "버린 노즐 없음". 범위 검증을 하는 구현이 덮어쓴다.</summary>
+        public virtual IReadOnlyList<int> IgnoredNozzles => Array.Empty<int>();
 
         public abstract void Start(SpitSettings settings);
 
@@ -129,8 +143,10 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         /// <summary>마지막 Start 로 지정된 노즐 수(표시/로그용).</summary>
         public int NozzleCount { get; private set; }
 
+        private IReadOnlyList<int> _ignored = Array.Empty<int>();
+
         /// <summary>패턴 생성 시 범위를 벗어나 무시된 노즐 번호. 비어 있지 않으면 노즐 번호 기준을 의심할 것.</summary>
-        public IReadOnlyList<int> IgnoredNozzles { get; private set; } = Array.Empty<int>();
+        public override IReadOnlyList<int> IgnoredNozzles => _ignored;
 
         public override void Start(SpitSettings settings)
         {
@@ -143,8 +159,8 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
             if (_patternBuilder != null)
             {
                 _patternBuilder.Build(settings);
-                IgnoredNozzles = (_patternBuilder as S800SingleSpitPatternBuilder)?.LastIgnoredNozzles
-                                 ?? Array.Empty<int>();
+                _ignored = (_patternBuilder as S800SingleSpitPatternBuilder)?.LastIgnoredNozzles
+                           ?? Array.Empty<int>();
             }
 
             CurrentSettings = settings;
