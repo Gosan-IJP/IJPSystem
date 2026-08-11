@@ -183,7 +183,15 @@ namespace IJPSystem.Platform.HMI.Print
         {
             int rows    = Math.Max(1, HeadSpec.Rows);
             int perRow  = Math.Max(1, HeadSpec.NozzlesPerRow);
-            double pitch = MachineSettings.Current.GetDouble(MachineSettingsStore.Keys.NozzlePitchUm);
+
+            // 장비 설정이 아직 안 열렸으면(도구·테스트 경로) 기본값으로 간다 — HeadSpec 과 같은 규칙.
+            // Current 를 그냥 부르면 예외가 나고, 그러면 "패턴 생성 실패"만 뜬 채 원인이 안 보인다.
+            double pitch = 0;
+            if (MachineSettings.IsReady)
+            {
+                try { pitch = MachineSettings.Current.GetDouble(MachineSettingsStore.Keys.NozzlePitchUm); }
+                catch { pitch = 0; }
+            }
             if (pitch <= 0) pitch = DefaultInRowPitchUm;
 
             // 열 간 오프셋 = 한 열 간격 ÷ 열 수. 열이 엇갈려 실효 간격을 그만큼 좁히는 배열이다.
