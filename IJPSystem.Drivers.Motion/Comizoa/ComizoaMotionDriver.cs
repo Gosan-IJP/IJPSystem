@@ -25,8 +25,12 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         // 지령과 피드백에 같은 부호를 곱해 좌표계 전체를 미러링한다(한쪽만 뒤집으면 절대이동이 발산).
         private readonly Dictionary<string, double> _signMap = new();
 
-        // 상/하한 리밋 표시를 서로 바꿀 축. MotorConfig.json 의 SwapLimitSensors 에서 채운다.
+        // 상/하한 리밋 표시를 서로 바꿀 축. AxisDeviceInfo.SwapLimitDisplay 에서 채운다
+        // (= 방향 반전 XOR 배선 반전). 방향만 뒤집힌 축도 여기 들어와야 탈출 방향이 맞는다.
         private readonly HashSet<string> _swapLimits = new();
+
+        // 절대 엔코더 축 → 원점복귀는 '0 으로 이동'이다. 값은 이동 속도를 꺼낼 Home 설정.
+        private readonly Dictionary<string, HomeConfig> _absoluteAxes = new();
         private List<AxisDeviceInfo> _configs = new();
 
         // 원점복귀 완료를 소프트웨어로 래치한다.
@@ -178,11 +182,14 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 int hw = cfg.HwAxis ?? idx;
                 _axisMap[cfg.AxisNo] = (AxisId)hw;
                 _signMap[cfg.AxisNo] = cfg.InvertDirection ? -1.0 : +1.0;
-                if (cfg.SwapLimitSensors) _swapLimits.Add(cfg.AxisNo);
+                // 방향을 뒤집으면 리밋 이름도 같이 뒤집힌다 — 왜 자동인지는 SwapLimitDisplay 주석 참고.
+                if (cfg.SwapLimitDisplay) _swapLimits.Add(cfg.AxisNo);
+                if (cfg.Home is { Absolute: true }) _absoluteAxes[cfg.AxisNo] = cfg.Home;
                 LoggerService.WriteToFile("INFO",
                     $"[Comizoa Motion] 축 매핑: {cfg.AxisNo}({cfg.Name}) → HwAxis {hw}" +
                     (cfg.InvertDirection  ? " · 방향 반전(InvertDirection=true)" : "") +
-                    (cfg.SwapLimitSensors ? " · 상/하한 교체(SwapLimitSensors=true)" : "") +
+                    (cfg.SwapLimitSensors ? " · 리밋 배선 교체(SwapLimitSensors=true)" : "") +
+                    (cfg.SwapLimitDisplay ? " · 상/하한 표시 교체(→ (−)리밋에서 (+)조그로 탈출)" : "") +
                     (cfg.TeachLimit != null ? $" · 티칭 저장 범위 {cfg.TeachLimitText}" : ""));
                 idx++;
             }
@@ -232,10 +239,11 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 lock (_homedSync) homed = _homedAxes.Contains(ax);
                 s.IsHomeDone   = homed;
                 s.IsAlarm      = alarm;
-                // 배선이 반대로 물린 축은 여기서 바꿔 준다(표시 전용 — 실제 정지는 드라이브가 건다).
+                // 하드웨어 EL 을 화면 좌표의 상/하한으로 옮긴다. 방향 반전축은 여기서 뒤집혀야
+                // "(−)리밋 점등 → (+)조그로 탈출"이 성립한다(표시 전용 — 실제 정지는 드라이브가 건다).
                 bool swap = _swapLimits.Contains(axisNo);
-                s.UpperLimit   = swap ? st.LowerLimit : st.UpperLimit;   // 상한 하드리밋(+EL)
-                s.LowerLimit   = swap ? st.UpperLimit : st.LowerLimit;   // 하한 하드리밋(-EL)
+                s.UpperLimit   = swap ? st.LowerLimit : st.UpperLimit;   // 화면 (+) 끝 리밋
+                s.LowerLimit   = swap ? st.UpperLimit : st.LowerLimit;   // 화면 (−) 끝 리밋
                 s.HomeSensor   = st.HomeSensor;       // 원점(HOME) 센서
                 s.IsInPosition = !st.IsMoving;
             }
@@ -325,6 +333,41 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             }
         }
 
+        /// <summary>
+        /// 절대 엔코더 축의 원점복귀 — <b>0 으로 절대이동</b>.
+        ///
+        /// <para>
+        /// 홈 서치를 하지 않는다. 원점센서를 찾아 달릴 이유가 없고(위치를 이미 안다),
+        /// 무엇보다 홈 성공 뒤의 위치 0 재정의가 절대 기준을 홈 센서 자리로 덮어써서
+        /// 초기화할 때마다 좌표계가 옮겨간다. 위치는 손대지 않는다.
+        /// </para>
+        /// </summary>
+        private async Task<bool> HomeAbsolute(string axisNo, AxisId ax, HomeConfig home)
+        {
+            if (!WaitServoEnabled(ax, 3000))
+                LoggerService.WriteToFile("WARN",
+                    $"[Comizoa Motion] Home({axisNo}) 절대축 — 서보 Enable 대기 시간초과, 그대로 진행");
+
+            double pos0 = 0;
+            try { pos0 = _comi!.GetState(ax).Position; } catch { /* 로그용 */ }
+
+            bool ok = await MoveAbs(axisNo, 0.0,
+                                    home.Velocity, home.Acceleration, home.Deceleration);
+            if (ok) { lock (_homedSync) _homedAxes.Add(ax); }
+
+            LoggerService.WriteToFile("INFO",
+                $"[Comizoa Motion] Home({axisNo}) 절대축 — 홈 서치 없이 0 으로 이동 " +
+                $"(vel={home.Velocity}) 결과={ok}, {pos0:F3} → " +
+                $"{(TryReadPos(ax, out double p1) ? p1.ToString("F3") : "?")}");
+            return ok;
+        }
+
+        private bool TryReadPos(AxisId ax, out double pos)
+        {
+            try { pos = _comi!.GetState(ax).Position; return true; }
+            catch { pos = 0; return false; }
+        }
+
         /// <summary>축 방향 부호(+1/-1). 미설정 축은 +1(정상).</summary>
         private double Sign(string axisNo) => _signMap.TryGetValue(axisNo, out var s) ? s : +1.0;
 
@@ -405,6 +448,10 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         public Task<bool> Home(string axisNo)
         {
             if (!TryAxis(axisNo, out var ax)) return Task.FromResult(false);
+
+            // 절대 엔코더 축은 찾아갈 원점이 없다 — 0 으로 이동하는 것이 곧 원점복귀다.
+            if (_absoluteAxes.TryGetValue(axisNo, out var abs)) return HomeAbsolute(axisNo, ax, abs);
+
             return Task.Run(() =>
             {
                 try

@@ -1,6 +1,7 @@
 {
-  "_comment_direction": "축마다 넣을 수 있는 방향 관련 값 두 가지. (1) InvertDirection=true → 지령(MoveAbs/MoveRel/Jog)과 현재위치에 모두 -1 을 곱해 좌표계를 미러링한다. 부호가 뒤집히므로 해당 축의 기존 티칭 좌표는 재티칭 필요. 드라이브 파라미터(회전방향/Polarity)로 잡을 수 있으면 그쪽이 더 깔끔하다. (2) SwapLimitSensors=true → 상한(+EL)/하한(-EL) LED 표시를 서로 바꾼다. 배선이 반대로 물린 축 교정용이며 표시만 바뀐다(실제 정지는 드라이브가 EL 입력으로 직접 건다). 둘은 일부러 묶지 않았다 — 방향을 뒤집어도 리밋 표시는 따라오지 않으니 필요하면 둘 다 넣을 것.",
+  "_comment_direction": "축마다 넣을 수 있는 방향 관련 값 두 가지. (1) InvertDirection=true → 지령(MoveAbs/MoveRel/Jog)과 현재위치에 모두 -1 을 곱해 좌표계를 미러링한다. 부호가 뒤집히므로 해당 축의 기존 티칭 좌표는 재티칭 필요. 드라이브 파라미터(회전방향/Polarity)로 잡을 수 있으면 그쪽이 더 깔끔하다. (2) SwapLimitSensors=true → 리밋 센서 배선이 반대로 물린 축만 교정한다. 표시만 바뀐다(실제 정지는 드라이브가 EL 입력으로 직접 건다). ★방향을 뒤집었다는 이유로 이 값을 넣지 말 것 — InvertDirection=true 면 리밋 상/하한 표시는 자동으로 함께 뒤집힌다. 좌표를 미러링하면 하드웨어 -EL 이 붙은 기구 끝이 화면에서는 (+) 끝이 되기 때문이며, 그래야 '(-)리밋 점등 → (+)조그로 탈출'이 성립한다. 둘 다 true 면 서로 상쇄된다.",
   "_comment_teachlimit": "TeachLimit = { Min, Max } 티칭 좌표로 '저장'할 수 있는 값의 범위(화면에 보이는 좌표 그대로, InvertDirection 적용 후). 한쪽만 넣어도 되고 넣지 않은 쪽은 제한 없음. ★이동은 막지 않는다 — 조그·수동이동은 어디든 갈 수 있어야 정비·복구가 된다. 값이 공정 좌표로 굳어지는 순간(레시피 저장 / 위치 티칭 저장)에만 막는다. 범위 밖이면 저장이 거부되고 어느 포인트·축인지 창에 뜬다. 사용 안 함으로 꺼 둔 축은 검사하지 않는다.",
+  "_comment_absolute":"Home.Absolute = true → 절대 엔코더 축. 원점복귀가 '홈 서치' 대신 '0 으로 절대이동'이 된다. 절대 엔코더는 전원을 넣은 순간 위치를 알아 찾아갈 원점이 없고, 홈 서치를 시키면 원점센서를 찾아 달리다 리밋을 때린다. 성공하더라도 그 뒤의 위치 0 재정의가 절대 기준을 홈 센서 자리로 덮어써서 초기화할 때마다 좌표계가 옮겨간다. Absolute 축은 위치를 손대지 않는다. 이동 속도는 아래 Velocity/Acceleration/Deceleration 을 쓰고 Direction/SpecVelocity 는 쓰이지 않는다. (T축 = 앱솔루트 DD 모터)",
   "_comment_home":"Home.Direction = 원점복귀 탐색 방향(코미조아 유틸 Home Return 탭의 Dir 버튼과 동일). -1=(-)방향, +1=(+)방향. 생략하면 (-). 반대로 넣으면 원점센서 반대편으로 달려 리밋을 때리므로 축마다 실물로 확인할 것. InvertDirection 의 영향은 받지 않는다(원점복귀는 드라이브가 수행).",
   "MotionAxisList": [
     {
@@ -52,9 +53,10 @@
       "HwAxis": 2,
       "EncoderPulsePerUnit": 10370,
       "InvertDirection": true,
-      "SwapLimitSensors": true,
+      "_comment_T": "SwapLimitSensors 는 넣지 않는다 — 배선은 정상이고, 방향 반전에 따른 상/하한 표시 교체는 자동이다(넣으면 상쇄되어 다시 반대가 된다).",
       "TeachLimit": { "Min": 0, "Max": 30 },
       "Home": {
+        "Absolute": true,
         "Velocity": 10,
         "Acceleration": 100,
         "Deceleration": 100,
