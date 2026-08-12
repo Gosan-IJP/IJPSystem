@@ -276,19 +276,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
-        private bool _isMotorSubMenuVisible;
-        public bool IsMotorSubMenuVisible
-        {
-            get => _isMotorSubMenuVisible;
-            set => SetProperty(ref _isMotorSubMenuVisible, value);
-        }
-
-        private bool _isVisionSubMenuVisible;
-        public bool IsVisionSubMenuVisible
-        {
-            get => _isVisionSubMenuVisible;
-            set => SetProperty(ref _isVisionSubMenuVisible, value);
-        }
+        // 모터/비전 서브메뉴 펼침 상태는 없앴다 — 유지보수 메뉴가 평면이 되어 접을 것이 없다.
 
         private bool _isPrintSubMenuVisible;
         public bool IsPrintSubMenuVisible
@@ -830,12 +818,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     AddLog(TLog("Log_MoveInitialize"), LogLevel.Info);
                     break;
 
-                // 유지보수 메뉴 진입 시 첫 화면 = 모터 제어(축 제어). 서브메뉴도 펼쳐 둔다.
+                // 유지보수 메뉴 진입 시 첫 화면 = 모터 제어(축 제어).
                 case "MAINTENANCE":
                     CollapseAllSubMenus();
-                    IsMotorSubMenuVisible = true;
                     SelectedMenu    = "MAINTENANCE";
-                    SelectedSubMenu = "AXIS_CONTROL";
+                    SelectedSubMenu = "MOTOR";
                     _motorControlVM ??= new MotorControlViewModel(this);
                     CurrentView = _motorControlVM;
                     AddLog(TLog("Log_MoveMotor"), LogLevel.Info);
@@ -849,62 +836,26 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     AddLog(TLog("Log_MoveIO"), LogLevel.Info);
                     break;
 
+                // 유지보수 서브메뉴는 평면이다 — 누르면 바로 그 화면으로 간다.
+                // "MOTOR" 버튼이 곧 축 제어 화면이라 SelectedSubMenu 도 MOTOR 로 둔다
+                // (버튼 하이라이트가 CommandParameter 와 이 값을 비교한다).
                 case "MOTOR":
-                    if (IsMotorSubMenuVisible)
-                    {
-                        IsMotorSubMenuVisible = false;
-                    }
-                    else
-                    {
-                        IsVisionSubMenuVisible = false;
-                        IsMotorSubMenuVisible  = true;
-                        SelectedMenu    = "MAINTENANCE";
-                        SelectedSubMenu = "AXIS_CONTROL";
-                        _motorControlVM ??= new MotorControlViewModel(this);
-                        CurrentView = _motorControlVM;
-                        AddLog(TLog("Log_MoveMotor"), LogLevel.Info);
-                    }
-                    break;
-
-                case "AXIS_CONTROL":
-                    IsMotorSubMenuVisible  = true;
-                    IsVisionSubMenuVisible = false;
+                case "AXIS_CONTROL":       // 예전 이름 — 외부 호출 호환용
                     SelectedMenu    = "MAINTENANCE";
-                    SelectedSubMenu = "AXIS_CONTROL";
+                    SelectedSubMenu = "MOTOR";
                     _motorControlVM ??= new MotorControlViewModel(this);
                     CurrentView = _motorControlVM;
                     AddLog(TLog("Log_MoveAxisControl"), LogLevel.Info);
                     break;
 
                 case "POSITION_TEACH":
-                    IsMotorSubMenuVisible  = true;
-                    IsVisionSubMenuVisible = false;
                     SelectedMenu    = "MAINTENANCE";
                     SelectedSubMenu = "POSITION_TEACH";
                     CurrentView = new MotorTeachingViewModel(this);
                     AddLog(TLog("Log_MovePositionTeach"), LogLevel.Info);
                     break;
 
-                case "VISION":
-                    if (IsVisionSubMenuVisible)
-                    {
-                        IsVisionSubMenuVisible = false;
-                    }
-                    else
-                    {
-                        IsMotorSubMenuVisible  = false;
-                        IsVisionSubMenuVisible = true;
-                        SelectedMenu    = "MAINTENANCE";
-                        // NJI 버튼은 숨김 상태이므로 비전 메뉴 기본 화면은 Glass View
-                        SelectedSubMenu = "GLASS_VIEW";
-                        CurrentView = new GlassViewModel(this);
-                        AddLog(TLog("Log_MoveGlassView"), LogLevel.Info);
-                    }
-                    break;
-
                 case "NJI":
-                    IsVisionSubMenuVisible = true;
-                    IsMotorSubMenuVisible  = false;
                     SelectedMenu    = "MAINTENANCE";
                     SelectedSubMenu = "NJI";
                     _njiVM ??= new NJIViewModel(this);
@@ -912,9 +863,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     AddLog(TLog("Log_MoveNJI"), LogLevel.Info);
                     break;
 
+                case "VISION":             // 예전 이름 — 비전 묶음의 첫 화면이었다
                 case "GLASS_VIEW":
-                    IsVisionSubMenuVisible = true;
-                    IsMotorSubMenuVisible  = false;
                     SelectedMenu    = "MAINTENANCE";
                     SelectedSubMenu = "GLASS_VIEW";
                     CurrentView = new GlassViewModel(this);
@@ -922,8 +872,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     break;
 
                 case "DROP_WATCHER":
-                    IsVisionSubMenuVisible = true;
-                    IsMotorSubMenuVisible  = false;
                     SelectedMenu    = "MAINTENANCE";
                     SelectedSubMenu = "DROP_WATCHER";
                     CurrentView = new DropWatcherViewModel(this);
@@ -931,8 +879,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     break;
 
                 case "VISUAL_MONITOR":
-                    IsVisionSubMenuVisible = true;
-                    IsMotorSubMenuVisible  = false;
                     SelectedMenu    = "MAINTENANCE";
                     SelectedSubMenu = "VISUAL_MONITOR";
                     CurrentView = new VisualMonitorViewModel(this);
@@ -1017,12 +963,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
-        /// <summary>모든 서브메뉴 그룹을 접습니다.</summary>
+        /// <summary>
+        /// 접히는 서브메뉴 그룹을 접습니다.
+        /// 유지보수 메뉴는 2026-08-12 부터 평면이라 접을 것이 인쇄(PRINT) 하나뿐이다.
+        /// </summary>
         private void CollapseAllSubMenus()
         {
-            IsMotorSubMenuVisible  = false;
-            IsVisionSubMenuVisible = false;
-            IsPrintSubMenuVisible  = false;
+            IsPrintSubMenuVisible = false;
         }
 
         private void ChangeUserRole(UserRole newRole)

@@ -171,44 +171,35 @@
                         <TextBlock Text="{DynamicResource SubMenu_SystemExit}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
-                <!-- 일반 서브메뉴 버튼 (순서: 모터 → 비전 → I/O → 시퀀스) -->
+                <!-- 유지보수 서브메뉴 — 6개를 나란히 둔다(2026-08-12).
+                     예전에는 모터 제어 안에 축 제어/위치 티칭, 비전 안에 글라스뷰/드랍와처가
+                     접혀 있었다. 한 화면 가려면 부모를 먼저 펴야 하고, 다른 갈래로 갈 때마다
+                     반대쪽이 접혀 두 번씩 눌러야 했다. 계층이 두 개뿐인 메뉴에 값을 못 한다.
+                     모터 제어 버튼이 곧 축 제어 화면이다. -->
                 <Button Content="{DynamicResource SubMenu_Motor}"
                         Style="{StaticResource MaintenanceSubButtonStyle}"
                         Command="{Binding MoveWindowCommand}" CommandParameter="MOTOR"/>
-                <!-- MOTOR 하위 메뉴 -->
-                <StackPanel Visibility="{Binding IsMotorSubMenuVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <Button Content="{DynamicResource SubMenu_AxisControl}"
-                            Style="{StaticResource SubNavButtonStyle}"
-                            Command="{Binding MoveWindowCommand}" CommandParameter="AXIS_CONTROL"/>
-                    <Button Content="{DynamicResource SubMenu_PositionTeach}"
-                            Style="{StaticResource SubNavButtonStyle}"
-                            Command="{Binding MoveWindowCommand}" CommandParameter="POSITION_TEACH"/>
-                </StackPanel>
-                <Button Content="{DynamicResource SubMenu_VISION}"
+                <Button Content="{DynamicResource SubMenu_PositionTeach}"
                         Style="{StaticResource MaintenanceSubButtonStyle}"
-                        Command="{Binding MoveWindowCommand}" CommandParameter="VISION"/>
-                <StackPanel Visibility="{Binding IsVisionSubMenuVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <!-- NJI 버튼: 기능은 유지하되 화면에서 숨김 (삭제하지 않음) -->
-                    <Button Content="{DynamicResource SubMenu_NJI}"
-                            Style="{StaticResource SubNavButtonStyle}"
-                            Visibility="Collapsed"
-                            Command="{Binding MoveWindowCommand}" CommandParameter="NJI"/>
-                    <Button Content="{DynamicResource SubMenu_GLASS_VIEW}"
-                            Style="{StaticResource SubNavButtonStyle}"
-                            Command="{Binding MoveWindowCommand}" CommandParameter="GLASS_VIEW"/>
-                    <Button Content="{DynamicResource SubMenu_DROP_WATCHER}"
-                            Style="{StaticResource SubNavButtonStyle}"
-                            Command="{Binding MoveWindowCommand}" CommandParameter="DROP_WATCHER"/>
-                    <!-- 비주얼 모니터: 기능은 유지하되 화면에서 숨김 (삭제하지 않음 — 실장 요청 2026-07-23) -->
-                    <Button Content="{DynamicResource SubMenu_VISUAL_MONITOR}"
-                            Style="{StaticResource SubNavButtonStyle}"
-                            Visibility="Collapsed"
-                            Command="{Binding MoveWindowCommand}" CommandParameter="VISUAL_MONITOR"/>
-
-                </StackPanel>
+                        Command="{Binding MoveWindowCommand}" CommandParameter="POSITION_TEACH"/>
+                <Button Content="{DynamicResource SubMenu_DROP_WATCHER}"
+                        Style="{StaticResource MaintenanceSubButtonStyle}"
+                        Command="{Binding MoveWindowCommand}" CommandParameter="DROP_WATCHER"/>
+                <Button Content="{DynamicResource SubMenu_GLASS_VIEW}"
+                        Style="{StaticResource MaintenanceSubButtonStyle}"
+                        Command="{Binding MoveWindowCommand}" CommandParameter="GLASS_VIEW"/>
                 <Button Content="{DynamicResource SubMenu_IO}"
                         Style="{StaticResource MaintenanceSubButtonStyle}"
                         Command="{Binding MoveWindowCommand}" CommandParameter="IO"/>
+                <!-- NJI·비주얼 모니터: 기능은 유지하되 화면에서 숨김 (삭제하지 않음 — 실장 요청 2026-07-23) -->
+                <Button Content="{DynamicResource SubMenu_NJI}"
+                        Style="{StaticResource MaintenanceSubButtonStyle}"
+                        Visibility="Collapsed"
+                        Command="{Binding MoveWindowCommand}" CommandParameter="NJI"/>
+                <Button Content="{DynamicResource SubMenu_VISUAL_MONITOR}"
+                        Style="{StaticResource MaintenanceSubButtonStyle}"
+                        Visibility="Collapsed"
+                        Command="{Binding MoveWindowCommand}" CommandParameter="VISUAL_MONITOR"/>
                 <!-- P&ID 메뉴 임시 숨김(요청) — 기능 유지, 표시만 Collapsed -->
                 <Button Content="{DynamicResource SubMenu_PNID}"
                         Visibility="Collapsed"
