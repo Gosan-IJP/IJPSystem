@@ -31,8 +31,10 @@ namespace IJPSystem.Platform.HMI.Print
         private Shape? _shape;          // line/rect/ellipse/diamond
         private Polyline? _stroke;      // pen/eraser
 
-        private readonly List<UIElement> _added = new();
-        private readonly Stack<UIElement> _redo = new();
+        // 되돌리기 항목은 두 종류다 — 그려 넣은 도형(UIElement)과 픽셀 획(PixelUndo).
+        // 픽셀 획을 도형으로 흉내 내면 획 하나에 사각형이 수만 개 쌓인다.
+        private readonly List<object> _added = new();
+        private readonly Stack<object> _redo = new();
 
         private int _gridN = 2;          // NxN 디더 패턴(2~5)
         private bool[,] _tile = new bool[2, 2];   // NxN 사용자 정의 타일(true=검정). 미리보기에서 클릭 편집.
@@ -130,28 +132,113 @@ namespace IJPSystem.Platform.HMI.Print
         /// </summary>
         private double StrokeUnits => Math.Max(LineWidth * CellW, 0.05);
 
-        private System.Windows.Shapes.Path? _cellPath;   // 픽셀 칠하기 한 획 = 요소 하나(Undo 단위)
-        private GeometryGroup? _cellGeo;
+        // ── 픽셀 층 (그림판처럼 비트맵에 직접 찍는다) ────────────────
+        //
+        // 처음에는 켜진 칸마다 사각형을 만들어 Path 하나에 모았다. 200mm 캔버스에서
+        // 획 하나가 1만 칸을 넘는데, 사각형을 넣을 때마다 WPF 가 그 뭉치를 다시
+        // 삼각형으로 쪼갠다 — 칸 수의 제곱으로 늘어나 몇 초씩 멎었다.
+        // 비트맵은 칸 하나가 비트 하나라, 몇 개를 칠하든 비용이 그만큼만 든다.
+        //
+        // 1bpp(Indexed1) 인 이유: 4724×4724 를 32비트로 잡으면 89MB 다. 이 앱은 x86 이라
+        // 그만한 덩어리를 함부로 못 잡는다. 1bpp 면 같은 크기가 2.8MB 다.
+        private WriteableBitmap? _pixels;
+        private Image? _pixelImage;
+        private byte[] _bits = Array.Empty<byte>();
+        private int _bitStride;
+
         private readonly HashSet<long> _cellSeen = new();
         private Point _lastCellPoint;
+        private List<int>? _strokeCells;        // 이번 획에서 실제로 바뀐 칸 (Undo 용)
+        private bool _strokeOn;
+
+        /// <summary>픽셀 획 하나의 되돌리기 정보. 바뀐 칸만 들고 있어 화면 크기와 무관하게 가볍다.</summary>
+        private sealed record PixelUndo(int[] Cells, bool On);
+
+        private void EnsurePixelLayer()
+        {
+            if (_pixels != null) return;
+
+            _bitStride = (_pxW + 7) / 8;
+            _bits = new byte[_bitStride * _pxH];
+
+            // 팔레트 0 = 투명(안 찍음), 1 = 검정(찍음). 투명이어야 밑에 그린 것이 남는다.
+            _pixels = new WriteableBitmap(_pxW, _pxH, 96, 96, PixelFormats.Indexed1,
+                new BitmapPalette(new List<Color> { Colors.Transparent, Colors.Black }));
+
+            _pixelImage = new Image
+            {
+                Source = _pixels,
+                Width = DrawCanvas.Width,
+                Height = DrawCanvas.Height,
+                IsHitTestVisible = false,
+            };
+            // 확대했을 때 픽셀이 뭉개지면 안 된다 — 네모가 네모로 보여야 한다.
+            RenderOptions.SetBitmapScalingMode(_pixelImage, BitmapScalingMode.NearestNeighbor);
+            RenderOptions.SetEdgeMode(_pixelImage, EdgeMode.Aliased);
+
+            Canvas.SetLeft(_pixelImage, 0);
+            Canvas.SetTop(_pixelImage, 0);
+            DrawCanvas.Children.Add(_pixelImage);
+        }
+
+        /// <summary>비트 하나를 바꾼다. 이미 그 상태면 false — 바뀐 칸만 되돌리기에 쌓는다.</summary>
+        private bool SetPixel(int x, int y, bool on)
+        {
+            int i = y * _bitStride + (x >> 3);
+            byte mask = (byte)(0x80 >> (x & 7));
+            bool cur = (_bits[i] & mask) != 0;
+            if (cur == on) return false;
+            if (on) _bits[i] |= mask; else _bits[i] &= (byte)~mask;
+            return true;
+        }
+
+        /// <summary>바뀐 줄만 화면에 올린다. 전체를 매번 올리면 2.8MB 를 초당 수십 번 복사한다.</summary>
+        private void FlushRows(int y0, int y1)
+        {
+            if (_pixels == null || y1 < y0) return;
+            y0 = Math.Max(0, y0); y1 = Math.Min(_pxH - 1, y1);
+            _pixels.WritePixels(new Int32Rect(0, y0, _pxW, y1 - y0 + 1),
+                                _bits, _bitStride, 0, y0);
+        }
 
         /// <summary>
-        /// (from → to) 구간에서 켜지는 픽셀 칸을 사각형으로 얹는다.
-        /// 어느 칸이 켜지는지는 <see cref="PixelCells"/> 가 정한다 — 화면 없이 검증할 수 있게 떼어 뒀다.
+        /// (from → to) 구간의 픽셀을 켜거나 끈다.
+        /// 어느 칸인지는 <see cref="PixelCells"/> 가 정한다 — 화면 없이 검증할 수 있게 떼어 뒀다.
         /// </summary>
         private void PaintCellLine(Point from, Point to)
         {
-            if (_cellGeo == null) return;
+            EnsurePixelLayer();
+            if (_strokeCells == null) return;
 
             int brush = Math.Max(1, (int)Math.Round(LineWidth));
-            double cw = CellW, ch = CellH;
+            int minY = int.MaxValue, maxY = int.MinValue;
 
             foreach (var c in PixelCells.Stroke(from.X, from.Y, to.X, to.Y,
-                                                cw, ch, brush, _pxW, _pxH, _cellSeen))
+                                                CellW, CellH, brush, _pxW, _pxH, _cellSeen))
             {
-                var (ox, oy) = PixelCells.Origin(c.X, c.Y, cw, ch);
-                _cellGeo.Children.Add(new RectangleGeometry(new Rect(ox, oy, cw, ch)));
+                if (!SetPixel(c.X, c.Y, _strokeOn)) continue;
+                _strokeCells.Add(c.Y * _pxW + c.X);
+                if (c.Y < minY) minY = c.Y;
+                if (c.Y > maxY) maxY = c.Y;
             }
+            FlushRows(minY, maxY);
+        }
+
+        /// <summary>되돌리기/다시하기 — 그때 바뀐 칸만 반대로 되돌린다.</summary>
+        private void ApplyPixelUndo(PixelUndo u, bool redo)
+        {
+            if (_pixels == null || u.Cells.Length == 0) return;
+            bool target = redo ? u.On : !u.On;
+
+            int minY = int.MaxValue, maxY = int.MinValue;
+            foreach (int cell in u.Cells)
+            {
+                int y = cell / _pxW, x = cell % _pxW;
+                SetPixel(x, y, target);
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+            FlushRows(minY, maxY);
         }
 
         // ── 캔버스 드로잉 ────────────────────────────────────────────
@@ -196,19 +283,14 @@ namespace IJPSystem.Platform.HMI.Print
             _drawing = true;
             DrawCanvas.CaptureMouse();
 
-            // 픽셀 편집에서는 획이 선(Polyline)이 아니라 켜진 칸의 모음이다.
+            // 픽셀 편집에서는 획이 선(Polyline)이 아니라 비트맵의 칸을 켜고 끄는 일이다.
             if (PixelEdit && (_tool == Tool.Pen || _tool == Tool.Eraser))
             {
                 _cellSeen.Clear();
-                _cellGeo  = new GeometryGroup();
-                _cellPath = new System.Windows.Shapes.Path
-                {
-                    Data = _cellGeo,
-                    Fill = _tool == Tool.Eraser ? Brushes.White : Brushes.Black,
-                };
-                DrawCanvas.Children.Add(_cellPath);
+                _strokeCells = new List<int>();
+                _strokeOn = _tool != Tool.Eraser;
                 _lastCellPoint = e.GetPosition(DrawCanvas);
-                PaintCellLine(_lastCellPoint, _lastCellPoint);   // 찍기만 해도 한 점은 켜진다
+                PaintCellLine(_lastCellPoint, _lastCellPoint);   // 찍기만 해도 한 칸은 바뀐다
                 return;
             }
 
@@ -264,7 +346,7 @@ namespace IJPSystem.Platform.HMI.Print
 
             if (!_drawing) return;
 
-            if (_cellGeo != null)
+            if (_strokeCells != null)
             {
                 Point raw = e.GetPosition(DrawCanvas);
                 PaintCellLine(_lastCellPoint, raw);
@@ -309,13 +391,22 @@ namespace IJPSystem.Platform.HMI.Print
             _drawing = false;
             DrawCanvas.ReleaseMouseCapture();
 
-            if (_cellPath != null)
-                StatusInfo.Text = $"픽셀 {_cellSeen.Count}개 " +
-                                  (_tool == Tool.Eraser ? "끔" : "켬") + $" (붓 {Math.Max(1, (int)Math.Round(LineWidth))}px)";
+            if (_strokeCells != null)
+            {
+                if (_strokeCells.Count > 0)
+                {
+                    _added.Add(new PixelUndo(_strokeCells.ToArray(), _strokeOn));
+                    _redo.Clear();
+                }
+                StatusInfo.Text = $"픽셀 {_strokeCells.Count}개 {(_strokeOn ? "켬" : "끔")} " +
+                                  $"(붓 {Math.Max(1, (int)Math.Round(LineWidth))}px)";
+                _strokeCells = null;
+                return;
+            }
 
-            UIElement? el = (UIElement?)_cellPath ?? (UIElement?)_stroke ?? _shape;
+            UIElement? el = (UIElement?)_stroke ?? _shape;
             if (el != null) { _added.Add(el); _redo.Clear(); }
-            _stroke = null; _shape = null; _cellPath = null; _cellGeo = null;
+            _stroke = null; _shape = null;
         }
 
         // ── 액션 버튼 ────────────────────────────────────────────────
@@ -330,24 +421,37 @@ namespace IJPSystem.Platform.HMI.Print
             DrawCanvas.Children.Clear();
             _added.Clear(); _redo.Clear();
             _fillPending = false;
+
+            // 픽셀 층도 같이 비운다 — 캔버스에서 뺐어도 비트는 남아 있어서,
+            // 다음에 한 점만 찍으면 지운 그림이 통째로 돌아온다.
+            _pixels = null; _pixelImage = null;
+            _bits = Array.Empty<byte>();
+            _strokeCells = null; _cellSeen.Clear();
+
             UpdateStatus();
         }
 
         private void Undo_Click(object sender, RoutedEventArgs e)
         {
             if (_added.Count == 0) return;
-            var el = _added[_added.Count - 1];
+            var item = _added[_added.Count - 1];
             _added.RemoveAt(_added.Count - 1);
-            DrawCanvas.Children.Remove(el);
-            _redo.Push(el);
+
+            if (item is PixelUndo pu) ApplyPixelUndo(pu, redo: false);
+            else if (item is UIElement el) DrawCanvas.Children.Remove(el);
+
+            _redo.Push(item);
         }
 
         private void Redo_Click(object sender, RoutedEventArgs e)
         {
             if (_redo.Count == 0) return;
-            var el = _redo.Pop();
-            DrawCanvas.Children.Add(el);
-            _added.Add(el);
+            var item = _redo.Pop();
+
+            if (item is PixelUndo pu) ApplyPixelUndo(pu, redo: true);
+            else if (item is UIElement el) DrawCanvas.Children.Add(el);
+
+            _added.Add(item);
         }
 
         private void Fill_Click(object sender, RoutedEventArgs e)

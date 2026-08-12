@@ -857,53 +857,6 @@
          SCROLLBAR STYLE
     ═══════════════════════════════════════ -->
 
-    <Style TargetType="{x:Type ScrollBar}">
-        <Setter Property="Stylus.IsPressAndHoldEnabled" Value="false"/>
-        <Setter Property="Stylus.IsFlicksEnabled"       Value="false"/>
-        <Setter Property="Width"                        Value="8"/>
-        <Setter Property="Background"                   Value="Transparent"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="{x:Type ScrollBar}">
-                    <Grid x:Name="Bg" SnapsToDevicePixels="true">
-                        <Border Background="#1E293B" CornerRadius="4"/>
-                        <Track x:Name="PART_Track" IsDirectionReversed="true">
-                            <Track.Thumb>
-                                <Thumb>
-                                    <Thumb.Style>
-                                        <Style TargetType="{x:Type Thumb}">
-                                            <Setter Property="OverridesDefaultStyle" Value="true"/>
-                                            <Setter Property="IsTabStop"             Value="false"/>
-                                            <Setter Property="Template">
-                                                <Setter.Value>
-                                                    <ControlTemplate TargetType="{x:Type Thumb}">
-                                                        <Border x:Name="rectangle"
-                                                                Background="#475569"
-                                                                CornerRadius="4"
-                                                                Height="{TemplateBinding Height}"
-                                                                Width="{TemplateBinding Width}"/>
-                                                        <ControlTemplate.Triggers>
-                                                            <Trigger Property="IsMouseOver" Value="true">
-                                                                <Setter TargetName="rectangle" Property="Background" Value="#64748B"/>
-                                                            </Trigger>
-                                                            <Trigger Property="IsDragging" Value="true">
-                                                                <Setter TargetName="rectangle" Property="Background" Value="#3B82F6"/>
-                                                            </Trigger>
-                                                        </ControlTemplate.Triggers>
-                                                    </ControlTemplate>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </Style>
-                                    </Thumb.Style>
-                                </Thumb>
-                            </Track.Thumb>
-                        </Track>
-                    </Grid>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
     <!-- 수직 스크롤바 -->
     <Style x:Key="ModernScrollBarStyle" TargetType="{x:Type ScrollBar}">
         <Setter Property="Stylus.IsPressAndHoldEnabled" Value="false"/>
@@ -1013,6 +966,19 @@
             </Trigger>
         </Style.Triggers>
     </Style>
+
+    <!--
+        앱 전체 기본 스크롤바 = 위 스타일 그대로.
+
+        예전에는 키 없는 스타일을 따로 하나 더 두고 있었는데, 그쪽에는 가로 방향
+        처리가 통째로 빠져 있었다. Width=8 이 방향과 무관하게 걸려 가로 막대가
+        8px 짜리 세로 조각이 되고, IsDirectionReversed 도 세로용(true) 그대로라
+        끌면 반대로 움직였다. 트랙을 눌러 한 페이지씩 넘기는 버튼도 없었다.
+        레시피·티칭 화면이 ScrollViewer.Resources 로 ModernScrollBarStyle 을 다시
+        덮어쓰고 있던 이유가 이것이다 — 덮어쓰지 않은 화면(편집 패널 등)은 그대로
+        고장난 막대를 썼다. 정의를 하나로 합친다.
+    -->
+    <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
 
     <!-- ═══════════════════════════════════════
          CARD / TEXT STYLES
