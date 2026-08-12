@@ -13,17 +13,34 @@ namespace IJPSystem.Platform.HMI.Nozzle
         /// <summary>XAML 의 Height 가 담고 있는 열 수. 이보다 많으면 늘어난 만큼만 더한다.</summary>
         private const int BaselineRows = 2;
 
+        private readonly NozzleSelectViewModel _vm;
+
         public NozzleSelectWindow()
         {
             InitializeComponent();
 
-            var vm = new NozzleSelectViewModel();
-            DataContext = vm;
+            _vm = new NozzleSelectViewModel();
+            DataContext = _vm;
 
-            Strip.RangeToggled += (_, e) => vm.ToggleRange(e.From, e.To, e.Add);
-            Strip.Hovered      += (_, n) => vm.SetHover(n);
+            Strip.RangeToggled += (_, e) => _vm.ToggleRange(e.From, e.To, e.Add);
+            Strip.Hovered      += (_, n) => _vm.SetHover(n);
 
-            FitHeightToRows(vm.Rows);
+            FitHeightToRows(_vm.Rows);
+        }
+
+        /// <summary>
+        /// [확인] — 이때만 선택이 장비에 반영된다.
+        /// 취소·Esc·창 닫기(X)는 아무것도 쓰지 않으므로 열기 전 선택이 그대로 남는다.
+        /// </summary>
+        private void Ok_Click(object sender, RoutedEventArgs e)
+        {
+            _vm.Commit();
+
+            // DialogResult 는 ShowDialog 로 연 창에서만 쓸 수 있다. 지금 호출부는 모두 모달이지만,
+            // 누가 Show() 로 열면 여기서 예외가 나 확인 버튼이 죽는다 — 닫기는 어느 쪽이든 된다.
+            try { DialogResult = true; }
+            catch (InvalidOperationException) { /* 모달이 아니다 */ }
+            Close();
         }
 
         /// <summary>

@@ -187,16 +187,27 @@ namespace IJPSystem.Platform.HMI.Nozzle
             }
         }
 
-        /// <summary>선택이 바뀌었을 때 화면과 전역을 한 번에 맞춘다.</summary>
+        /// <summary>
+        /// 선택이 바뀌었을 때 화면을 맞춘다.
+        ///
+        /// <para>
+        /// <b>전역은 건드리지 않는다.</b> 예전에는 여기서 바로 전역에 썼는데, 그러면 창을 닫는
+        /// 순간이 아니라 막대를 한 번 끄는 순간 이미 반영돼 되돌릴 방법이 없었다.
+        /// 전역에 옮기는 것은 [확인]을 눌렀을 때뿐이다(<see cref="Commit"/>).
+        /// </para>
+        /// </summary>
         private void RefreshSelection(string? status)
         {
             Selected = _selected.ToList();
-            NozzleControlGlobal.Instance.UsingNozzle = new SelectedNozzleInfo(_selected, InputText);
 
             OnPropertyChanged(nameof(UsingNozzleText));
             OnPropertyChanged(nameof(CountText));
             if (status != null) StatusText = status;
         }
+
+        /// <summary>지금 선택을 전역에 반영한다 — [확인] 전용.</summary>
+        public void Commit()
+            => NozzleControlGlobal.Instance.UsingNozzle = new SelectedNozzleInfo(_selected, InputText);
 
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? name = null)
