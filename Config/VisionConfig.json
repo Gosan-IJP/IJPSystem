@@ -23,7 +23,7 @@
       "LightChannel": 1,
       "VirtualFailRate": 0.0
     },
-    {
+   {
       "_comment1": "실장 2026-08-03 eBUS Player 확인: JAI GOX-8105M-PGE. 대역폭 역산 2856x2848 Mono8 @12.98FPS(844Mbps).",
       "_comment2": "IP 가 169.254.111.27(링크로컬)이라 전원마다 바뀔 수 있어 비워둠 → MacAddress 로 찾는다. 고정 IP 를 주면 IpAddress 를 채울 것.",
       "_comment3": "★DropWatcherConfig.json 의 MicronsPerPixel 은 이전 하이크로봇 기준값이므로 반드시 재교정할 것.",

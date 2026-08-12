@@ -1,0 +1,43 @@
+{
+  "MotionAxisList": [
+    {
+      "AxisNo": "X",
+      "Name": "X AXIS",
+      "Unit": "mm",
+      "HwAxis": 1,
+      "EncoderPulsePerUnit": 2000,
+      "Home": {
+        "Velocity": 15,
+        "Acceleration": 150,
+        "Deceleration": 150,
+        "SpecVelocity": 2.0
+      }
+    },
+    {
+      "AxisNo": "Y",
+      "Name": "Y AXIS",
+      "Unit": "mm",
+      "HwAxis": 0,
+      "EncoderPulsePerUnit": 1000,
+      "Home": {
+        "Velocity": 10,
+        "Acceleration": 100,
+        "Deceleration": 100,
+        "SpecVelocity": 2.0
+      }
+    },
+    {
+      "AxisNo": "Z",
+      "Name": "Z AXIS",
+      "Unit": "mm",
+      "HwAxis": 2,
+      "EncoderPulsePerUnit": 2000,
+      "Home": {
+        "Velocity": 10,
+        "Acceleration": 100,
+        "Deceleration": 100,
+        "SpecVelocity": 2.0
+      }
+    }
+  ]
+}

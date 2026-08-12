@@ -1,5 +1,5 @@
 {
-  "_comment1": "장비 공통 설정. 장치별 배선/레지스터는 각 장치 파일에 있다 — MotorConfig.json / IO.json / VisionConfig.json / StrobeConfig.json / DropWatcherConfig.json / TriggerChainConfig.json / MeniscusConfig.json.",
+  "_comment1": "장비 공통 설정. 장치별 배선/레지스터는 각 장치 파일에 있다 — MotorConfig.json(Comizoa) / IO.json / VisionConfig.json / StrobeConfig.json / DropWatcherConfig.json / TriggerChainConfig.json / MeniscusConfig.json.",
   "_comment2": "DriverMode = '실물이 달렸나' 판정만 모아 둔 곳. 가상↔실장 전환은 여기 한 곳만 고치면 된다.",
 
   "MachineType": "PULSE",

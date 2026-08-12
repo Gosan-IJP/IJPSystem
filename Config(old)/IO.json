@@ -1,0 +1,162 @@
+{
+  "Digital_IO_List": [
+    {
+      "Address": "X000",
+      "Index": "DI_PRESS_SW_CHUCK_VAC",
+      "Description": "Regulator Pressure Switch #1 (Vacuum, Chuck)",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X001",
+      "Index": "DI_PRESS_SW_DMPC_VAC",
+      "Description": "DMPC Vacuum Switch",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X002",
+      "Index": "DI_PRESS_SW_HEAD",
+      "Description": "Head Pressure Switch",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X003",
+      "Index": "DI_PRESS_SW_3WAY",
+      "Description": "3Way Pressure Switch",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X004",
+      "Index": "DI_LEVEL_SND_LOW",
+      "Description": "Level Sensor Low (BAE00KJ)",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    
+    {
+      "Address": "X005",
+      "Index": "DI_LEVEL_SND_HIGH",
+      "Description": "Level Sensor High (BAE00KJ)",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+
+    {
+      "Address": "X006",
+      "Index": "DI_OVER_FLOW_SND",
+      "Description": "Over Flower Sensor (FS-N11N)",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+   {
+      "Address": "X007",
+      "Index": "DI_DOOR_FRONT",
+      "Description": "정면 DOOR SW",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X008",
+      "Index": "DI_TEMP_LOW_ALARM",
+      "Description": "TEMP LOW ALARM",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+    {
+      "Address": "X009",
+      "Index": "DI_TEMP_HIGH_ALARM",
+      "Description": "TEMP HIGH ALARM",
+      "Type": "N.O",
+      "IoCategory": "Digital Input"
+    },
+
+   {
+      "Address": "Y000",
+      "Index": "DO_SOL_VV_CHUCK_VAC",
+      "Description": "Chuck Table Vacuum Sol' V/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y001",
+      "Index": "DO_SOL_VV_DMPC_VAC",
+      "Description": "DMD Vacuum Sol' V/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y002",
+      "Index": "DO_SOL_VV_HEAD_CONV",
+      "Description": "Head CDA/VAC Convert Sol' V/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y003",
+      "Index": "DO_SOL_VV_INK_1",
+      "Description": "Ink Supply 1 Sol' V/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y004",
+      "Index": "DO_SOL_VV_INK_2",
+      "Description": "Ink Supply 2 Sol' V/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y005",
+      "Index": "DO_SOL_VV_EXHAUST",
+      "Description": "배기 Sol V/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y006",
+      "Index": "DO_MIST_COLLECTOR",
+      "Description": "MIST COLLECTOR",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y007",
+      "Index": "DO_BUZZER",
+      "Description": "BUZZER",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y008",
+      "Index": "DO_TOWER_LAMP_RED",
+      "Description": "LED R (Tower Lamp Red)",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y009",
+      "Index": "DO_TOWER_LAMP_GREEN",
+      "Description": "LED G (Tower Lamp Green)",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y010",
+      "Index": "DO_TOWER_LAMP_BLUE",
+      "Description": "LED B (Tower Lamp Blue)",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    },
+    {
+      "Address": "Y011",
+      "Index": "DO_DRAIN_SV",
+      "Description": "DRAIN S/V",
+      "Type": "N.O",
+      "IoCategory": "Digital Output"
+    }
+
+  ]
+}

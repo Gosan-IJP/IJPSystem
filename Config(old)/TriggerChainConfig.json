@@ -1,0 +1,34 @@
+{
+  "_comment1": "DAQ(Dev1, NI X-Series) 트리거 체인. 밸브·펌프와 무관 — 조명 스트로브 타이밍 전용이다(밸브·펌프는 EtherCAT).",
+  "_comment2": "핵심은 펄스 분주기(랩뷰 'Pules Reducer.vi'): 엔코더/프린트 펄스 → PFI8 → CO Pulse(Ticks) + Digital Edge Start Trigger + Implicit Timing → 분주된 펄스 → PFI13/PFI14 → iCore 스트로브 → LED.",
+  "_comment3": "★위치 동기 스트로브다. 이동 거리(엔코더)에 동기해 일정 간격마다 발광하므로 스테이지 속도가 변해도 촬영 간격(거리)이 일정하다. 시간 기반으로 바꾸면 인쇄 중 촬영 위치가 속도에 따라 흔들린다.",
+
+  "_comment4": "── 입력(PFI) ── 랩뷰 구성 2026-08-07 공유",
+  "_comment5": "PFI8 = 엔코더/프린트 펄스(분주기 소스) · PFI5 = 드랍와처 세팅 화면 트리거(스핏 동기) · PFI0 = 추가 트리거",
+  "SpitPulseTerminal": "/Dev1/PFI8",
+  "SpitSyncTerminal": "/Dev1/PFI5",
+
+  "TimebaseTerminal": "/Dev1/100MHzTimebase",
+  "TimebaseRateHz": 100000000.0,
+
+  "_comment6": "── 카운터 배정 ── 랩뷰 CO Pulse 채널은 ctr0/ctr1/ctr3. 배선 주석은 'PFI13(ctr1 out)→DWC LED, PFI14(ctr2 out)→GVC LED'.",
+  "_comment7": "X-Series 기본 라우팅 ctr0→PFI12, ctr1→PFI13, ctr2→PFI14, ctr3→PFI15. PFI13=DWC LED 가 확정이므로 LED=ctr1, 남는 ctr0 이 분주기다.",
+  "_comment8": "★정정(2026-08-07): 이전 값 LED=ctr0 은 틀렸다 — 발광 펄스가 PFI12 로 나가 아무 데도 연결되지 않는다.",
+  "_comment9": "★미확인 ①GVC LED 가 ctr2(PFI14)인지 ctr3(PFI15)인지 — CO 채널 목록에는 ctr2 가 없고 ctr3 이 있어 둘 중 하나가 어긋난다. ②랩뷰 목록에 카메라 트리거 출력이 없다 — 스트로브 발광만으로 얼리고 카메라는 자유 실행일 수 있다. CamCounter 존재 자체가 확인 대상.",
+  "DividerCounter": "Dev1/ctr0",
+  "LedCounter": "Dev1/ctr1",
+  "CamCounter": "Dev1/ctr3",
+
+  "DivideRatio": 100,
+  "InitialSkipPulses": 0,
+
+  "LedDelayUs": 0.0,
+  "LedWidthUs": 1.0,
+
+  "CamDelayUs": 0.0,
+  "CamWidthUs": 10.0,
+
+  "TriggerOnRisingEdge": true,
+
+  "_comment10": "── 우리 코드가 아직 안 쓰는 것 ── AO Dev1/ao0(용도 미확정) · AI Dev1/ai0~ai4(센서 전압 모니터링) · TDMS 로깅. 필요해지면 별도 설정으로 추가할 것."
+}
