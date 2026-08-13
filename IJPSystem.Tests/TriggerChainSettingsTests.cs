@@ -9,7 +9,10 @@ namespace IJPSystem.Tests
     /// </summary>
     public class TriggerChainSettingsTests
     {
-        private static TriggerChainSettings Cfg() => new();   // 기본값 = Config/TriggerChainConfig.json 과 동일
+        // ※ 코드 기본값과 Config/TriggerChainConfig.json 은 카운터 배정이 서로 다르다
+        //   (코드 분주기=ctr0/LED=ctr1, 파일 분주기=ctr1/LED=ctr0). 실배선 확인 전까지 확정 못 하며,
+        //   실행 시 이기는 쪽은 파일이다 — 그래서 Describe() 로 해석 결과를 로그에 남긴다.
+        private static TriggerChainSettings Cfg() => new();
 
         // ── 틱 환산 ───────────────────────────────────────────────────────────
         [Theory]
@@ -112,6 +115,64 @@ namespace IJPSystem.Tests
             c.CamDelayUs  = 900;
             c.CamWidthUs  = 200;         // 10kHz/10 = 1kHz → 주기 1000µs < 900+200
             Assert.NotNull(c.ValidateTriggerMargin(10000));
+        }
+
+        // ── 카운터 배정 ───────────────────────────────────────────────────────
+        [Fact]
+        public void Validate_DefaultCounters_Ok()
+            => Assert.Null(Cfg().Validate());
+
+        [Theory]
+        [InlineData("Dev1/ctr1", "Dev1/ctr1", "Dev1/ctr3")]   // 분주기 == LED
+        [InlineData("Dev1/ctr0", "Dev1/ctr1", "Dev1/ctr0")]   // 분주기 == Cam
+        [InlineData("Dev1/ctr0", "Dev1/ctr3", "Dev1/ctr3")]   // LED == Cam
+        [InlineData("Dev1/ctr0", "Dev1/CTR0", "Dev1/ctr3")]   // 대소문자만 다른 같은 카운터
+        [InlineData("Dev1/ctr0", " Dev1/ctr0 ", "Dev1/ctr3")] // 공백만 다른 같은 카운터
+        public void Validate_DuplicateCounter_Rejected(string divider, string led, string cam)
+        {
+            // 겹치면 DAQmx 는 두 번째 태스크에서 "리소스 사용 중" 으로 실패하는데,
+            // 그 메시지만으로는 설정이 겹쳤다는 걸 알기 어렵다.
+            var c = Cfg();
+            c.DividerCounter = divider;
+            c.LedCounter     = led;
+            c.CamCounter     = cam;
+            Assert.NotNull(c.Validate());
+        }
+
+        [Fact]
+        public void Validate_EmptyCounter_Rejected()
+        {
+            var c = Cfg();
+            c.LedCounter = "";
+            Assert.NotNull(c.Validate());
+        }
+
+        [Theory]
+        [InlineData("Dev1/ctr0", "PFI12")]
+        [InlineData("Dev1/ctr1", "PFI13")]
+        [InlineData("Dev1/ctr2", "PFI14")]
+        [InlineData("Dev1/ctr3", "PFI15")]
+        [InlineData("ctr1",      "PFI13")]   // 디바이스 접두어가 없어도 같은 결과
+        [InlineData("Dev1/ctr9", "PFI?")]    // X-Series 에 없는 번호는 단정하지 않는다
+        public void DefaultOutputPfi_FollowsXSeriesRouting(string counter, string expected)
+            => Assert.Equal(expected, TriggerChainSettings.DefaultOutputPfi(counter));
+
+        [Fact]
+        public void Describe_ShowsWhichPinEachCounterDrivesTo()
+        {
+            // 이 한 줄과 실제 케이블을 대조하는 것이 배선 확인의 전부다 —
+            // 카운터·핀·분주비가 모두 들어 있어야 한다.
+            var c = Cfg();
+            c.DividerCounter = "Dev1/ctr1";
+            c.LedCounter     = "Dev1/ctr0";
+            c.CamCounter     = "Dev1/ctr3";
+
+            string s = c.Describe();
+
+            Assert.Contains("/Dev1/Ctr1InternalOutput", s);   // 분주 출력 = LED/Cam 의 트리거 소스
+            Assert.Contains("LED ctr0→PFI12", s);
+            Assert.Contains("Cam ctr3→PFI15", s);
+            Assert.Contains($"1/{c.DivideRatio}", s);
         }
     }
 }

@@ -267,16 +267,25 @@ namespace IJPSystem.Drivers.Vision.Ebus
             }
         }
 
+        public void SetHardwareTrigger(string cameraId, bool on)
+        {
+            if (_configMap.TryGetValue(cameraId, out var cfg)) Cam(cameraId)?.SetHardwareTrigger(cfg, on);
+        }
+
+        /// <summary>
+        /// 트리거 동기 프레임 하나. 카메라가 트리거 모드면 파이프라인이 트리거가 올 때까지
+        /// 프레임을 내주지 않으므로, 여기서 하는 "다음 프레임 대기"가 곧 트리거 대기다.
+        ///
+        /// <para><b>횟수가 아니라 취소로 끊는다.</b> 예전에는 10회 시도 후 포기했는데, 분주비 100 에
+        /// 토출 1kHz 면 프레임 간격이 100ms 다 — 정상 동작인데도 금방 포기해 실패로 보였다.
+        /// 기다리는 시간을 정하는 것은 호출부의 토큰이다.</para>
+        /// </summary>
         public async Task<VisionImage> WaitForHardwareTriggerAsync(string cameraId, CancellationToken ct)
         {
-            // TODO(eBUS): TriggerSelector=FrameStart / TriggerMode=On / TriggerSource=LineN 구성.
-            //   노드 경로·Line 번호는 JAI·하이크로봇 GenICam 트리를 실측해야 확정된다(ImaqdxTriggerConfig 참고).
-            //   지금은 연속 획득 파이프라인에서 다음 프레임을 기다린다 — 스트로브가 프레임에 맞춰 발광하면
-            //   실사용상 동일하게 동작한다.
             var cam = Cam(cameraId);
             if (cam == null) return VisionImage.Invalid(cameraId);
 
-            for (int i = 0; i < 10 && !ct.IsCancellationRequested; i++)
+            while (!ct.IsCancellationRequested)
             {
                 var img = await CaptureAsync(cameraId, saveToDisk: false).ConfigureAwait(false);
                 if (img.IsValid) return img;

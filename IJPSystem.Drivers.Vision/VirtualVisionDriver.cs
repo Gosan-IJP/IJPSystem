@@ -21,8 +21,17 @@ namespace IJPSystem.Drivers.Vision
         private readonly Dictionary<string, int>               _captureSeq = new();  // 카메라별 캡처 순번(액적 낙하 시뮬레이션용)
         private readonly Random _rng = new();
 
-        // 하드웨어 트리거 시뮬레이션용 (CameraId → TCS)
-        private readonly Dictionary<string, TaskCompletionSource<VisionImage>> _triggerWaiters = new();
+        // 하드웨어 트리거 시뮬레이션 (CameraId → 대기자들). 라이브뷰와 측정이 동시에 기다릴 수 있어
+        // 카메라당 여러 대기자를 받는다 — 한 칸짜리로 두면 먼저 기다리던 쪽이 영영 안 깨어난다.
+        private readonly Dictionary<string, List<TaskCompletionSource<VisionImage>>> _triggerWaiters = new();
+        private readonly HashSet<string> _hwTriggerOn = new();
+        private readonly object _triggerSync = new();
+
+        /// <summary>
+        /// 트리거 모드에서 프레임 하나를 기다리는 한도[ms]. 실장 드라이버의 그랩 타임아웃과 같은 값 —
+        /// 넘기면 실장과 똑같이 Invalid 를 돌려준다(카메라가 죽은 게 아니라 트리거가 안 온 것).
+        /// </summary>
+        public int TriggerGrabTimeoutMs { get; set; } = 1000;
 
         public bool   IsConnected   { get; private set; } = false;
         public string ImageSavePath { get; set; } = @"C:\Logs\Vision";
@@ -92,9 +101,13 @@ namespace IJPSystem.Drivers.Vision
         public void Disconnect()
         {
             IsConnected = false;
-            foreach (var tcs in _triggerWaiters.Values)
-                tcs.TrySetCanceled();
-            _triggerWaiters.Clear();
+            lock (_triggerSync)
+            {
+                foreach (var list in _triggerWaiters.Values)
+                    foreach (var tcs in list) tcs.TrySetCanceled();
+                _triggerWaiters.Clear();
+                _hwTriggerOn.Clear();
+            }
             Debug.WriteLine("[Virtual Vision] Disconnected.");
         }
 
@@ -141,7 +154,39 @@ namespace IJPSystem.Drivers.Vision
         // 3. 촬영
         // ────────────────────────────────────────────────
 
+        /// <summary>
+        /// 촬영. <b>카메라가 트리거 모드면 트리거가 올 때까지 프레임을 내주지 않는다</b> —
+        /// 실장 카메라와 같다. 이 시늉을 내는 이유는 트리거 모드를 켜 놓고 끄지 않았을 때
+        /// 생기는 "화면이 멎는" 실패가 <b>가상 모드에서도 그대로 재현</b>돼야 하기 때문이다.
+        /// 무해하게 넘겨 버리면 실장에 올린 뒤에야 드러난다.
+        ///
+        /// <para>기다리는 한도는 <see cref="TriggerGrabTimeoutMs"/> — 실장 드라이버의
+        /// 그랩 타임아웃(1초)과 같은 값이고, 넘기면 실장과 똑같이 Invalid 를 돌려준다.</para>
+        /// </summary>
         public async Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true)
+        {
+            if (!_statusMap.ContainsKey(cameraId))
+                return VisionImage.Invalid(cameraId);
+
+            if (IsHardwareTriggerOn(cameraId))
+            {
+                var waiter = RegisterWaiter(cameraId);
+                var done   = await Task.WhenAny(waiter.Task, Task.Delay(TriggerGrabTimeoutMs));
+                if (done != waiter.Task)
+                {
+                    RemoveWaiter(cameraId, waiter);
+                    Debug.WriteLine($"[Virtual Vision] 트리거 대기 타임아웃: {cameraId} " +
+                                    $"({TriggerGrabTimeoutMs}ms) — 트리거 체인이 돌고 있는지 확인하세요.");
+                    return VisionImage.Invalid(cameraId);
+                }
+                return await waiter.Task;
+            }
+
+            return await CaptureCore(cameraId, saveToDisk);
+        }
+
+        /// <summary>트리거 모드와 무관하게 프레임을 만든다 — 트리거가 도착했을 때 쓰는 실제 촬영부.</summary>
+        private async Task<VisionImage> CaptureCore(string cameraId, bool saveToDisk)
         {
             if (!_statusMap.TryGetValue(cameraId, out var status))
                 return VisionImage.Invalid(cameraId);
@@ -203,32 +248,102 @@ namespace IJPSystem.Drivers.Vision
             return image;
         }
 
+        /// <summary>
+        /// 트리거 모드 전환. 가상이라도 <b>상태를 실제로 들고 있는다</b> — 이래야
+        /// "켜 놓고 안 끄면 화면이 멎는다" 는 실장의 실패가 가상에서도 재현된다.
+        /// </summary>
+        public void SetHardwareTrigger(string cameraId, bool on)
+        {
+            lock (_triggerSync)
+            {
+                if (on) _hwTriggerOn.Add(cameraId);
+                else    _hwTriggerOn.Remove(cameraId);
+            }
+
+            // 끌 때는 기다리던 쪽을 풀어 준다. 안 그러면 해제한 뒤에도 타임아웃까지 멎어 있다.
+            if (!on) ReleaseWaiters(cameraId);
+
+            Debug.WriteLine($"[Virtual Vision] HW trigger {(on ? "ON" : "OFF")}: {cameraId}");
+        }
+
+        /// <summary>이 카메라가 지금 트리거 모드인지 — 검증·테스트용.</summary>
+        public bool IsHardwareTriggerOn(string cameraId)
+        {
+            lock (_triggerSync) return _hwTriggerOn.Contains(cameraId);
+        }
+
         public async Task<VisionImage> WaitForHardwareTriggerAsync(string cameraId, CancellationToken ct)
         {
             if (!_statusMap.ContainsKey(cameraId))
                 return VisionImage.Invalid(cameraId);
 
-            var tcs = new TaskCompletionSource<VisionImage>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _triggerWaiters[cameraId] = tcs;
-
-            ct.Register(() => tcs.TrySetCanceled());
+            var tcs = RegisterWaiter(cameraId);
+            using var reg = ct.Register(() => tcs.TrySetCanceled());
 
             Debug.WriteLine($"[Virtual Vision] Waiting HW trigger: {cameraId}");
             return await tcs.Task;
         }
 
         /// <summary>
-        /// 외부에서 하드웨어 트리거를 시뮬레이션할 때 호출합니다.
+        /// 외부에서 하드웨어 트리거를 시뮬레이션할 때 호출합니다
+        /// (<c>VirtualTriggerChain</c> 이 분주 주기마다 부른다).
         /// </summary>
         public async Task SimulateHardwareTrigger(string cameraId)
         {
-            if (!_triggerWaiters.TryGetValue(cameraId, out var tcs)) return;
+            // 기다리는 쪽이 없으면 프레임을 만들 이유가 없다 — 만들어 봐야 버려진다.
+            if (!HasWaiter(cameraId)) return;
 
             // saveToDisk:false — 트리거 체인이 초당 수~수십 회 호출한다. 기본값(true)으로 두면
             // 프레임마다 BMP 가 쌓여 디스크가 찬다(예전 CAM_DW 폭주와 같은 경로).
-            var image = await CaptureAsync(cameraId, saveToDisk: false);
-            tcs.TrySetResult(image);
-            _triggerWaiters.Remove(cameraId);
+            // CaptureCore 를 직접 부른다 — CaptureAsync 로 가면 트리거 대기에 자기가 걸린다.
+            var image = await CaptureCore(cameraId, saveToDisk: false);
+
+            foreach (var tcs in TakeWaiters(cameraId)) tcs.TrySetResult(image);
+        }
+
+        // ── 트리거 대기자 관리 ────────────────────────────────────────────────
+        // 대기자가 하나뿐이라고 가정하면 안 된다: 라이브뷰 타이머와 측정이 동시에 기다릴 수 있고,
+        // 예전처럼 Dictionary 한 칸에 덮어쓰면 먼저 기다리던 쪽이 영영 안 깨어난다.
+
+        private TaskCompletionSource<VisionImage> RegisterWaiter(string cameraId)
+        {
+            var tcs = new TaskCompletionSource<VisionImage>(TaskCreationOptions.RunContinuationsAsynchronously);
+            lock (_triggerSync)
+            {
+                if (!_triggerWaiters.TryGetValue(cameraId, out var list))
+                    _triggerWaiters[cameraId] = list = new List<TaskCompletionSource<VisionImage>>();
+                list.Add(tcs);
+            }
+            return tcs;
+        }
+
+        private void RemoveWaiter(string cameraId, TaskCompletionSource<VisionImage> tcs)
+        {
+            lock (_triggerSync)
+                if (_triggerWaiters.TryGetValue(cameraId, out var list)) list.Remove(tcs);
+        }
+
+        private bool HasWaiter(string cameraId)
+        {
+            lock (_triggerSync)
+                return _triggerWaiters.TryGetValue(cameraId, out var list) && list.Count > 0;
+        }
+
+        private List<TaskCompletionSource<VisionImage>> TakeWaiters(string cameraId)
+        {
+            lock (_triggerSync)
+            {
+                if (!_triggerWaiters.TryGetValue(cameraId, out var list)) return new();
+                _triggerWaiters.Remove(cameraId);
+                return list;
+            }
+        }
+
+        /// <summary>트리거 모드를 껐을 때 기다리던 쪽을 즉시 풀어 준다(프레임 없이 무효로).</summary>
+        private void ReleaseWaiters(string cameraId)
+        {
+            foreach (var tcs in TakeWaiters(cameraId))
+                tcs.TrySetResult(VisionImage.Invalid(cameraId));
         }
 
         // ────────────────────────────────────────────────

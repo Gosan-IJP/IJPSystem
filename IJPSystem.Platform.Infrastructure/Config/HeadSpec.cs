@@ -41,8 +41,122 @@ namespace IJPSystem.Platform.Infrastructure.Config
         /// <summary>한 열의 노즐 수. 나누어떨어지지 않으면 올림 — 뒤쪽 노즐이 빠지지 않게.</summary>
         public static int NozzlesPerRow => (int)Math.Ceiling(Count / (double)Math.Max(1, Rows));
 
+        // ── 칩이 엇갈린 헤드 (Epson S3200) ────────────────────────────────────
+        // 칩 수가 1 이면 지금까지의 헤드(S800)와 완전히 같게 동작한다 — 설정을 넣지 않은
+        // 장비는 아무 영향을 받지 않는다. 값을 넣는 순간부터 칩 배치가 쓰인다.
+
+        private static int? _chipCount;
+
+        /// <summary>헤드 안의 칩 수. 1 이면 칩 없는 헤드.</summary>
+        public static int ChipCount => _chipCount ??= ReadInt(MachineSettingsStore.Keys.HeadChipCount, 1);
+
+        /// <summary>칩이 엇갈린 헤드인가 — 이게 true 라야 <see cref="ChipLayout"/> 이 의미를 갖는다.</summary>
+        public static bool HasChips => ChipCount > 1;
+
+        private static int? _nozzlesPerChipRow;
+
+        /// <summary>
+        /// <b>칩 하나의 한 열</b> 노즐 수. 설정이 없으면 전체를 칩·열로 나눠 되돌린다
+        /// (칩 없는 헤드에서는 <see cref="NozzlesPerRow"/> 와 같은 값이 된다).
+        /// </summary>
+        public static int NozzlesPerChipRow =>
+            _nozzlesPerChipRow ??= ReadInt(
+                MachineSettingsStore.Keys.HeadNozzlesPerRow,
+                (int)Math.Ceiling(Count / (double)Math.Max(1, ChipCount * Rows)));
+
+        /// <summary>
+        /// 노즐 선택 막대가 그릴 <b>줄 수</b> = 칩 수 × 열 수.
+        ///
+        /// <para>S3200 은 4칩 × 2열이라 <b>8줄</b>이 된다. 전체를 2줄로만 그리면 한 줄에 1,600개가
+        /// 들어가 칩 경계가 안 보이고, 겹치는 60개가 어디인지도 짚을 수 없다. 화면이 헤드 생김새와
+        /// 같아야 "칩3 A열만 끄기" 같은 조작이 눈으로 된다.</para>
+        /// </summary>
+        public static int SelectionRows => Math.Max(1, ChipCount * Rows);
+
+        /// <summary>
+        /// 선택 막대 한 줄에 들어가는 노즐 수. 줄 수로 나눈 값이라
+        /// <see cref="SelectionRows"/> 와 곱하면 전체를 덮는다.
+        /// </summary>
+        public static int NozzlesPerSelectionRow =>
+            (int)Math.Ceiling(Count / (double)SelectionRows);
+
+        /// <summary>
+        /// 칩 배치. <see cref="HasChips"/> 가 false 면 null — 칩 없는 헤드에 억지로 칩 모델을
+        /// 씌우면 좌표가 조용히 달라진다(겹침 0, 칩 1개짜리도 "칩 헤드"로 보이게 된다).
+        ///
+        /// <para>값이 하나라도 빠져 있으면 S3200 도면값으로 채운다 — 지금 도입하는 헤드가
+        /// 그것뿐이라, 부분 입력이 엉뚱한 폭으로 조용히 굳는 것보다 낫다.</para>
+        /// </summary>
+        public static Print.ChipHeadLayout? ChipLayout
+        {
+            get
+            {
+                if (!HasChips) return null;
+                return _chipLayout ??= BuildChipLayout();
+            }
+        }
+
+        private static Print.ChipHeadLayout? _chipLayout;
+
+        private static Print.ChipHeadLayout BuildChipLayout()
+        {
+            var order = ParseNumbering(ReadString(MachineSettingsStore.Keys.HeadNozzleNumbering));
+
+            return new Print.ChipHeadLayout(
+                chipCount:        ChipCount,
+                nozzlesPerRow:    ReadInt(MachineSettingsStore.Keys.HeadNozzlesPerRow,
+                                          Print.ChipHeadLayout.S3200NozzlesPerRow),
+                overlapNozzles:   ReadInt(MachineSettingsStore.Keys.HeadOverlapNozzles,
+                                          Print.ChipHeadLayout.S3200OverlapNozzles),
+                effectivePitchUm: ReadDouble(MachineSettingsStore.Keys.HeadPitchUm,
+                                             Print.ChipHeadLayout.S3200EffectivePitchUm),
+                rowGapUm:         ReadDouble(MachineSettingsStore.Keys.HeadRowGapUm,
+                                             Print.ChipHeadLayout.S3200RowGapUm),
+                chipGapUm:        ReadDouble(MachineSettingsStore.Keys.HeadChipGapUm,
+                                             Print.ChipHeadLayout.S3200ChipGapUm),
+                order:            order,
+                firstNozzleNumber: FirstNozzle);
+        }
+
+        /// <summary>
+        /// 번호 규약 문자열 해석. <b>모르는 값이면 기본값으로 조용히 넘어가지 않는다</b> —
+        /// 오타 하나로 패턴이 통째로 재배치되는데 화면에는 아무 표시가 없다.
+        /// </summary>
+        public static Print.ChipHeadLayout.Numbering ParseNumbering(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return Print.ChipHeadLayout.Numbering.ChipRowBlock;
+            if (Enum.TryParse<Print.ChipHeadLayout.Numbering>(value.Trim(), ignoreCase: true, out var parsed))
+                return parsed;
+
+            throw new ArgumentException(
+                $"알 수 없는 노즐 번호 규약 '{value}'. " +
+                $"{string.Join(" / ", Enum.GetNames(typeof(Print.ChipHeadLayout.Numbering)))} 중 하나여야 합니다.");
+        }
+
         /// <summary>장비 설정을 고친 뒤 부른다. 다음 접근에서 다시 읽는다.</summary>
-        public static void Reload() { _count = null; _rows = null; }
+        public static void Reload()
+        {
+            _count = null; _rows = null;
+            _chipCount = null; _chipLayout = null; _nozzlesPerChipRow = null;
+        }
+
+        private static double ReadDouble(string key, double fallback)
+        {
+            if (!MachineSettings.IsReady) return fallback;
+            try
+            {
+                double v = MachineSettings.Current.GetDouble(key, fallback);
+                return v > 0 ? v : fallback;
+            }
+            catch { return fallback; }
+        }
+
+        private static string ReadString(string key)
+        {
+            if (!MachineSettings.IsReady) return "";
+            try { return MachineSettings.Current.GetString(key, ""); }
+            catch { return ""; }
+        }
 
         private static int ReadInt(string key, int fallback)
         {

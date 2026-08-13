@@ -238,13 +238,21 @@ namespace IJPSystem.Drivers.Vision.Hikrobot
             }
         }
 
+        public void SetHardwareTrigger(string cameraId, bool on)
+        {
+            if (_configMap.TryGetValue(cameraId, out var cfg)) Cam(cameraId)?.SetHardwareTrigger(cfg, on);
+        }
+
+        /// <summary>
+        /// 트리거 동기 프레임 하나. 카메라가 트리거 모드면 스트림이 트리거가 올 때까지 프레임을
+        /// 내주지 않으므로, 여기서 하는 "다음 프레임 대기"가 곧 트리거 대기다.
+        /// 횟수가 아니라 취소 토큰으로 끊는다(분주비가 크면 프레임 간격이 길어 금방 포기하면 안 된다).
+        /// </summary>
         public async Task<VisionImage> WaitForHardwareTriggerAsync(string cameraId, CancellationToken ct)
         {
-            // TODO(Hikrobot): TriggerMode=On / TriggerSource=LineN 구성. Line 번호는 실배선 확인 필요.
-            //   지금은 연속 획득에서 다음 프레임을 기다린다.
             if (Cam(cameraId) == null) return VisionImage.Invalid(cameraId);
 
-            for (int i = 0; i < 10 && !ct.IsCancellationRequested; i++)
+            while (!ct.IsCancellationRequested)
             {
                 var img = await CaptureAsync(cameraId, saveToDisk: false).ConfigureAwait(false);
                 if (img.IsValid) return img;

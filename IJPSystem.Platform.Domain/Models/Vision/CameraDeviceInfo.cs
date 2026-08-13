@@ -54,6 +54,27 @@ namespace IJPSystem.Platform.Domain.Models.Vision
         /// </summary>
         public string ExposureNode { get; set; } = string.Empty;
         public string GainNode { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 하드웨어 트리거 입력 라인(GenICam <c>TriggerSource</c>) — 예: <c>Line0</c>, <c>Line1</c>.
+        ///
+        /// <para><b>비어 있으면 하드웨어 트리거를 쓰지 않는다</b>(자유 실행). 이 값이 있어야만
+        /// 드랍와처가 트리거 체인을 켤 때 카메라를 트리거 모드로 바꾼다.</para>
+        ///
+        /// <para>Line 번호는 <b>배선으로 정해진다</b> — NI 카운터 출력(PFI)이 카메라의 몇 번
+        /// 입력 핀에 꽂혔는지에 달렸다. 그래서 코드에 박지 않고 여기 둔다. 나머지 노드
+        /// (TriggerSelector/TriggerMode/TriggerActivation)는 GenICam 표준이라 기본값으로 맞는다.</para>
+        /// </summary>
+        public string TriggerSource { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 트리거가 무엇을 개시할지. 표준값 <c>FrameStart</c> — 트리거 1회당 프레임 1장.
+        /// <c>AcquisitionStart</c> 로 두면 첫 트리거에 연속 촬영이 시작돼 동기가 깨진다.
+        /// </summary>
+        public string TriggerSelector { get; set; } = "FrameStart";
+
+        /// <summary>트리거 엣지. NI 체인의 <c>TriggerOnRisingEdge</c> 와 맞춰야 한다.</summary>
+        public string TriggerActivation { get; set; } = "RisingEdge";
         public int PixelWidth { get; set; } = 1920;
         public int PixelHeight { get; set; } = 1080;
         public double DefaultExposureMs { get; set; } = 10.0;

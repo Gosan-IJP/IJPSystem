@@ -26,6 +26,18 @@ namespace IJPSystem.Platform.Domain.Interfaces
         Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true);
         Task<VisionImage> WaitForHardwareTriggerAsync(string cameraId, CancellationToken ct);
 
+        /// <summary>
+        /// 카메라를 하드웨어 트리거 모드로 전환하거나 자유 실행으로 되돌린다.
+        ///
+        /// <para><b>왜 켜고 끄는가</b> — 트리거 모드에서는 카메라가 트리거가 올 때만 프레임을
+        /// 내보내므로, 켜 둔 채로 라이브뷰를 열면 화면이 멎는다. 트리거 체인이 도는 동안만 켠다.</para>
+        ///
+        /// <para>설정(VisionConfig 의 <c>TriggerSource</c>)이 비어 있거나 기종이 지원하지 않으면
+        /// <b>조용히 자유 실행으로 남는다</b> — 예외를 던지지 않는다. 촬영 자체는 유효하고,
+        /// 다만 스트로브와 동기되지 않았다는 사실이 로그에 남는다.</para>
+        /// </summary>
+        void SetHardwareTrigger(string cameraId, bool on);
+
         // ── 4. 검사 ──
         Task<InspectionResult> InspectAsync(string cameraId, VisionImage image);
         Task<InspectionResult> CaptureAndInspectAsync(string cameraId);

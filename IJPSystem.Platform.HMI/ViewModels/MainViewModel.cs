@@ -334,6 +334,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             RecipeVM = new RecipeViewModel(SharedAxisList, this.AddLog, code => _alarmVM.RaiseAlarm(code));
 
+            SubscribeSpitLog();
+
             var motionAdapter = new Services.MotionServiceAdapter(this);
             _mainDashboardVM = new MainDashboardViewModel(
                     this.AddLog,
@@ -461,6 +463,24 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 foreach (var config in configs)
                     SharedAxisList.Add(new AxisViewModel(motionDriver, config, this));
             }
+        }
+
+        // 스핏은 화면이 아니라 SpitService 한 곳에서 일어난다(어느 화면에서 눌렀든 같은 헤드).
+        // 그래서 로그도 거기서 내는데, <b>받는 쪽이 없어 전부 버려지고 있었다</b> — 토출을 해도
+        // 로그가 한 줄도 안 남던 원인이다(2026-08-13). 정적 이벤트라 프로세스에 한 번만 잇는다.
+        private static bool _spitLogHooked;
+
+        private void SubscribeSpitLog()
+        {
+            if (_spitLogHooked) return;      // 창을 다시 열어도 두 번 잇지 않는다(로그 중복 방지)
+            _spitLogHooked = true;
+
+            SpitService.Log += msg =>
+            {
+                // 사유가 있는 실패는 경고로 올린다 — 정보로 묻히면 토출이 안 된 걸 놓친다.
+                var level = msg.Contains("실패") || msg.Contains("무시된") ? LogLevel.Warning : LogLevel.Info;
+                AddLog($"[HEAD] {msg}", level);
+            };
         }
 
         public void AddLog(string message, LogLevel level = LogLevel.Info)

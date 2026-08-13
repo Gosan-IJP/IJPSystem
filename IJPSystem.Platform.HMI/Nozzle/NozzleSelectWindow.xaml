@@ -2,12 +2,14 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:nz="clr-namespace:IJPSystem.Platform.HMI.Nozzle"
-        Title="Nozzle Select" Height="500" MinHeight="440" Width="900" MinWidth="700"
+        Title="Nozzle Select" Height="560" MinHeight="560" Width="900" MinWidth="700"
         WindowStartupLocation="CenterOwner"
         Background="#0F172A" Foreground="#E2E8F0"
         FontFamily="Segoe UI">
-    <!-- Height 는 2열(BaselineRows) 기준값이다. 열이 더 많으면 코드비하인드가 줄 수만큼 늘린다 —
-         4열 헤드에서 창이 잘려 열 때마다 손으로 늘려 잡아야 했다. -->
+    <!-- Height 는 2줄(BaselineRows) 기준값이다. 줄이 더 많으면 코드비하인드가 줄 수만큼 늘린다.
+
+         MinHeight 는 <b>막대를 뺀 나머지가 다 들어가는 높이</b>다(고정 내용 ≈400 + 막대 최소 120).
+         이보다 작게 잡으면 창을 줄였을 때 다시 [확인]/[취소]가 잘린다 — 440 이었을 때가 그랬다. -->
     <Window.Resources>
         <Style x:Key="LightBox" TargetType="TextBox">
             <Setter Property="Background"      Value="#E5E7EB"/>
@@ -49,13 +51,19 @@
     </Window.Resources>
 
     <Grid Margin="16">
+        <!-- ★ 남는 공간을 갖는 행은 <b>노즐 막대 하나뿐</b>이다(Height="*").
+             나머지는 전부 Auto — 즉 창이 작아지면 막대가 줄고 그 안에서 스크롤되며,
+             [확인]/[취소]는 어떤 높이에서도 화면에 남는다.
+
+             예전에는 막대도 Auto 라 8줄(S3200 = 4칩 × 2열)이면 제 크기를 그대로 요구했고,
+             창 높이는 작업 영역에서 잘리므로 아래 버튼이 밖으로 밀려 눌 수가 없었다. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>   <!-- 제목 + 개수 + 도움말 -->
-            <RowDefinition Height="Auto"/>   <!-- 노즐 막대 -->
+            <RowDefinition Height="*"/>      <!-- 노즐 막대 — 여기만 늘고 준다 -->
             <RowDefinition Height="Auto"/>   <!-- 선택 구간 -->
             <RowDefinition Height="Auto"/>   <!-- 빠른 선택 -->
             <RowDefinition Height="Auto"/>   <!-- 명령 입력 -->
-            <RowDefinition Height="*"/>      <!-- 도움말(접힘) -->
+            <RowDefinition Height="Auto"/>   <!-- 도움말(접힘) -->
             <RowDefinition Height="Auto"/>   <!-- 상태 -->
             <RowDefinition Height="Auto"/>   <!-- 확인 / 취소 -->
         </Grid.RowDefinitions>
@@ -76,6 +84,14 @@
         <!-- ── 노즐 막대 ────────────────────────────────────────── -->
         <Border Grid.Row="1" Background="#0D1117" BorderBrush="#1E293B" BorderThickness="1"
                 CornerRadius="6" Padding="10,8">
+            <!-- 높이 상한은 바깥 행(Height="*")이 정한다 — 여기서 MaxHeight 로 고정하면
+                 큰 화면에서 남는 공간을 못 쓴다. 줄이 많으면(S3200 = 8줄) 여기서 스크롤된다.
+                 MinHeight: 창을 아무리 줄여도 막대가 한 줄은 보이게. -->
+            <ScrollViewer MinHeight="120" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <ScrollViewer.Resources>
+                    <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
+                </ScrollViewer.Resources>
             <StackPanel>
                 <nz:NozzleStrip x:Name="Strip"
                                 FirstNozzle="{Binding FirstNozzle}"
@@ -86,6 +102,7 @@
                 <TextBlock Text="드래그로 선택 · 선택된 곳을 다시 드래그하면 해제 · 줄을 넘겨 끌면 그 사이 번호가 모두 잡힙니다"
                            Foreground="#475569" FontSize="11" Margin="0,6,0,0"/>
             </StackPanel>
+            </ScrollViewer>
         </Border>
 
         <!-- ── 선택 구간 ────────────────────────────────────────── -->
@@ -103,13 +120,57 @@
         </Grid>
 
         <!-- ── 빠른 선택 ────────────────────────────────────────── -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,10,0,0">
-            <Button Style="{StaticResource NzBtn}" Content="전체" Margin="0,0,6,0" Command="{Binding SelectAllCommand}"/>
-            <Button Style="{StaticResource NzBtn}" Content="홀수" Margin="0,0,6,0" Command="{Binding SelectOddCommand}"/>
-            <Button Style="{StaticResource NzBtn}" Content="짝수" Margin="0,0,6,0" Command="{Binding SelectEvenCommand}"/>
-            <Button Style="{StaticResource NzBtn}" Content="반전" Margin="0,0,6,0" Command="{Binding InvertCommand}"/>
-            <Button Style="{StaticResource NzBtn}" Content="해제" Command="{Binding ClearCommand}"
-                    Background="#7F1D1D" BorderBrush="#B91C1C"/>
+        <StackPanel Grid.Row="3" Margin="0,10,0,0">
+            <StackPanel Orientation="Horizontal">
+                <Button Style="{StaticResource NzBtn}" Content="전체" Margin="0,0,6,0" Command="{Binding SelectAllCommand}"/>
+                <Button Style="{StaticResource NzBtn}" Content="홀수" Margin="0,0,6,0" Command="{Binding SelectOddCommand}"/>
+                <Button Style="{StaticResource NzBtn}" Content="짝수" Margin="0,0,6,0" Command="{Binding SelectEvenCommand}"/>
+                <Button Style="{StaticResource NzBtn}" Content="반전" Margin="0,0,6,0" Command="{Binding InvertCommand}"/>
+                <Button Style="{StaticResource NzBtn}" Content="해제" Command="{Binding ClearCommand}"
+                        Background="#7F1D1D" BorderBrush="#B91C1C"/>
+            </StackPanel>
+
+            <!-- ── 칩 / 열 단위 ─────────────────────────────────
+                 헤드가 칩·열로 나뉘어 있으므로 그 단위로 집는 버튼을 둔다. 800개(S3200 은 3,200)를
+                 막대에서 손으로 끌어 칩 경계를 정확히 맞추는 것은 사실상 불가능하다.
+                 개수는 헤드 설정을 따라간다 — 칩이 1개면 칩 줄 자체가 사라진다. -->
+            <ItemsControl ItemsSource="{Binding ChipButtons}" Margin="0,8,0,0"
+                          Visibility="{Binding HasChips, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <!-- 왼쪽=더하기 / 오른쪽=빼기. 한 칩만 빼는 조작이 잦아 따로 버튼을 두지 않았다. -->
+                        <Button Style="{StaticResource NzBtn}" Content="{Binding Label}" MinWidth="64"
+                                Margin="0,0,6,0" Command="{Binding AddCommand}"
+                                Background="#1E3A5F" BorderBrush="#3B82F6"
+                                ToolTip="왼쪽 클릭 = 선택에 더함 / 오른쪽 클릭 = 뺌">
+                            <Button.InputBindings>
+                                <MouseBinding MouseAction="RightClick" Command="{Binding RemoveCommand}"/>
+                            </Button.InputBindings>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <ItemsControl ItemsSource="{Binding RowButtons}" Margin="0,6,0,0">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Style="{StaticResource NzBtn}" Content="{Binding Label}" MinWidth="64"
+                                Margin="0,0,6,0" Command="{Binding AddCommand}"
+                                Background="#312E81" BorderBrush="#6366F1"
+                                ToolTip="왼쪽 클릭 = 선택에 더함 / 오른쪽 클릭 = 뺌 (칩 전체에 걸친 그 열)">
+                            <Button.InputBindings>
+                                <MouseBinding MouseAction="RightClick" Command="{Binding RemoveCommand}"/>
+                            </Button.InputBindings>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </StackPanel>
 
         <!-- ── 명령 입력 ────────────────────────────────────────── -->
@@ -145,12 +206,17 @@
                     Background="#1D4ED8" BorderBrush="#3B82F6"/>
         </Grid>
 
-        <!-- ── 도움말 (기본 접힘) ───────────────────────────────── -->
+        <!-- ── 도움말 (기본 접힘) ─────────────────────────────────
+             이 행은 Auto 다 — 펼치면 제 크기를 그대로 요구하므로 MaxHeight 가 없으면
+             [확인]/[취소]를 다시 밀어낸다. 넘치는 만큼은 안에서 스크롤된다. -->
         <Border Grid.Row="5" Margin="0,10,0,0" Background="#33415580" CornerRadius="6"
-                BorderBrush="#1E293B" BorderThickness="1"
+                BorderBrush="#1E293B" BorderThickness="1" MaxHeight="240"
                 Visibility="{Binding IsChecked, ElementName=HelpToggle,
                                      Converter={StaticResource BooleanToVisibilityConverter}}">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="12">
+                <ScrollViewer.Resources>
+                    <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
+                </ScrollViewer.Resources>
                 <TextBlock Foreground="#CBD5E1" FontSize="13" LineHeight="21">
                     <Run FontWeight="Bold" Foreground="#93C5FD">입력 문법</Run><LineBreak/>
                     <Run>ADD( ) 추가 · DEL( ) 제거 · 구분자 ;  · 함수 ODD / EVEN</Run><LineBreak/>

@@ -297,6 +297,51 @@ namespace IJPSystem.Drivers.Vision.Ebus
         }
 
         /// <summary>
+        /// 하드웨어 트리거 모드 On/Off. 켜면 카메라는 <b>트리거가 올 때만</b> 프레임을 내보낸다 —
+        /// 이래야 스트로브가 얼린 그 순간이 찍힌다. 끄면 자유 실행(라이브뷰)으로 돌아간다.
+        ///
+        /// <para><see cref="CameraDeviceInfo.TriggerSource"/> 가 비어 있으면 <b>아무것도 하지 않는다.</b>
+        /// Line 번호를 모르는 채로 TriggerMode 만 On 하면 오지 않는 트리거를 기다리며
+        /// 화면이 통째로 멎는다 — 미설정은 자유 실행으로 두는 편이 안전하다.</para>
+        ///
+        /// <para>쓰기 순서가 중요하다: Selector 를 먼저 정해야 이어지는 Mode/Source/Activation 이
+        /// 그 selector 에 적용된다. GenICam 에서 이 셋은 selector 로 인덱싱되는 값이다.</para>
+        /// </summary>
+        public void SetHardwareTrigger(CameraDeviceInfo cfg, bool on)
+        {
+            if (_params == null) return;
+
+            if (string.IsNullOrWhiteSpace(cfg.TriggerSource))
+            {
+                if (on)
+                    LoggerService.WriteToFile("WARN",
+                        $"[eBUS Vision] {CameraId} 하드웨어 트리거 미설정 — VisionConfig 의 TriggerSource(예: Line0)를 " +
+                        "채우기 전까지 자유 실행으로 촬영합니다(스트로브와 동기되지 않음).");
+                return;
+            }
+
+            WriteEnum("TriggerSelector", Or(cfg.TriggerSelector, "FrameStart"));
+
+            if (!on)
+            {
+                WriteEnum("TriggerMode", "Off");
+                LoggerService.WriteToFile("INFO", $"[eBUS Vision] {CameraId} 하드웨어 트리거 해제 — 자유 실행");
+                return;
+            }
+
+            WriteEnum("TriggerSource",     cfg.TriggerSource.Trim());
+            WriteEnum("TriggerActivation", Or(cfg.TriggerActivation, "RisingEdge"));
+            WriteEnum("TriggerMode",       "On");   // 마지막에 켠다 — 설정 도중의 프레임 유실 방지
+
+            LoggerService.WriteToFile("INFO",
+                $"[eBUS Vision] {CameraId} 하드웨어 트리거 ON — {Or(cfg.TriggerSelector, "FrameStart")} / " +
+                $"{cfg.TriggerSource.Trim()} / {Or(cfg.TriggerActivation, "RisingEdge")}");
+        }
+
+        private static string Or(string value, string fallback)
+            => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+        /// <summary>
         /// 쓸 수 있는 노드명을 한 번만 찾아 캐시한다. config 에 강제 지정이 있으면 그것만 쓴다
         /// (틀린 이름을 넣었을 때 조용히 다른 노드로 넘어가면 원인 파악이 어려워진다).
         /// </summary>
@@ -345,6 +390,22 @@ namespace IJPSystem.Drivers.Vision.Ebus
             try { return _params!.GetFloatValue(node); }   catch { }
             try { return _params!.GetIntegerValue(node); } catch { }
             return 0.0;
+        }
+
+        /// <summary>
+        /// 열거형 노드 쓰기. 실패해도 예외를 올리지 않고 로그만 남긴다 —
+        /// 기종이 지원하지 않는 항목(예: TriggerActivation 이 고정인 카메라) 하나 때문에
+        /// 트리거 설정 전체가 무너지면 안 된다. 다만 <b>조용히 넘기지는 않는다</b>:
+        /// 트리거가 안 걸릴 때 어느 노드에서 어긋났는지가 유일한 단서다.
+        /// </summary>
+        private void WriteEnum(string node, string value)
+        {
+            try { _params!.SetEnumValue(node, value); }
+            catch (Exception ex)
+            {
+                LoggerService.WriteToFile("WARN",
+                    $"[eBUS Vision] {CameraId} {node}='{value}' 쓰기 실패: {ex.Message}");
+            }
         }
 
         private void Execute(string command)

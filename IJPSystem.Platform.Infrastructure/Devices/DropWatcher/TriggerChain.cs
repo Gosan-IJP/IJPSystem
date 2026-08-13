@@ -143,9 +143,55 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
             return null;
         }
 
+        /// <summary>
+        /// 카운터 번호만 뽑는다("Dev1/ctr1" → "ctr1"). 표기 흔들림(대소문자·공백)을 흡수해
+        /// 중복 검사와 PFI 환산이 같은 기준으로 돌게 한다.
+        /// </summary>
+        private static string CounterName(string counter)
+        {
+            string c = (counter ?? "").Trim();
+            int slash = c.LastIndexOf('/');
+            return (slash >= 0 ? c.Substring(slash + 1) : c).ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// 카운터의 기본 출력 PFI 번호. X-Series 기본 라우팅은 ctr0→PFI12, ctr1→PFI13,
+        /// ctr2→PFI14, ctr3→PFI15 다(즉 12 + 카운터번호).
+        /// <para>※ 라우팅을 바꾸지 않았을 때의 값이다 — <b>배선 대조용 참고</b>지 보증이 아니다.</para>
+        /// </summary>
+        public static string DefaultOutputPfi(string counter)
+        {
+            string idx = new string(Array.FindAll(CounterName(counter).ToCharArray(), char.IsDigit));
+            return int.TryParse(idx, out int n) && n is >= 0 and <= 3 ? $"PFI{12 + n}" : "PFI?";
+        }
+
+        /// <summary>
+        /// 지금 설정이 실제로 어느 핀으로 나가는지 한 줄로. <b>기동 로그에 남기기 위한 것</b>이다.
+        ///
+        /// <para>코드 기본값과 <c>TriggerChainConfig.json</c> 이 서로 다른 카운터를 가리키고 있어도
+        /// 이기는 쪽은 config 인데, 그 사실이 어디에도 안 남으면 "LED 가 안 켜진다" 는 증상만 보고
+        /// 배선부터 뜯게 된다. 이 한 줄과 실제 케이블만 대조하면 끝난다.</para>
+        /// </summary>
+        public string Describe()
+            => $"분주기 {CounterName(DividerCounter)}(입력 {SpitPulseTerminal}, 1/{DivideRatio}) " +
+               $"→ {DividerOutputTerminal()} / " +
+               $"LED {CounterName(LedCounter)}→{DefaultOutputPfi(LedCounter)} " +
+               $"(지연 {LedDelayUs:F1}µs, 폭 {LedWidthUs:F1}µs) / " +
+               $"Cam {CounterName(CamCounter)}→{DefaultOutputPfi(CamCounter)} " +
+               $"(지연 {CamDelayUs:F1}µs, 폭 {CamWidthUs:F1}µs)";
+
         /// <summary>설정 정합성 검사. 문제가 있으면 사유를, 없으면 null 을 반환한다.</summary>
         public string? Validate()
         {
+            // 카운터가 겹치면 DAQmx 는 두 번째 태스크에서 "리소스 사용 중" 으로 실패하는데,
+            // 그 메시지만 보고는 설정이 겹쳤다는 걸 알기 어렵다 — 여기서 먼저 잡는다.
+            string dv = CounterName(DividerCounter), led = CounterName(LedCounter), cam = CounterName(CamCounter);
+            if (dv.Length == 0 || led.Length == 0 || cam.Length == 0)
+                return "카운터 지정이 비어 있습니다(DividerCounter / LedCounter / CamCounter).";
+            if (dv == led) return $"분주기와 LED 가 같은 카운터({dv})입니다. 서로 다른 카운터를 지정하세요.";
+            if (dv == cam) return $"분주기와 Cam 이 같은 카운터({dv})입니다. 서로 다른 카운터를 지정하세요.";
+            if (led == cam) return $"LED 와 Cam 이 같은 카운터({led})입니다. 서로 다른 카운터를 지정하세요.";
+
             if (DivideRatio < 2)   return "분주비는 2 이상이어야 합니다(1이면 분주 의미 없음).";
             if (TimebaseRateHz <= 0) return "타임베이스 주파수가 0 이하입니다.";
             if (LedWidthUs <= 0)   return "LED 발광 폭은 0보다 커야 합니다.";

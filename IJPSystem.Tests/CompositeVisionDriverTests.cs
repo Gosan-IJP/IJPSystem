@@ -52,6 +52,10 @@ namespace IJPSystem.Tests
             public Task<VisionImage> WaitForHardwareTriggerAsync(string cameraId, CancellationToken ct) =>
                 CaptureAsync(cameraId, false);
 
+            /// <summary>트리거 전환이 어느 카메라로 갔는지 — 라우팅 검증용.</summary>
+            public List<(string CameraId, bool On)> TriggerCalls { get; } = new();
+            public void SetHardwareTrigger(string cameraId, bool on) => TriggerCalls.Add((cameraId, on));
+
             public Task<InspectionResult> InspectAsync(string cameraId, VisionImage image) =>
                 Task.FromResult(InspectionResult.Pass(cameraId, 0));
 
@@ -106,6 +110,19 @@ namespace IJPSystem.Tests
 
             Assert.Equal(new[] { "CAM_DW" }, fakes["ebus"].Captured);
             Assert.Equal(new[] { "CAM_GV" }, fakes["hikrobot"].Captured);
+        }
+
+        [Fact]
+        public void 트리거_전환이_담당_드라이버로만_간다()
+        {
+            // 드랍와처를 트리거 모드로 바꿀 때 글라스뷰까지 같이 바뀌면 글라스뷰 화면이 멎는다.
+            var (drv, fakes) = Build("ebus", Cam("CAM_DW"), Cam("CAM_GV", "hikrobot"));
+
+            drv.SetHardwareTrigger("CAM_DW", true);
+            drv.SetHardwareTrigger("CAM_DW", false);
+
+            Assert.Equal(new[] { ("CAM_DW", true), ("CAM_DW", false) }, fakes["ebus"].TriggerCalls);
+            Assert.Empty(fakes["hikrobot"].TriggerCalls);
         }
 
         [Fact]

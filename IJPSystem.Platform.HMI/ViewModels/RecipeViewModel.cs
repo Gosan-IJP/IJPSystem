@@ -302,15 +302,26 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
 
         // ── 노즐 정보 (헤드 사양) ─────────────────────────────────────────────
-        // <b>장비 설정</b>이다 — 레시피가 아니라 MachineSettings DB 에 저장된다.
-        // 헤드는 장비에 달린 것이라 제품이 바뀐다고 안 바뀌고, 헤드를 교체하면 모든 레시피에
-        // 동시에 적용돼야 한다. 드랍와처도 같은 값을 읽으므로 화면과 측정이 갈라지지 않는다.
+        // <b>레시피에 딸린다</b>(2026-08-13 변경). 장비 하나로 여러 헤드를 갈아 쓰므로,
+        // 헤드는 장비가 아니라 "이 제품을 이 헤드로 찍는다" 는 선택이다.
         //
-        // 화면은 레시피 편집 화면에 있지만 값은 레시피에 딸리지 않는다 — 그래서 UI 에
-        // "장비 공통" 이라고 표시한다. 저장은 [저장] 버튼과 같이 일어난다(조작 일관성).
+        // 예전에는 장비 설정(MachineSettings)에만 뒀다. 그러면 헤드를 바꿀 때마다 손으로 고쳐야
+        // 했고, 지난 레시피가 어떤 헤드로 찍힌 것인지 기록이 남지 않았다.
+        //
+        // 다만 읽는 쪽 중 SpitService 는 Infrastructure 계층이라 레시피 DB 를 못 본다. 그래서
+        // 활성 레시피의 헤드를 MachineSettings 로 비춰 준다(ApplyHeadSpecToMachine) —
+        // 즉 MachineSettings 는 이제 "장비 고정값" 이 아니라 <b>지금 물린 헤드</b>를 뜻한다.
 
         private static MachineSettingsStore Machine =>
             IJPSystem.Platform.Infrastructure.Config.MachineSettings.Current;
+
+        private string _headName = "";
+        /// <summary>헤드 이름(예: <c>S3200</c>, <c>S800</c>). 표시·기록용 — 계산에는 쓰지 않는다.</summary>
+        public string HeadName
+        {
+            get => _headName;
+            set { if (SetProperty(ref _headName, value ?? "") && !_isLoading) IsDirty = true; }
+        }
 
         private double _nozzlePitchUm;
         /// <summary>같은 열 안에서 인접 노즐 간 거리[µm]. 0=미입력.</summary>
@@ -327,7 +338,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public int NozzleRows
         {
             get => _nozzleRows;
-            set { if (SetProperty(ref _nozzleRows, Math.Clamp(value, 0, 4)) && !_isLoading) IsDirty = true; }
+            set
+            {
+                if (SetProperty(ref _nozzleRows, Math.Clamp(value, 0, 4)) && !_isLoading) IsDirty = true;
+                OnPropertyChanged(nameof(NozzleCountHint));
+            }
         }
 
         private double _nozzleRowPitchUm;
@@ -338,12 +353,84 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set { if (SetProperty(ref _nozzleRowPitchUm, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
         }
 
-        private double _nozzleDiameterUm;
-        /// <summary>노즐 구경[µm]. 액적 크기 판정의 기준값.</summary>
-        public double NozzleDiameterUm
+        // 노즐 구경은 화면에서 뺐다(2026-08-13) — 입력만 받고 어디에서도 쓰지 않았고,
+        // 액적 크기는 드랍와처가 실제로 재는 값이라 여기 적힌 숫자가 근거가 되지 못했다.
+
+        private int _nozzlesPerRow;
+        /// <summary>
+        /// <b>칩 하나의 한 열</b> 노즐 수. S3200 = 400. 0=미입력.
+        /// <para>칩 수 × 열 수 × 이 값 = 총 노즐 수여야 한다 — 어긋나면 화면에 계산값을 같이 보여
+        /// 준다(<see cref="NozzleCountHint"/>). 조용히 두면 패턴이 헤드보다 좁거나 넓게 만들어진다.</para>
+        /// </summary>
+        public int NozzlesPerRow
         {
-            get => _nozzleDiameterUm;
-            set { if (SetProperty(ref _nozzleDiameterUm, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
+            get => _nozzlesPerRow;
+            set
+            {
+                if (SetProperty(ref _nozzlesPerRow, Math.Max(0, value)) && !_isLoading) IsDirty = true;
+                OnPropertyChanged(nameof(NozzleCountHint));
+            }
+        }
+
+        public int[] ChipCountOptions { get; } = { 1, 2, 3, 4 };
+
+        private int _chipCount = 1;
+        /// <summary>
+        /// 헤드 안의 칩 수(1~4). S3200 = 4, S800 = 1.
+        /// <para>1 이면 칩 없는 헤드로 다뤄져 지금까지와 똑같이 동작한다.
+        /// 2 이상이면 칩이 겹쳐 붙은 배치(<c>ChipHeadLayout</c>)가 쓰인다.</para>
+        /// </summary>
+        public int ChipCount
+        {
+            get => _chipCount;
+            set
+            {
+                if (SetProperty(ref _chipCount, Math.Clamp(value, 1, 4)) && !_isLoading) IsDirty = true;
+                OnPropertyChanged(nameof(NozzleCountHint));
+            }
+        }
+
+        /// <summary>
+        /// 칩 수 · 열 수 · 열당 노즐 수로 계산한 총 노즐 수. 입력한 총 노즐 수와 다르면 그 사실을 말한다.
+        ///
+        /// <para>세 값을 각각 받으면 서로 안 맞아도 화면은 아무 말이 없다 — S3200 은
+        /// 4칩 × 2열 × 400 = 3,200 인데, 열 수에 칩 수를 적어 넣기 쉽다(4열로 두면 6,400 이 된다).
+        /// 계산값을 옆에 띄워 두면 그 자리에서 드러난다.</para>
+        /// </summary>
+        public string NozzleCountHint
+        {
+            get
+            {
+                int computed = ChipCount * NozzleRows * NozzlesPerRow;
+                if (computed <= 0) return "";
+                return computed == NozzleCount
+                    ? $"= {ChipCount} × {NozzleRows} × {NozzlesPerRow}"
+                    : $"⚠ {ChipCount} × {NozzleRows} × {NozzlesPerRow} = {computed}";
+            }
+        }
+
+        /// <summary>
+        /// 웨이브폼(액적 크기) 목록. 엡손 계열 헤드의 계조 단계 이름 그대로다.
+        /// S3200 사양의 "Grey scale: Up to 4" 가 이 넷을 말한다.
+        ///
+        /// <para>액적 부피: <c>Vibration</c> = 토출 안 함(메니스커스만 흔들어 노즐 마름 방지) /
+        /// <c>Small</c> = 3.2pL / <c>Middle</c> = 5.1pL / <c>Large</c> = 10.1pL.
+        /// 화면 설명글이 이 순서를 그대로 따르므로, 목록 순서를 바꾸면 설명도 같이 고칠 것.</para>
+        /// </summary>
+        public string[] WaveformOptions { get; } = { "Vibration", "Small", "Middle", "Large" };
+
+        private string _waveform = "Middle";
+        /// <summary>선택된 웨이브폼 단계. 헤드에 실린 웨이브폼의 어느 계조로 쏠지.</summary>
+        public string Waveform
+        {
+            get => _waveform;
+            set
+            {
+                // 빈 값이 들어오면 콤보가 선택 없음으로 보인다 — 목록에 있는 값만 받는다.
+                string v = string.IsNullOrWhiteSpace(value) ? _waveform : value.Trim();
+                if (Array.IndexOf(WaveformOptions, v) < 0) return;
+                if (SetProperty(ref _waveform, v) && !_isLoading) IsDirty = true;
+            }
         }
 
         private int _nozzleCount;
@@ -351,41 +438,79 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public int NozzleCount
         {
             get => _nozzleCount;
-            set { if (SetProperty(ref _nozzleCount, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
+            set
+            {
+                if (SetProperty(ref _nozzleCount, Math.Max(0, value)) && !_isLoading) IsDirty = true;
+                OnPropertyChanged(nameof(NozzleCountHint));
+            }
         }
 
-        /// <summary>장비 설정 DB → 화면. 레시피 선택과 무관하므로 생성 시 1회만 읽는다.</summary>
-        private void LoadNozzleSpec()
+        /// <summary>
+        /// 레시피에서 읽은 헤드 사양을 화면에 채운다. 레시피에 값이 없으면(옛 레시피)
+        /// <b>장비 설정에 남아 있던 값</b>으로 채운다 — 예전 방식으로 저장된 헤드가 그것이라,
+        /// 빈 화면을 보여 주고 다시 입력하게 하는 것보다 낫다.
+        /// </summary>
+        private void LoadNozzleSpec(dynamic? row)
         {
-            if (!IJPSystem.Platform.Infrastructure.Config.MachineSettings.IsReady) return;
-
             bool prev = _isLoading;
             _isLoading = true;      // 읽기만으로 IsDirty 가 켜지면 안 된다
             try
             {
-                NozzlePitchUm    = Machine.GetDouble(MachineKeys.NozzlePitchUm);
-                NozzleRows       = Machine.GetInt   (MachineKeys.NozzleRows);
-                NozzleRowPitchUm = Machine.GetDouble(MachineKeys.NozzleRowPitchUm);
-                NozzleDiameterUm = Machine.GetDouble(MachineKeys.NozzleDiameterUm);
-                NozzleCount      = Machine.GetInt   (MachineKeys.NozzleCount);
+                bool machine = IJPSystem.Platform.Infrastructure.Config.MachineSettings.IsReady;
+
+                double D(object? v, string key) =>
+                    v != null && Convert.ToDouble(v) > 0 ? Convert.ToDouble(v)
+                    : machine ? Machine.GetDouble(key) : 0;
+
+                int I(object? v, string key, int fallback = 0) =>
+                    v != null && Convert.ToInt32(v) > 0 ? Convert.ToInt32(v)
+                    : machine ? Machine.GetInt(key, fallback) : fallback;
+
+                string S(object? v, string key, string fallback) =>
+                    v is string s && s.Length > 0 ? s
+                    : machine ? Machine.GetString(key, fallback) : fallback;
+
+                HeadName         = row?.HeadName as string ?? "";
+                NozzlePitchUm    = D(row?.NozzlePitchUm,     MachineKeys.NozzlePitchUm);
+                NozzleRows       = I(row?.NozzleRows,        MachineKeys.NozzleRows);
+                NozzleRowPitchUm = D(row?.NozzleRowPitchUm,  MachineKeys.NozzleRowPitchUm);
+                NozzleCount      = I(row?.NozzleCount,       MachineKeys.NozzleCount);
+                ChipCount        = I(row?.HeadChipCount,     MachineKeys.HeadChipCount, 1);
+                NozzlesPerRow    = I(row?.HeadNozzlesPerRow, MachineKeys.HeadNozzlesPerRow);
+                Waveform         = S(row?.HeadWaveform,      MachineKeys.HeadWaveform, "Middle");
             }
             finally { _isLoading = prev; }
         }
 
-        /// <summary>화면 → 장비 설정 DB. 레시피 저장과 함께 호출된다.</summary>
-        private void SaveNozzleSpec()
+        /// <summary>
+        /// 화면의 헤드 사양을 <b>장비 설정에 비춘다</b> — 레시피 DB 를 못 보는 쪽(SpitService 등)을
+        /// 위한 것이다. 여기서 MachineSettings 는 "장비 고정값"이 아니라 <b>지금 물린 헤드</b>다.
+        ///
+        /// <para>비추고 나면 캐시를 반드시 버려야 한다. <see cref="HeadSpec"/> 은 값을 들고 있고
+        /// <c>SpitService</c> 는 노즐 수로 만든 어댑터를 들고 있어서, 버리지 않으면 헤드를 바꿔도
+        /// 노즐 선택은 새 헤드로 보이는데 <b>토출은 옛 헤드로 나간다</b>.</para>
+        /// </summary>
+        private void ApplyHeadSpecToMachine()
         {
             if (!IJPSystem.Platform.Infrastructure.Config.MachineSettings.IsReady) return;
 
-            Machine.Set(MachineKeys.NozzlePitchUm,    NozzlePitchUm);
-            Machine.Set(MachineKeys.NozzleRows,       NozzleRows);
-            Machine.Set(MachineKeys.NozzleRowPitchUm, NozzleRowPitchUm);
-            Machine.Set(MachineKeys.NozzleDiameterUm, NozzleDiameterUm);
-            Machine.Set(MachineKeys.NozzleCount,      NozzleCount);
+            Machine.Set(MachineKeys.NozzlePitchUm,     NozzlePitchUm);
+            Machine.Set(MachineKeys.NozzleRows,        NozzleRows);
+            Machine.Set(MachineKeys.NozzleRowPitchUm,  NozzleRowPitchUm);
+            Machine.Set(MachineKeys.NozzleCount,       NozzleCount);
+            Machine.Set(MachineKeys.HeadChipCount,     ChipCount);
+            Machine.Set(MachineKeys.HeadNozzlesPerRow, NozzlesPerRow);
+            Machine.Set(MachineKeys.HeadWaveform,      Waveform);
 
-            // HeadSpec 은 값을 캐시한다 — 여기서 버려 주지 않으면 노즐 선택 화면·패턴 생성이
-            // 앱을 다시 켤 때까지 옛 노즐 수를 계속 쓴다. 저장했는데 안 바뀌는 것으로 보인다.
             IJPSystem.Platform.Infrastructure.Config.HeadSpec.Reload();
+
+            // 토출 중에 어댑터를 갈면 헤드가 도는 채로 참조가 끊긴다 — 멈춘 뒤에만 바꾼다.
+            // (돌고 있으면 지금 헤드 그대로 쓰는 게 맞다. 다음 기동에서 새 사양이 잡힌다)
+            if (!Infrastructure.Devices.DropWatcher.SpitService.IsSpitting)
+                Infrastructure.Devices.DropWatcher.SpitService.Reset();
+            else _addLogAction?.Invoke(
+                "[RECIPE] 토출 중이라 헤드 사양 반영을 미룹니다 — 토출을 멈춘 뒤 다시 적용하세요.",
+                LogLevel.Warning);
         }
 
         // ── 글라스 정보 ───────────────────────────────────────────────────────
@@ -482,7 +607,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _raiseAlarm = raiseAlarm;
 
             InitDatabase();
-            LoadNozzleSpec();   // 장비 설정 — 레시피와 무관하므로 여기서 1회만 읽는다
+            // 헤드 사양은 레시피에 딸리므로 여기서 읽지 않는다 — 레시피를 불러올 때 같이 온다.
+            // (레시피가 아직 없는 첫 실행에서는 화면이 비어 있고, 장비 설정에 남은 값으로 채워진다)
 
             CreateRecipeCommand   = new RelayCommand(_ => ExecuteCreateRecipe());
             DeleteRecipeCommand   = new RelayCommand(_ => ExecuteDeleteRecipe(), _ => !string.IsNullOrEmpty(SelectedRecipeName) && SelectedRecipeName != ActiveRecipeName);
@@ -597,9 +723,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
                 // 글라스 정보 컬럼 마이그레이션(2026-08-07). 기본 0 = 미입력.
                 //
-                // ※ 노즐 헤드 사양은 여기 두지 않는다 — 헤드는 <b>장비</b>에 달린 것이라 제품이
-                //   바뀐다고 안 바뀐다. 레시피마다 복사본을 두면 헤드 교체 시 모든 레시피를 고쳐야 하고,
-                //   드랍와처가 보는 값과 갈라진다. MachineSettings(장비 설정 DB)로 간다.
+                // 노즐 헤드 사양도 여기 둔다(2026-08-13 변경). 예전에는 장비 설정(MachineSettings)에만
+                // 뒀는데, 장비 하나로 <b>여러 헤드를 갈아 쓰는</b> 운용이라 그 전제가 틀렸다 —
+                // 헤드를 바꿀 때마다 손으로 다섯 칸을 고쳐야 했고, 어느 레시피가 어떤 헤드로 찍은
+                // 것인지 기록이 남지 않았다.
+                //
+                // ※ 값의 진실은 레시피다. 다만 SpitService 는 Infrastructure 계층이라 레시피 DB 를
+                //   볼 수 없으므로, 활성 레시피의 헤드를 MachineSettings 로 비춰 준다
+                //   (<see cref="ApplyHeadSpecToMachine"/>). 그래서 읽는 쪽 코드는 그대로다.
                 foreach (string col in new[]
                 {
                     "GlassWidthMm REAL DEFAULT 0",
@@ -607,6 +738,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     "GlassThicknessMm REAL DEFAULT 0",
                     "GlassOriginXMm REAL DEFAULT 0",     // 글라스 기준점 오프셋
                     "GlassOriginYMm REAL DEFAULT 0",
+
+                    "HeadName TEXT",                     // 헤드 이름 — 어느 헤드로 찍은 레시피인지
+                    "NozzlePitchUm REAL DEFAULT 0",
+                    "NozzleRows INTEGER DEFAULT 0",
+                    "NozzleRowPitchUm REAL DEFAULT 0",
+                    "HeadChipCount INTEGER DEFAULT 1",
+                    "HeadNozzlesPerRow INTEGER DEFAULT 0",
+                    "HeadWaveform TEXT",
+                    "NozzleCount INTEGER DEFAULT 0",
                 })
                 {
                     try { db.Execute($"ALTER TABLE Recipes ADD COLUMN {col}"); }
@@ -694,10 +834,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         "SELECT PrintDirection FROM Recipes WHERE Name=@recipeName",
                         new { recipeName }) ?? 1;
 
-                    // 글라스 정보 — 한 번의 조회로 가져온다(컬럼마다 왕복하면 5번이 된다).
-                    // 노즐 사양은 여기 없다 — 장비 설정이라 레시피를 바꿔도 그대로다.
+                    // 글라스·노즐 정보 — 한 번의 조회로 가져온다(컬럼마다 왕복하면 열 번이 된다).
                     var spec = db.QueryFirstOrDefault(
-                        @"SELECT GlassWidthMm, GlassHeightMm, GlassThicknessMm, GlassOriginXMm, GlassOriginYMm
+                        @"SELECT GlassWidthMm, GlassHeightMm, GlassThicknessMm, GlassOriginXMm, GlassOriginYMm,
+                                 HeadName, NozzlePitchUm, NozzleRows, NozzleRowPitchUm,
+                                 HeadChipCount, HeadNozzlesPerRow, HeadWaveform, NozzleCount
                           FROM Recipes WHERE Name=@recipeName", new { recipeName });
                     if (spec != null)
                     {
@@ -707,7 +848,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         GlassOriginXMm    = Convert.ToDouble(spec.GlassOriginXMm   ?? 0d);
                         GlassOriginYMm    = Convert.ToDouble(spec.GlassOriginYMm   ?? 0d);
                     }
+
+                    // 헤드 사양도 레시피에 딸린다 — 이 레시피가 어떤 헤드로 찍는지.
+                    LoadNozzleSpec(spec);
                 }
+
+                // 활성 레시피를 불러왔을 때만 장비에 비춘다. 편집하려고 다른 레시피를 열어 본 것만으로
+                // 토출·노즐 선택이 그 헤드로 바뀌면, 보기만 했는데 장비가 따라 움직이는 셈이 된다.
+                if (recipeName == ActiveRecipeName) ApplyHeadSpecToMachine();
 
                 LoadTeachingPoints(recipeName);
 
@@ -1027,7 +1175,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         db.Execute(@"UPDATE Recipes SET
                                          PurgeTime=@purgeTime, Swath=@swath, HeadLength=@headLength, PrintDirection=@printDir,
                                          GlassWidthMm=@gW, GlassHeightMm=@gH, GlassThicknessMm=@gT,
-                                         GlassOriginXMm=@gX, GlassOriginYMm=@gY
+                                         GlassOriginXMm=@gX, GlassOriginYMm=@gY,
+                                         HeadName=@headName, NozzlePitchUm=@nPitch, NozzleRows=@nRows,
+                                         NozzleRowPitchUm=@nRowPitch, HeadChipCount=@chips,
+                                         HeadNozzlesPerRow=@perRow, HeadWaveform=@wave, NozzleCount=@nCount
                                      WHERE Name=@name",
                             new
                             {
@@ -1035,12 +1186,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                 printDir = PrintDirectionIndex,
                                 gW = GlassWidthMm, gH = GlassHeightMm, gT = GlassThicknessMm,
                                 gX = GlassOriginXMm, gY = GlassOriginYMm,
+                                headName = HeadName, nPitch = NozzlePitchUm, nRows = NozzleRows,
+                                nRowPitch = NozzleRowPitchUm, chips = ChipCount,
+                                perRow = NozzlesPerRow, wave = Waveform, nCount = NozzleCount,
                                 name = SelectedRecipeName
                             }, trans);
-
-                        // 노즐 헤드 사양은 장비 설정 DB 로 — 레시피 트랜잭션 밖이다.
-                        // 레시피가 아니라 장비에 달린 값이라 이 레시피에만 적용되면 안 된다.
-                        SaveNozzleSpec();
 
                         // 티칭 포인트 저장
                         if (TeachingPoints.Count > 0)
@@ -1079,6 +1229,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         if (SelectedRecipeName == ActiveRecipeName)
                         {
                             RefreshActivePointsSnapshot();
+
+                            // 활성 레시피의 헤드를 고쳤으면 장비에도 비춘다 — 안 하면 화면은 새 헤드,
+                            // 토출은 옛 헤드가 된다(HeadSpec·SpitService 가 값을 캐시한다).
+                            ApplyHeadSpecToMachine();
+
                             _addLogAction?.Invoke(
                                 $"[RECIPE] {ActiveRecipeName} — 활성 레시피 저장, 스냅샷 갱신됨",
                                 LogLevel.Info);
@@ -1115,6 +1270,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
                     // 적용 순간의 포인트 데이터를 snapshot으로 고정 — 이후 편집/저장은 영향 X
                     RefreshActivePointsSnapshot();
+
+                    // 이 레시피의 헤드를 장비에 물린다. 레시피마다 헤드가 다를 수 있으므로
+                    // 적용이 곧 헤드 교체다 — 노즐 선택·패턴 생성·토출이 모두 이 값을 따른다.
+                    ApplyHeadSpecToMachine();
 
                     // 실제 모터 주입 로직은 여기서 호출 (이미 LoadAllRecipeData가 되어있으므로, 필요 시 PLC/Driver 전송 로직 추가)
                     _addLogAction?.Invoke($"[RECIPE] {SelectedRecipeName} — 모델 적용 완료", LogLevel.Success);

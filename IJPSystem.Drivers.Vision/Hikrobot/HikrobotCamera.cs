@@ -294,6 +294,49 @@ namespace IJPSystem.Drivers.Vision.Hikrobot
             return node == null ? 0.0 : ReadNumeric(node);
         }
 
+        /// <summary>
+        /// 하드웨어 트리거 모드 On/Off. 켜면 카메라는 <b>트리거가 올 때만</b> 프레임을 내보낸다.
+        /// 끄면 자유 실행(라이브뷰)으로 돌아간다.
+        ///
+        /// <para><see cref="CameraDeviceInfo.TriggerSource"/> 가 비어 있으면 아무것도 하지 않는다 —
+        /// Line 번호를 모르는 채 TriggerMode 만 켜면 오지 않는 트리거를 기다리며 화면이 멎는다.</para>
+        ///
+        /// <para>Selector 를 먼저 써야 이어지는 Mode/Source/Activation 이 그 selector 에 적용된다.</para>
+        /// </summary>
+        public void SetHardwareTrigger(CameraDeviceInfo cfg, bool on)
+        {
+            if (_device == null) return;
+
+            if (string.IsNullOrWhiteSpace(cfg.TriggerSource))
+            {
+                if (on)
+                    LoggerService.WriteToFile("WARN",
+                        $"[Hikrobot Vision] {CameraId} 하드웨어 트리거 미설정 — VisionConfig 의 TriggerSource(예: Line0)를 " +
+                        "채우기 전까지 자유 실행으로 촬영합니다(스트로브와 동기되지 않음).");
+                return;
+            }
+
+            WriteEnum("TriggerSelector", Or(cfg.TriggerSelector, "FrameStart"));
+
+            if (!on)
+            {
+                WriteEnum("TriggerMode", "Off");
+                LoggerService.WriteToFile("INFO", $"[Hikrobot Vision] {CameraId} 하드웨어 트리거 해제 — 자유 실행");
+                return;
+            }
+
+            WriteEnum("TriggerSource",     cfg.TriggerSource.Trim());
+            WriteEnum("TriggerActivation", Or(cfg.TriggerActivation, "RisingEdge"));
+            WriteEnum("TriggerMode",       "On");   // 마지막에 켠다 — 설정 도중의 프레임 유실 방지
+
+            LoggerService.WriteToFile("INFO",
+                $"[Hikrobot Vision] {CameraId} 하드웨어 트리거 ON — {Or(cfg.TriggerSelector, "FrameStart")} / " +
+                $"{cfg.TriggerSource.Trim()} / {Or(cfg.TriggerActivation, "RisingEdge")}");
+        }
+
+        private static string Or(string value, string fallback)
+            => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
         /// <summary>쓸 수 있는 노드명을 1회만 찾아 캐시한다. config 지정이 있으면 그것만 쓴다.</summary>
         private string? ResolveNode(ref string? cached, string configured, string[] candidates)
         {
@@ -334,6 +377,28 @@ namespace IJPSystem.Drivers.Vision.Hikrobot
             if (_device!.Parameters.GetFloatValue(node, out IFloatValue f) == 0) return f.CurValue;
             if (_device.Parameters.GetIntValue(node, out IIntValue i)      == 0) return i.CurValue;
             return 0.0;
+        }
+
+        /// <summary>
+        /// 열거형 노드 쓰기. 실패해도 예외를 올리지 않고 로그만 남긴다 — 기종이 지원하지 않는
+        /// 항목 하나 때문에 트리거 설정 전체가 무너지면 안 된다. 다만 <b>조용히 넘기지는 않는다</b>:
+        /// 트리거가 안 걸릴 때 어느 노드에서 어긋났는지가 유일한 단서다.
+        /// (MVS 는 예외 대신 상태코드를 돌려준다 — 0 이 성공)
+        /// </summary>
+        private void WriteEnum(string node, string value)
+        {
+            int rc;
+            try { rc = _device!.Parameters.SetEnumValueByString(node, value); }
+            catch (Exception ex)
+            {
+                LoggerService.WriteToFile("WARN",
+                    $"[Hikrobot Vision] {CameraId} {node}='{value}' 쓰기 예외: {ex.Message}");
+                return;
+            }
+
+            if (rc != 0)
+                LoggerService.WriteToFile("WARN",
+                    $"[Hikrobot Vision] {CameraId} {node}='{value}' 쓰기 실패(0x{rc:X8})");
         }
 
         /// <summary>분석 파이프라인이 Mono8 기준이라 가능하면 Mono8 로 맞춘다(안 되면 Grab 에서 다운시프트).</summary>

@@ -26,7 +26,7 @@ namespace IJPSystem.Platform.Application.Sequences
     public static class AutoPrintSequence
     {
         private const string ScanAxisNo = "Y";   // 프린트 스캔 축(스테이지 이송)
-        private const string StepAxisNo = "X";   // 스와스 스텝오버 축(크로스스캔)
+        private const string StepAxisNo = "X";   // 해드 스텝오버 축(크로스스캔)
 
         public static IReadOnlyList<SequenceStepDef> Build(
             IMachine machine, IMotionService motion, int swathCount = 1, double headLength = 0,

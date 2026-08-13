@@ -399,6 +399,13 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
         /// Next 를 쓰는 이유: Last 는 새 트리거가 없어도 직전 버퍼를 즉시 돌려주므로
         /// 같은 프레임을 중복 반환한다 — 트리거당 1장이 필요한 드랍와쳐엔 맞지 않는다.
         /// </summary>
+        /// <summary>
+        /// IMAQdx 는 트리거 모드 전환을 <see cref="WaitForHardwareTriggerAsync"/> 안의
+        /// <c>EnsureTriggeredAcquisition</c> 이 스스로 처리하므로 여기서 할 일이 없다.
+        /// (eBUS/하이크로봇은 GenICam 노드를 직접 써야 해서 별도 호출이 필요하다)
+        /// </summary>
+        public void SetHardwareTrigger(string cameraId, bool on) { }
+
         public async Task<VisionImage> WaitForHardwareTriggerAsync(string cameraId, CancellationToken ct)
         {
             if (!_sessions.TryGetValue(cameraId, out uint session) ||

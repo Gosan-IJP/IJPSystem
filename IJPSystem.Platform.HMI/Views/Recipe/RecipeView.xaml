@@ -582,30 +582,31 @@
                              헤드 교체가 레시피 전환으로 끝난다.
                              값 0 = 미입력이며, 아직 어떤 동작에도 쓰이지 않는다(입력·보관만). -->
                         <ScrollViewer Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
-                                      VerticalScrollBarVisibility="Auto" Margin="0,20,20,20">
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled" Margin="0,20,20,20">
                             <ScrollViewer.Resources>
                                 <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
                             </ScrollViewer.Resources>
-                            <StackPanel>
+                            <!-- 두 박스를 가로로 나란히 둔다. WrapPanel 인 이유: 창이 좁아 두 개가
+                                 안 들어가면 예전처럼 아래로 내려가 준다 — Grid 두 칸으로 고정하면
+                                 좁은 화면에서 글라스 정보가 잘린다(가로 스크롤은 꺼 두어야 접힌다). -->
+                            <WrapPanel Orientation="Horizontal">
 
                                 <!-- 노즐 정보 -->
                                 <Border Background="#1E293B" CornerRadius="10"
                                         BorderBrush="#334155" BorderThickness="1"
-                                        Padding="16" Margin="0,0,0,12" HorizontalAlignment="Left" MinWidth="420">
+                                        Padding="16" Margin="0,0,12,12" VerticalAlignment="Top" MinWidth="420">
                                     <StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
                                             <TextBlock Text="◇" FontSize="14" Foreground="#38BDF8"
                                                        Margin="0,0,8,0" VerticalAlignment="Center"/>
                                             <TextBlock Text="노즐 정보" Foreground="White"
                                                        FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
-                                            <!-- 이 값들은 레시피가 아니라 장비에 딸린다. 여기서 고치면
-                                                 모든 레시피에 적용되므로 그 사실을 화면에 밝혀 둔다. -->
-                                            <Border Background="#0B2A45" BorderBrush="#1D4ED8" BorderThickness="1"
-                                                    CornerRadius="4" Padding="6,1" Margin="10,1,0,0"
-                                                    VerticalAlignment="Center"
-                                                    ToolTip="헤드는 장비에 달린 것이라 레시피를 바꿔도 그대로입니다. 드랍와처 화면도 같은 값을 씁니다.">
-                                                <TextBlock Text="장비 공통" Foreground="#93C5FD" FontSize="10" FontWeight="Bold"/>
-                                            </Border>
+                                            <!-- 장비 하나로 여러 헤드를 갈아 쓰므로 헤드 사양은 레시피에 딸린다.
+                                                 [적용]을 눌러 활성 레시피가 되는 순간이 곧 헤드 교체다. -->
+                                            <TextBlock Text="레시피별" Foreground="#475569" FontSize="11"
+                                                       VerticalAlignment="Center" Margin="10,1,0,0"
+                                                       ToolTip="헤드 사양은 이 레시피에만 적용됩니다. [적용]으로 활성 레시피가 되면 노즐 선택·패턴 생성·토출이 이 헤드를 따릅니다."/>
                                         </StackPanel>
 
                                         <Grid>
@@ -619,11 +620,29 @@
                                                 <RowDefinition Height="Auto"/>
                                                 <RowDefinition Height="Auto"/>
                                                 <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
                                             </Grid.RowDefinitions>
 
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="노즐 피치"
+                                            <!-- 헤드명 — 계산에는 안 쓰고 기록용이다. 아래 숫자들이
+                                                 어느 헤드의 것인지 나중에 알아볼 수 있어야 한다. -->
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="헤드명"
                                                        Style="{StaticResource SpecFieldLabel}"/>
                                             <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
+                                                <Border Style="{StaticResource SpecFieldBox}" MinWidth="150">
+                                                    <TextBox Text="{Binding HeadName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                             Style="{StaticResource SpecTextBox}"
+                                                             HorizontalContentAlignment="Left"/>
+                                                </Border>
+                                                <TextBlock Text="예: S3200, S800"
+                                                           Foreground="#475569" FontSize="11"
+                                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                            </StackPanel>
+
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="노즐 피치"
+                                                       Style="{StaticResource SpecFieldLabel}"/>
+                                            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
                                                 <Border Style="{StaticResource SpecFieldBox}">
                                                     <TextBox Text="{Binding NozzlePitchUm, Mode=TwoWay, StringFormat={}{0:F1}, UpdateSourceTrigger=LostFocus}"
                                                              Style="{StaticResource SpecTextBox}"/>
@@ -631,16 +650,6 @@
                                                 <TextBlock Text="µm" Style="{StaticResource SpecUnit}"/>
                                                 <TextBlock Text="같은 열 안 인접 노즐 간 거리"
                                                            Foreground="#475569" FontSize="11" VerticalAlignment="Center"/>
-                                            </StackPanel>
-
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="노즐 열 수"
-                                                       Style="{StaticResource SpecFieldLabel}"/>
-                                            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
-                                                <ComboBox Width="110" Height="30" Margin="0,4"
-                                                          Style="{StaticResource ModernComboBoxStyle}"
-                                                          ItemsSource="{Binding NozzleRowOptions}"
-                                                          SelectedItem="{Binding NozzleRows, Mode=TwoWay}"/>
-                                                <TextBlock Text="열" Style="{StaticResource SpecUnit}"/>
                                             </StackPanel>
 
                                             <TextBlock Grid.Row="2" Grid.Column="0" Text="열 간격"
@@ -655,33 +664,80 @@
                                                            Foreground="#475569" FontSize="11" VerticalAlignment="Center"/>
                                             </StackPanel>
 
-                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="노즐 구경"
+                                            <!-- 칩 수 → 노즐 열 수 → 열당 노즐 수 순서. 이 셋을 곱하면
+                                                 총 노즐 수가 되므로 위에서 아래로 그대로 읽힌다
+                                                 (S3200 = 4 × 2 × 400 = 3,200). -->
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="칩 수"
                                                        Style="{StaticResource SpecFieldLabel}"/>
                                             <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal">
-                                                <Border Style="{StaticResource SpecFieldBox}">
-                                                    <TextBox Text="{Binding NozzleDiameterUm, Mode=TwoWay, StringFormat={}{0:F1}, UpdateSourceTrigger=LostFocus}"
-                                                             Style="{StaticResource SpecTextBox}"/>
-                                                </Border>
-                                                <TextBlock Text="µm" Style="{StaticResource SpecUnit}"/>
+                                                <ComboBox Width="110" Height="30" Margin="0,4"
+                                                          Style="{StaticResource ModernComboBoxStyle}"
+                                                          ItemsSource="{Binding ChipCountOptions}"
+                                                          SelectedItem="{Binding ChipCount, Mode=TwoWay}"/>
+                                                <TextBlock Text="개" Style="{StaticResource SpecUnit}"/>
+                                                <TextBlock Text="1이면 칩 없는 헤드 (S3200 = 4)"
+                                                           Foreground="#475569" FontSize="11" VerticalAlignment="Center"/>
                                             </StackPanel>
 
-                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="총 노즐 수"
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="노즐 열 수"
                                                        Style="{StaticResource SpecFieldLabel}"/>
                                             <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
+                                                <ComboBox Width="110" Height="30" Margin="0,4"
+                                                          Style="{StaticResource ModernComboBoxStyle}"
+                                                          ItemsSource="{Binding NozzleRowOptions}"
+                                                          SelectedItem="{Binding NozzleRows, Mode=TwoWay}"/>
+                                                <TextBlock Text="열" Style="{StaticResource SpecUnit}"/>
+                                                <TextBlock Text="칩 하나의 열 수 (S3200 = 2, Row A/B)"
+                                                           Foreground="#475569" FontSize="11" VerticalAlignment="Center"/>
+                                            </StackPanel>
+
+                                            <TextBlock Grid.Row="5" Grid.Column="0" Text="열당 노즐 수"
+                                                       Style="{StaticResource SpecFieldLabel}"/>
+                                            <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal">
+                                                <Border Style="{StaticResource SpecFieldBox}">
+                                                    <TextBox Text="{Binding NozzlesPerRow, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                             Style="{StaticResource SpecTextBox}"/>
+                                                </Border>
+                                                <TextBlock Text="개" Style="{StaticResource SpecUnit}"/>
+                                                <TextBlock Text="칩 하나의 한 열 (S3200 = 400)"
+                                                           Foreground="#475569" FontSize="11" VerticalAlignment="Center"/>
+                                            </StackPanel>
+
+                                            <TextBlock Grid.Row="6" Grid.Column="0" Text="웨이브폼"
+                                                       Style="{StaticResource SpecFieldLabel}"/>
+                                            <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal">
+                                                <ComboBox Width="110" Height="30" Margin="0,4"
+                                                          Style="{StaticResource ModernComboBoxStyle}"
+                                                          ItemsSource="{Binding WaveformOptions}"
+                                                          SelectedItem="{Binding Waveform, Mode=TwoWay}"/>
+                                                <!-- 목록 순서와 같은 순서로 적는다:
+                                                     Vibration=토출 안함 / Small=3.2pL / Middle=5.1pL / Large=10.1pL -->
+                                                <TextBlock Text="액적 크기 (토출 안함, 3.2pL, 5.1pL, 10.1pL)"
+                                                           Foreground="#475569" FontSize="11"
+                                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                            </StackPanel>
+
+                                            <TextBlock Grid.Row="7" Grid.Column="0" Text="총 노즐 수"
+                                                       Style="{StaticResource SpecFieldLabel}"/>
+                                            <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal">
                                                 <Border Style="{StaticResource SpecFieldBox}">
                                                     <TextBox Text="{Binding NozzleCount, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                              Style="{StaticResource SpecTextBox}"/>
                                                 </Border>
                                                 <TextBlock Text="개" Style="{StaticResource SpecUnit}"/>
+                                                <!-- 칩·열·열당이 총합과 안 맞으면 여기서 드러난다.
+                                                     세 값을 따로 받으면 어긋나도 화면이 아무 말을 안 한다. -->
+                                                <TextBlock Text="{Binding NozzleCountHint}"
+                                                           Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Grid>
                                     </StackPanel>
                                 </Border>
 
-                                <!-- 글라스 정보 -->
+                                <!-- 글라스 정보 — 노즐 정보 오른쪽 옆 -->
                                 <Border Background="#1E293B" CornerRadius="10"
                                         BorderBrush="#334155" BorderThickness="1"
-                                        Padding="16" HorizontalAlignment="Left" MinWidth="420">
+                                        Padding="16" Margin="0,0,0,12" VerticalAlignment="Top" MinWidth="420">
                                     <StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
                                             <TextBlock Text="▭" FontSize="14" Foreground="#A78BFA"
@@ -757,7 +813,7 @@
                                     </StackPanel>
                                 </Border>
 
-                            </StackPanel>
+                            </WrapPanel>
                         </ScrollViewer>
 
                     </Grid>

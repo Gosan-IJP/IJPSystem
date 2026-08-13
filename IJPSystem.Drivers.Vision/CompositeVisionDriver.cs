@@ -168,6 +168,9 @@ namespace IJPSystem.Drivers.Vision
             Route(cameraId)?.WaitForHardwareTriggerAsync(cameraId, ct)
             ?? Task.FromResult(VisionImage.Invalid(cameraId));
 
+        public void SetHardwareTrigger(string cameraId, bool on) =>
+            Route(cameraId)?.SetHardwareTrigger(cameraId, on);
+
         // ── 4. 검사 ─────────────────────────────────────────────────────────
         public Task<InspectionResult> InspectAsync(string cameraId, VisionImage image) =>
             Route(cameraId)?.InspectAsync(cameraId, image)

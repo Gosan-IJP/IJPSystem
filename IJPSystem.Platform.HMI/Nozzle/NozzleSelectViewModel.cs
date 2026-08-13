@@ -43,6 +43,8 @@ namespace IJPSystem.Platform.HMI.Nozzle
             InvertCommand  = new RelayCommand(_ => Replace(AllNozzles().Where(n => !_selected.Contains(n)), "반전"));
             ClearCommand   = new RelayCommand(_ => Replace(Array.Empty<int>(), "해제"));
 
+            BuildGroupButtons();
+
             // 전역에 범위 밖 번호가 들어 있을 수 있다(헤드 사양이 바뀌었거나 옛 레시피).
             // 그대로 받으면 "사용 152 / 128" 같은 표시가 나오고, 토출 단계에서 조용히 빠진다.
             var stored = NozzleControlGlobal.Instance.UsingNozzle.UsingNozzles;
@@ -62,8 +64,76 @@ namespace IJPSystem.Platform.HMI.Nozzle
         public int FirstNozzle  => MinNozzle;
         public int TotalNozzles => MaxNozzle - MinNozzle + 1;
 
-        /// <summary>막대를 몇 줄로 나눌지 — 헤드 열 수와 맞춘다(S800 = 2열 × 400).</summary>
-        public int Rows => HeadSpec.Rows;
+        /// <summary>
+        /// 막대를 몇 줄로 나눌지 — <b>칩 수 × 열 수</b>. S800 = 1×2 = 2줄, S3200 = 4×2 = 8줄.
+        /// 화면이 헤드 생김새와 같아야 "칩3 A열만 끄기" 같은 조작이 눈으로 된다.
+        /// </summary>
+        public int Rows => HeadSpec.SelectionRows;
+
+        /// <summary>칩 수. 1 이면 칩 단위 버튼을 감춘다(칩이 없는 헤드에서 의미 없는 줄이 생긴다).</summary>
+        public int ChipCount => HeadSpec.ChipCount;
+
+        public bool HasChips => ChipCount > 1;
+
+        /// <summary>한 칩의 노즐 수(A+B 합).</summary>
+        private int NozzlesPerChip => HeadSpec.Rows * HeadSpec.NozzlesPerChipRow;
+
+        /// <summary>
+        /// 칩·열 단위 빠른 선택 버튼. 헤드 구조가 바뀌면 버튼도 따라 바뀐다 —
+        /// 개수를 코드에 박아 두면 S3200 에서 칩3·칩4 버튼이 없다.
+        /// </summary>
+        public IReadOnlyList<GroupButton> ChipButtons { get; private set; } = Array.Empty<GroupButton>();
+        public IReadOnlyList<GroupButton> RowButtons  { get; private set; } = Array.Empty<GroupButton>();
+
+        /// <summary>빠른 선택 버튼 하나 — 칩 또는 열 한 덩어리를 켜고 끈다.</summary>
+        public sealed class GroupButton
+        {
+            public GroupButton(string label, IReadOnlyList<int> nozzles, ICommand add, ICommand remove)
+            {
+                Label = label; Nozzles = nozzles; AddCommand = add; RemoveCommand = remove;
+            }
+
+            public string Label { get; }
+            public IReadOnlyList<int> Nozzles { get; }
+            /// <summary>왼쪽 클릭 = 이 덩어리를 선택에 <b>더한다</b>.</summary>
+            public ICommand AddCommand { get; }
+            /// <summary>오른쪽 클릭 = <b>뺀다</b>. 한 칩만 빼는 조작이 잦다.</summary>
+            public ICommand RemoveCommand { get; }
+        }
+
+        /// <summary>
+        /// 칩·열 버튼을 만든다. 노즐 번호를 어떻게 나누느냐는 <b>번호 규약</b>에 달렸는데,
+        /// 아직 확정 전이라 지금은 <c>ChipRowBlock</c>(칩1 A 전부 → 칩1 B 전부 → 칩2 A …)을 따른다.
+        /// 규약이 정해지면 여기 한 곳만 고치면 된다.
+        /// </summary>
+        private void BuildGroupButtons()
+        {
+            int chips      = HeadSpec.ChipCount;
+            int rows       = HeadSpec.Rows;
+            int perChipRow = HeadSpec.NozzlesPerChipRow;
+
+            ChipButtons = NozzleGroups.ByChip(chips, rows, perChipRow, MinNozzle, MaxNozzle)
+                                      .Select(ToButton).ToList();
+            RowButtons  = NozzleGroups.ByRow (chips, rows, perChipRow, MinNozzle, MaxNozzle)
+                                      .Select(ToButton).ToList();
+        }
+
+        private GroupButton ToButton(NozzleGroups.Group g)
+            => new(g.Label, g.Nozzles,
+                   new RelayCommand(_ => AddNozzles(g.Nozzles, g.Label)),
+                   new RelayCommand(_ => RemoveNozzles(g.Nozzles, g.Label)));
+
+        private void AddNozzles(IReadOnlyList<int> nozzles, string what)
+        {
+            foreach (int n in nozzles) _selected.Add(n);
+            RefreshSelection($"{what} 선택 — 사용 {_selected.Count}개");
+        }
+
+        private void RemoveNozzles(IReadOnlyList<int> nozzles, string what)
+        {
+            foreach (int n in nozzles) _selected.Remove(n);
+            RefreshSelection($"{what} 해제 — 사용 {_selected.Count}개");
+        }
 
         // ── 선택 상태 ─────────────────────────────────────────────────────
         private IReadOnlyCollection<int> _selectedView = Array.Empty<int>();

@@ -44,16 +44,30 @@ namespace IJPSystem.Platform.HMI.Nozzle
         }
 
         /// <summary>
-        /// 열 수만큼 창을 세로로 늘린다. 막대는 열마다 <see cref="NozzleStrip.RowPitchPx"/> 씩
-        /// 커지는데 창이 고정이면 4열부터 아래 버튼이 잘려, 열 때마다 손으로 늘려야 했다.
-        /// SizeToContent 를 쓰지 않는 이유: CenterOwner 와 같이 쓰면 창이 중앙에서 어긋난다.
+        /// 줄 수만큼 창을 세로로 늘려 <b>가능하면 막대 전체가 한눈에 보이게</b> 한다.
+        ///
+        /// <para>여기서 못 늘려도 잘리지는 않는다 — 막대 행만 <c>Height="*"</c> 라 남는 공간을
+        /// 가져가고, 모자라면 막대 안에서 스크롤된다. 즉 이 계산은 <b>편의</b>일 뿐이고
+        /// [확인]/[취소]가 보이는 것은 레이아웃이 보장한다.</para>
+        ///
+        /// <para>SizeToContent 를 쓰지 않는 이유: CenterOwner 와 같이 쓰면 창이 중앙에서 어긋난다.</para>
         /// </summary>
         private void FitHeightToRows(int rows)
         {
-            double want = Height + Math.Max(0, rows - BaselineRows) * NozzleStrip.RowPitchPx;
+            // 기준(2줄)보다 늘어난 줄 수만큼. 상한을 두지 않는다 — 큰 화면에서는 8줄을 다 보여 주고,
+            // 작은 화면에서는 아래 작업영역 제한에 걸린 뒤 막대가 스크롤로 처리한다.
+            double stripGrowth = Math.Max(0, rows - BaselineRows) * NozzleStrip.RowPitchPx;
+
+            // 칩·열 버튼 줄이 늘어난 만큼(칩이 없으면 열 줄 하나뿐).
+            double buttonRows = _vm.HasChips ? 2 : 1;
+
+            double want = Height + stripGrowth + buttonRows * GroupButtonRowPx;
 
             // 화면 밖으로 나가면 늘려 준 의미가 없다 — 작업 영역 안에서 멈춘다.
             Height = Math.Max(MinHeight, Math.Min(want, SystemParameters.WorkArea.Height - 60));
         }
+
+        /// <summary>칩/열 버튼 한 줄이 차지하는 세로 크기(버튼 32 + 위 여백 6~8).</summary>
+        private const double GroupButtonRowPx = 40;
     }
 }

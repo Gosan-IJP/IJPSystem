@@ -109,6 +109,26 @@ namespace IJPSystem.Platform.Infrastructure.Config
             public const string NozzleRowPitchUm = "Nozzle.RowPitchUm";
             public const string NozzleDiameterUm = "Nozzle.DiameterUm";
             public const string NozzleCount      = "Nozzle.Count";
+
+            // ── 칩이 엇갈린 헤드(S3200) ───────────────────────────────────────
+            // 1 이면 칩 없는 헤드(S800)로 본다 — 기존 장비는 아무것도 넣지 않아도 그대로 돈다.
+
+            /// <summary>헤드 안의 칩 수. S3200 = 4, S800 = 1.</summary>
+            public const string HeadChipCount        = "Head.ChipCount";
+            /// <summary>칩 하나의 <b>한 열</b> 노즐 수. S3200 = 400.</summary>
+            public const string HeadNozzlesPerRow    = "Head.NozzlesPerRow";
+            /// <summary>이웃한 칩끼리 겹치는 노즐 수(열당). S3200 = 60(도면 Over-Lap).</summary>
+            public const string HeadOverlapNozzles   = "Head.OverlapNozzles";
+            /// <summary>크로스스캔 실효 피치[µm]. S3200 = 600npi = 42.3333.</summary>
+            public const string HeadPitchUm          = "Head.EffectivePitchUm";
+            /// <summary>칩 안 A–B 열 간 <b>스캔방향</b> 거리[µm]. S3200 = 1016(24/600 inch).</summary>
+            public const string HeadRowGapUm         = "Head.RowGapUm";
+            /// <summary>홀·짝 칩 간 <b>스캔방향</b> 거리[µm]. S3200 = 15240(360/600 inch).</summary>
+            public const string HeadChipGapUm        = "Head.ChipGapUm";
+            /// <summary>통짜 노즐 번호 규약(<c>ChipRowBlock</c> / <c>ChipInterleaved</c> / <c>ByPosition</c>).</summary>
+            public const string HeadNozzleNumbering  = "Head.NozzleNumbering";
+            /// <summary>웨이브폼 계조 단계(<c>Vibration</c> / <c>Small</c> / <c>Middle</c> / <c>Large</c>).</summary>
+            public const string HeadWaveform         = "Head.Waveform";
         }
     }
 

@@ -743,10 +743,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
             try
             {
                 ApplyCameraForStrobe();          // 스트로브 촬영용 노출/조명 설정
+
+                // 카메라를 먼저 트리거 대기로 만든 뒤 체인을 켠다 — 순서가 반대면
+                // 모드를 바꾸는 사이에 나간 트리거를 카메라가 못 받는다.
+                // (트리거 체인과 같은 원칙: 소비자를 arm 한 다음 공급을 켠다)
+                _vision.SetHardwareTrigger(CamId, true);
                 _trigger.Start(FrequencyHz);
                 OnPropertyChanged(nameof(IsTriggerSynced));
                 _mainVM.AddLog($"[VISION] DropWatcher: 트리거 체인 기동 — 분주 1/{_trigCfg.DivideRatio}, " +
                                $"실촬영 {_trigger.EffectiveFrameRateHz:F1}fps", LogLevel.Info);
+
+                // 어느 카운터가 어느 핀으로 나가는지 남긴다 — 배선과 대조할 유일한 근거다.
+                // (코드 기본값과 config 가 다를 때 이기는 쪽은 config 인데, 그게 안 보이면
+                //  LED 가 안 켜졌을 때 배선부터 뜯게 된다)
+                _mainVM.AddLog($"[VISION] DropWatcher: 트리거 배선 — {_trigCfg.Describe()}", LogLevel.Info);
 
                 // 프레임 누락 위험은 조용히 넘기면 "그냥 느린 촬영"으로 보여 원인 추적이 어렵다.
                 if (!string.IsNullOrEmpty(_trigger.MarginWarning))
@@ -754,6 +764,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
             catch (Exception ex)
             {
+                // ★ 카메라를 자유 실행으로 되돌린다. 체인이 죽었는데 트리거 대기로 두면
+                //   오지 않는 트리거를 기다리며 화면이 통째로 멎어, 원인이 트리거가 아니라
+                //   카메라 고장으로 보인다(제어PC에 NI 런타임이 없을 때가 바로 이 경로다).
+                try { _vision.SetHardwareTrigger(CamId, false); } catch { }
+
                 // 트리거 없이도 토출 자체는 유효하다(육안 확인 등). 다만 측정값은 신뢰할 수 없다.
                 _mainVM.AddLog($"[VISION] DropWatcher: 트리거 체인 기동 실패: {ex.Message} " +
                                "— 촬영이 토출과 동기되지 않아 속도 측정값을 신뢰할 수 없습니다.", LogLevel.Error);
@@ -772,6 +787,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // 트리거 공급부터 차단(역순 정지) — 토출이 멎는 동안 헛 트리거가 나가지 않게.
             try { _trigger.Stop(); OnPropertyChanged(nameof(IsTriggerSynced)); }
             catch (Exception ex) { _mainVM.AddLog($"[VISION] DropWatcher: 트리거 체인 정지 실패: {ex.Message}", LogLevel.Warning); }
+
+            // 공급이 끊긴 뒤 카메라를 자유 실행으로 되돌린다 — 트리거 모드로 남으면 라이브뷰가 멎는다.
+            try { _vision.SetHardwareTrigger(CamId, false); }
+            catch (Exception ex) { _mainVM.AddLog($"[VISION] DropWatcher: 카메라 트리거 해제 실패: {ex.Message}", LogLevel.Warning); }
 
             bool idle = await SpitService.StopAsync();
 
@@ -1570,6 +1589,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _measureCts?.Dispose();
             // 화면을 떠나도 헤드가 계속 토출하면 안 된다. 종료 경로라 무한정 기다리진 않는다.
             try { _trigger.Stop(); } catch { }
+            // 카메라는 화면보다 오래 산다 — 트리거 모드로 남겨 두면 다음에 여는 화면이 멎는다.
+            try { _vision.SetHardwareTrigger(CamId, false); } catch { }
             _trigger.Dispose();
             // 토출기는 장비 공용(SpitService)이라 여기서 Dispose 하지 않는다 — 화면을 닫았다고
             // 다른 화면의 스핏 버튼까지 죽으면 안 된다. 다만 돌고 있으면 멈춘다.

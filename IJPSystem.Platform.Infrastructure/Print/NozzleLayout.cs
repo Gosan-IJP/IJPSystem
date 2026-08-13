@@ -7,9 +7,11 @@ namespace IJPSystem.Platform.Infrastructure.Print
     /// <summary>노즐 하나의 물리 위치.</summary>
     public readonly struct NozzlePosition
     {
-        public NozzlePosition(int number, int head, int row, int indexInRow, double xUm)
+        public NozzlePosition(int number, int head, int row, int indexInRow, double xUm,
+                              double yUm = 0, int chip = 0, int slot = -1)
         {
             Number = number; Head = head; Row = row; IndexInRow = indexInRow; XUm = xUm;
+            YUm = yUm; Chip = chip; Slot = slot < 0 ? indexInRow : slot;
         }
 
         /// <summary>화면·레시피가 쓰는 노즐 번호(1-based).</summary>
@@ -22,6 +24,24 @@ namespace IJPSystem.Platform.Infrastructure.Print
         public int IndexInRow { get; }
         /// <summary>스캔 직각 방향(크로스스캔) 위치 [µm]. 첫 헤드 첫 노즐이 0.</summary>
         public double XUm { get; }
+
+        /// <summary>
+        /// <b>스캔 방향</b> 위치 [µm]. 칩이 엇갈린 헤드(S3200)에서만 0 이 아니다.
+        ///
+        /// <para>이 값이 필요한 이유: 칩2·칩4 는 칩1 보다 15.24mm 앞서 있어, 글라스의
+        /// <b>같은 지점</b>에 찍으려면 그만큼 늦게 발사해야 한다. X 만 보고 동시에 쏘면
+        /// 칩마다 15mm 씩 어긋난 그림이 나온다.</para>
+        /// </summary>
+        public double YUm { get; }
+
+        /// <summary>몇 번째 칩인가(1-based). 칩이 없는 헤드는 0.</summary>
+        public int Chip { get; }
+
+        /// <summary>
+        /// 크로스스캔 <b>격자 칸 번호</b>(0-based) — X 를 실효 피치로 나눈 정수.
+        /// 겹치는 노즐은 <b>이 값이 같다</b>. 부동소수 X 를 비교하지 않고 겹침을 판정하려고 둔다.
+        /// </summary>
+        public int Slot { get; }
     }
 
     /// <summary>

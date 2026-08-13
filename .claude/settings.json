@@ -420,7 +420,18 @@
       "Bash(DOTNET_ROLL_FORWARD=LatestMajor ./bin/Debug/net8.0-windows/win-x86/ripprobe.exe)",
       "Bash(DOTNET_ROLL_FORWARD=LatestMajor ./ripprobe.exe)",
       "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"Tools\\\\Deploy\\\\Build-Hotfix.ps1\")",
-      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"Tools\\\\Deploy\\\\Build-Hotfix.ps1\" -Config MotorConfig.json)"
+      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"Tools\\\\Deploy\\\\Build-Hotfix.ps1\" -Config MotorConfig.json)",
+      "Bash(cd \"C:/Users/bluey/.claude/projects/d--IJP-IJPSystem/memory\" && ls -a && if [ -d .git ]; then rm -rf .git && echo \"removed accidental .git\"; fi)",
+      "Bash(grep -a -o \"PULSE_[^\\\\x00\\\\\"]\\\\{0,12\\\\}\" Config/RecipeData.db)",
+      "Bash(grep -a -o \"PULSE_[^\\\\x00\\\\\"]\\\\{0,12\\\\}\" Config/MachineData.db)",
+      "Bash(cd \"C:/Users/bluey/.claude/projects/d--IJP-IJPSystem/memory\" && sed -n '18,20p' MEMORY.md)",
+      "Bash(cd \"d:/IJP\" && ls 2>/dev/null | head -20 && echo \"=== VI 파일 검색 ===\" && find . -maxdepth 4 -iname \"*.vi\" -o -maxdepth 4 -iname \"*Pules*\" -o -maxdepth 4 -iname \"*Reducer*\" 2>/dev/null | head -10)",
+      "Bash(powershell.exe -NoProfile -Command '$d = Get-Content Config/VisionConfig.json -Raw -Encoding UTF8 | ConvertFrom-Json; $d.VisionCameraList | ForEach-Object { '\\\\''{0} | Driver={1} | TriggerSource=[{2}]'\\\\'' -f $_.CameraId, $_.Driver, $_.TriggerSource }')",
+      "Bash(DOTNET_ROLL_FORWARD=LatestMajor dotnet test IJPSystem.Tests/IJPSystem.Tests.csproj --nologo -v q --filter \"FullyQualifiedName~VirtualHardwareTrigger\")",
+      "Bash(awk 'BEGIN{ *)",
+      "Bash(DOTNET_ROLL_FORWARD=LatestMajor dotnet test IJPSystem.Tests/IJPSystem.Tests.csproj --nologo -v q --filter \"FullyQualifiedName~ChipHeadLayout\")",
+      "Bash(DOTNET_ROLL_FORWARD=LatestMajor dotnet test IJPSystem.Tests/IJPSystem.Tests.csproj --nologo --logger \"console;verbosity=detailed\" --filter \"FullyQualifiedName~인쇄폭\")",
+      "Bash(DOTNET_ROLL_FORWARD=LatestMajor dotnet test IJPSystem.Tests/IJPSystem.Tests.csproj --nologo -v q --filter \"FullyQualifiedName~NozzleGroups\")"
     ],
     "additionalDirectories": [
       "d:\\tmp",
