@@ -733,6 +733,78 @@
                     </StackPanel>
                 </Border>
 
+                <!-- ── 트리거 상태 ──────────────────────────────────────────────
+                     Spit 버튼 바로 위에 둔다 — 누르고 나서 눈이 가는 자리다.
+                     램프 하나로 "트리거 OK/NG" 만 띄우면 NG 일 때 어디가 끊겼는지 모르므로
+                     구간을 갈라 보여준다(체인 / 조명 / 프레임). 숫자를 같이 띄우는 것도 중요한데,
+                     램프만 있으면 "느리게 도는 중"과 "정상"이 똑같은 초록불이 된다. -->
+                <Border Background="#111827" CornerRadius="12" Padding="16" Margin="0,0,0,10"
+                        BorderBrush="#334155" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="TRIGGER" Style="{StaticResource DwSectionTitle}"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="62"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="22"/>
+                                <RowDefinition Height="22"/>
+                                <RowDefinition Height="22"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- 체인 — DAQmx 가 설정을 받아들여 카운터가 돌기 시작했는가 -->
+                            <Ellipse Grid.Row="0" Grid.Column="0" Width="9" Height="9" Margin="0,0,8,0"
+                                     VerticalAlignment="Center"
+                                     Fill="{Binding ChainLamp, Converter={StaticResource TriggerLampToBrushConverter}}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="체인"
+                                       Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding ChainText}"
+                                       Foreground="#E2E8F0" FontSize="11" FontFamily="Consolas"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+
+                            <!-- 조명 — 명령이 아니라 iCore 레지스터 리드백이다 -->
+                            <Ellipse Grid.Row="1" Grid.Column="0" Width="9" Height="9" Margin="0,0,8,0"
+                                     VerticalAlignment="Center"
+                                     Fill="{Binding LightLamp, Converter={StaticResource TriggerLampToBrushConverter}}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="조명"
+                                       Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"
+                                       ToolTip="iCore 컨트롤러에서 직접 읽은 운전 모드입니다. 켜라고 명령했는지가 아니라 실제로 켜져 있는지를 보여줍니다."/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding LightText}"
+                                       Foreground="#E2E8F0" FontSize="11" FontFamily="Consolas"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+
+                            <!-- 프레임 — 체인 전체가 카메라까지 도달했다는 유일한 증거 -->
+                            <Ellipse Grid.Row="2" Grid.Column="0" Width="9" Height="9" Margin="0,0,8,0"
+                                     VerticalAlignment="Center"
+                                     Fill="{Binding FrameLamp, Converter={StaticResource TriggerLampToBrushConverter}}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="프레임"
+                                       Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"
+                                       ToolTip="라이브 뷰나 측정이 돌고 있을 때만 셀 수 있습니다. 둘 다 꺼져 있으면 프레임이 안 오는 것이 정상이라 회색입니다."/>
+                            <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding FrameText}"
+                                       Foreground="#E2E8F0" FontSize="11" FontFamily="Consolas"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        </Grid>
+
+                        <!-- 램프 조합이 가리키는 "볼 곳". 이게 없으면 램프 세 개를 보고도
+                             매번 같은 추론을 다시 해야 한다. -->
+                        <Border Background="#1E293B" CornerRadius="6" Padding="8,6" Margin="0,10,0,0"
+                                Visibility="{Binding HasTriggerDiagnosis, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="{Binding TriggerDiagnosis}" Foreground="#FCD34D"
+                                       FontSize="11" TextWrapping="Wrap"/>
+                        </Border>
+
+                        <!-- 기동 시 경고(마진·공유 펄스 폭) — 로그는 흘러가서 못 본다. -->
+                        <Border Background="#1E293B" CornerRadius="6" Padding="8,6" Margin="0,6,0,0"
+                                Visibility="{Binding HasTriggerWarning, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="{Binding TriggerWarning}" Foreground="#F59E0B"
+                                       FontSize="11" TextWrapping="Wrap"/>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
                 <!-- ── 동작 버튼 ────────────────────────────────────────────── -->
                 <Border Background="#111827" CornerRadius="12" Padding="16"
                         BorderBrush="#334155" BorderThickness="1">

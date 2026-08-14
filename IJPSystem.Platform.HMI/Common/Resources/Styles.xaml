@@ -7,6 +7,7 @@
     ═══════════════════════════════════════ -->
     <cvts:BooleanToVisibilityConverter      x:Key="BooleanToVisibilityConverter"/>
     <cvts:SignalToColorConverter            x:Key="SignalToColorConverter"/>
+    <cvts:TriggerLampToBrushConverter       x:Key="TriggerLampToBrushConverter"/>
     <cvts:SignalToColorConverter            x:Key="BoolToColorConverter"/>
     <cvts:SignalToTextConverter             x:Key="SignalToTextConverter"/>
     <cvts:AlarmToColorConverter             x:Key="AlarmToColorConverter"/>

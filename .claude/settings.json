@@ -431,7 +431,13 @@
       "Bash(awk 'BEGIN{ *)",
       "Bash(DOTNET_ROLL_FORWARD=LatestMajor dotnet test IJPSystem.Tests/IJPSystem.Tests.csproj --nologo -v q --filter \"FullyQualifiedName~ChipHeadLayout\")",
       "Bash(DOTNET_ROLL_FORWARD=LatestMajor dotnet test IJPSystem.Tests/IJPSystem.Tests.csproj --nologo --logger \"console;verbosity=detailed\" --filter \"FullyQualifiedName~인쇄폭\")",
-      "Bash(DOTNET_ROLL_FORWARD=LatestMajor dotnet test IJPSystem.Tests/IJPSystem.Tests.csproj --nologo -v q --filter \"FullyQualifiedName~NozzleGroups\")"
+      "Bash(DOTNET_ROLL_FORWARD=LatestMajor dotnet test IJPSystem.Tests/IJPSystem.Tests.csproj --nologo -v q --filter \"FullyQualifiedName~NozzleGroups\")",
+      "Bash(cd \"d:/IJP/IJPSystem\" && sed -n '620,769p' IJPSystem.Platform.HMI/Views/Recipe/RecipeView.xaml > /tmp/old_block.txt && wc -l /tmp/old_block.txt && head -2 /tmp/old_block.txt && tail -2 /tmp/old_block.txt)",
+      "Bash(DOTNET_ROLL_FORWARD=LatestMajor \"/c/Program Files \\(x86\\)/dotnet/dotnet.exe\" Probe.dll)",
+      "Bash(iconv -f cp949 -t utf-8 out.txt)",
+      "Bash(node -e \"const f=require\\('fs'\\);for\\(const p of ['Config/VisionConfig.json','Config/TriggerChainConfig.json']\\)JSON.parse\\(f.readFileSync\\(p,'utf8'\\)\\);console.log\\('JSON OK'\\)\")",
+      "Bash(powershell.exe -NoProfile -Command \"Get-Content Config/VisionConfig.json -Raw | ConvertFrom-Json | Out-Null; Get-Content Config/TriggerChainConfig.json -Raw | ConvertFrom-Json | Out-Null; 'JSON OK'\")",
+      "Bash(grep -o -i -E \"\\(tcp|udp|socket|ethernet|port [0-9]+|ip address|shared memory|pipe|localhost|127\\\\.0\\\\.0\\\\.1\\)[^<]{0,80}\" lib/Meteor/x86/PrinterInterfaceCLS.xml lib/Meteor/x86/MeteorCLS.xml)"
     ],
     "additionalDirectories": [
       "d:\\tmp",

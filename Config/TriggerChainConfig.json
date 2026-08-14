@@ -1,18 +1,27 @@
 {
-  "SpitPulseTerminal": "/Dev1/PFI8",
+  "_comment1": "드랍와처 하드웨어 트리거 체인(NI-DAQmx). 배선 근거 = 「(9~12호기)PULSE 200 전장도면_0720-1.dwg」(2026-08-14 확인).",
+  "_comment2": "신호 흐름: PCC2-E PL3-2 → PFI5 → [분주기 ctr1] → Ctr1InternalOutput → [LED ctr0] → PFI12 → 조명 iCore + DWC 카메라(병렬).",
+
+  "_comment3": "★SpitPulseTerminal: 도면상 PFI5/P1.5(6) 이 PCC2-E PL3 2번 핀, DGND(7) 이 PL3 5번 핀에 물려 있다. 토출 펄스를 만드는 것이 헤드 컨트롤러이므로 여기가 분주기 입력이다. 이전 값 PFI8 은 외부 배선이 없다(AI1(33)·PFI8(37)·PFI15(39) 끼리 점퍼만 되어 있는 자체 시험용 루프백).",
+  "SpitPulseTerminal": "/Dev1/PFI5",
   "TimebaseTerminal": "/Dev1/100MHzTimebase",
   "TimebaseRateHz": 100000000.0,
 
+  "_comment4": "★카운터: 도면의 PFI12/P2.4(2) 가 조명·카메라로 가므로 LED = ctr0(X-Series 기본 라우팅 ctr0→PFI12). 남는 ctr1 이 분주기. 랩뷰 주석의 'PFI13(ctr1 out) → DWC LED' 는 도면과 맞지 않으며 PFI13 에는 아무것도 꽂혀 있지 않다.",
   "DividerCounter": "Dev1/ctr1",
   "LedCounter": "Dev1/ctr0",
-  "CamCounter": "Dev1/ctr3",
+
+  "_comment5": "★CamCounter 를 비워 둔 것은 누락이 아니다 — 카메라가 조명과 PFI12 한 가닥을 병렬로 물고 있어 전용 트리거 카운터가 없다. 이때 CamDelayUs/CamWidthUs 는 쓰이지 않는다(카메라 위상은 LedDelayUs/LedWidthUs 가 정한다). 배선을 분리하면 'Dev1/ctr3' 처럼 채운다.",
+  "CamCounter": "",
 
   "DivideRatio": 100,
   "InitialSkipPulses": 0,
 
+  "_comment6": "★LedWidthUs 는 방울 선명도와 카메라 트리거 인식을 동시에 결정한다(공유 배선). 짧을수록 방울이 선명하지만, 카메라 광절연 입력이 너무 짧은 펄스를 놓치면 '조명은 번쩍이는데 촬영이 안 되는' 증상이 난다. 5µs 미만이면 기동 시 경고가 남는다 — 카메라 매뉴얼의 최소 트리거 폭을 확인해 판단할 것.",
   "LedDelayUs": 0.0,
   "LedWidthUs": 1.0,
 
+  "_comment7": "아래 둘은 CamCounter 를 채워 배선을 분리했을 때만 유효하다.",
   "CamDelayUs": 0.0,
   "CamWidthUs": 10.0,
 

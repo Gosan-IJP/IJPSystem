@@ -35,10 +35,15 @@ namespace IJPSystem.Tests
             public List<double> AppliedDelays   { get; } = new();
 
             public void Init() { }
-            public void Enable(bool on) { }
+            public void Enable(bool on) { IsEnabled = on; }
             public void SetDelayMicroseconds(double us) { LastDelayMicroseconds = us; AppliedDelays.Add(us); }
             public uint? TryReadDelayRaw() =>
                 double.IsNaN(LastDelayMicroseconds) ? null : (uint)Math.Round(LastDelayMicroseconds);
+
+            public bool IsEnabled { get; private set; }
+            public ushort ExpectedRunMode => 2;                     // 드랍와처 = Pulse
+            public ushort? ReadOperationMode() => IsEnabled ? ExpectedRunMode : (ushort)0;
+
             public void Dispose() { }
         }
 

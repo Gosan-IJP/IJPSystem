@@ -92,14 +92,21 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
     /// NI-DAQmx 하드웨어 트리거 체인 구현.
     /// (LabVIEW "Pules Reducer.vi" — 4. Component/20_DAQ LED Trigger)
     ///
-    /// 구성:
-    ///   토출 펄스(PFI8) → [분주기] CO Pulse Ticks, Continuous, 소스=PFI8  → low+high=N 로 divide-by-N
-    ///                       ↓ Ctr{n}InternalOutput
-    ///                     [LED] ┬ CO Pulse Ticks, Finite 1펄스, 소스=100MHz, Retriggerable
-    ///                     [Cam] ┘  각각 독립 지연/폭
+    /// 구성 (전장도면 2026-08-14 확정 — 10호기 실배선):
+    ///   PCC2-E PL3-2 → 토출 펄스(PFI5) → [분주기 ctr1] CO Pulse Ticks, Continuous, 소스=PFI5
+    ///                                       low+high=N 로 정확한 divide-by-N
+    ///                       ↓ /Dev1/Ctr1InternalOutput
+    ///                     [LED ctr0] CO Pulse Ticks, Finite 1펄스, 소스=100MHz, Retriggerable
+    ///                       ↓ PFI12 <b>한 가닥</b>
+    ///                       ├→ iCore 조명 DIGITAL INPUT+
+    ///                       └→ DWC 카메라 OPTO IN+(PIN2)
     ///
-    /// ※ 하드웨어 없이 작성했다 — 시그니처·상수는 NI 공개 헤더 기준이지만 카운터 배정과 터미널명은
-    ///   장비에서 확인해야 한다. 첫 기동은 오실로스코프로 LED/Cam 파형을 확인할 것.
+    /// ★카메라 전용 카운터가 없다 — 조명 펄스를 그대로 나눠 쓴다. 그래서 스트로브 폭 하나가
+    ///   방울 선명도와 카메라 트리거 인식을 동시에 결정한다
+    ///   (<see cref="TriggerChainSettings.ValidateSharedPulseWidth"/> 참조).
+    ///
+    /// ※ 하드웨어 없이 작성했다 — 시그니처·상수는 NI 공개 헤더 기준이다.
+    ///   첫 기동은 오실로스코프로 PFI12 파형을 확인할 것.
     /// </summary>
     public sealed class NiDaqTriggerChain : ITriggerChain
     {
@@ -131,17 +138,23 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
             if (EffectiveFrameRateHz <= 0)
                 throw new InvalidOperationException("실촬영 주파수가 0 입니다. 토출 주파수/분주비를 확인하세요.");
 
-            MarginWarning = _cfg.ValidateTriggerMargin(spitFrequencyHz);
+            // 실장은 공유 펄스 폭 경고까지 함께 본다(가상은 광절연 입력이 없어 해당 없음).
+            MarginWarning = _cfg.StartupWarning(spitFrequencyHz);
 
             try
             {
                 BuildDivider();
                 BuildRetriggerable(out _led, "LED", _cfg.LedCounter, _cfg.LedDelayUs, _cfg.LedWidthUs);
-                BuildRetriggerable(out _cam, "Cam", _cfg.CamCounter, _cfg.CamDelayUs, _cfg.CamWidthUs);
+
+                // 10호기 실배선은 조명과 카메라가 PFI12 한 가닥을 병렬로 문다 — 카메라 전용 카운터가
+                // 없다. 이때 Cam 태스크를 만들면 쓰지도 않는 카운터를 점유할 뿐이다.
+                if (!_cfg.CamSharesLed)
+                    BuildRetriggerable(out _cam, "Cam", _cfg.CamCounter, _cfg.CamDelayUs, _cfg.CamWidthUs);
 
                 // ① 소비자(LED/Cam)를 먼저 arm — 트리거 대기 상태로 만든 뒤에
                 Warn(DaqmxInterop.Check("StartTask(LED)", DaqmxInterop.DAQmxStartTask(_led)));
-                Warn(DaqmxInterop.Check("StartTask(Cam)", DaqmxInterop.DAQmxStartTask(_cam)));
+                if (_cam != IntPtr.Zero)
+                    Warn(DaqmxInterop.Check("StartTask(Cam)", DaqmxInterop.DAQmxStartTask(_cam)));
                 // ② 분주기를 켠다. 순서가 반대면 첫 트리거를 놓친다.
                 Warn(DaqmxInterop.Check("StartTask(Divider)", DaqmxInterop.DAQmxStartTask(_divider)));
 

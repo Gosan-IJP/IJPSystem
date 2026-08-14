@@ -590,7 +590,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ToggleStrobeCommand        = new RelayCommand(_ => ExecuteToggleStrobe());
 
             _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-            _pollTimer.Tick += (_, _) => CamStatus = _vision.GetStatus(CamId);
+            _pollTimer.Tick += (_, _) =>
+            {
+                CamStatus = _vision.GetStatus(CamId);
+                RefreshTriggerStatus();
+            };
             _pollTimer.Start();
 
             _liveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };  // 약 5 fps
@@ -748,6 +752,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 // 모드를 바꾸는 사이에 나간 트리거를 카메라가 못 받는다.
                 // (트리거 체인과 같은 원칙: 소비자를 arm 한 다음 공급을 켠다)
                 _vision.SetHardwareTrigger(CamId, true);
+                // 이전 회차의 프레임이 창에 남아 있으면 방금 기동한 체인이 이미 정상인 것처럼 보인다.
+                _frameRate.Reset();
+                _chainStartFailed = false;
                 _trigger.Start(FrequencyHz);
                 OnPropertyChanged(nameof(IsTriggerSynced));
                 _mainVM.AddLog($"[VISION] DropWatcher: 트리거 체인 기동 — 분주 1/{_trigCfg.DivideRatio}, " +
@@ -759,11 +766,17 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 _mainVM.AddLog($"[VISION] DropWatcher: 트리거 배선 — {_trigCfg.Describe()}", LogLevel.Info);
 
                 // 프레임 누락 위험은 조용히 넘기면 "그냥 느린 촬영"으로 보여 원인 추적이 어렵다.
-                if (!string.IsNullOrEmpty(_trigger.MarginWarning))
-                    _mainVM.AddLog($"[VISION] DropWatcher: 트리거 마진 경고 — {_trigger.MarginWarning}", LogLevel.Warning);
+                // 로그는 흘러가 버리므로 화면에도 띄운다 — 체인이 도는 내내 보여야 한다.
+                TriggerWarning = _trigger.MarginWarning ?? "";
+                if (HasTriggerWarning)
+                    _mainVM.AddLog($"[VISION] DropWatcher: 트리거 경고 — {_trigger.MarginWarning}", LogLevel.Warning);
             }
             catch (Exception ex)
             {
+                // 폴링이 500ms 뒤 덮어쓰므로 플래그로 남긴다 — 안 그러면 기동 실패가
+                // "그냥 정지" 로 보여, 화면만 보고는 눌렀는데 안 켜진 건지 알 수 없다.
+                _chainStartFailed = true;
+                TriggerWarning = "";
                 // ★ 카메라를 자유 실행으로 되돌린다. 체인이 죽었는데 트리거 대기로 두면
                 //   오지 않는 트리거를 기다리며 화면이 통째로 멎어, 원인이 트리거가 아니라
                 //   카메라 고장으로 보인다(제어PC에 NI 런타임이 없을 때가 바로 이 경로다).
@@ -787,6 +800,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // 트리거 공급부터 차단(역순 정지) — 토출이 멎는 동안 헛 트리거가 나가지 않게.
             try { _trigger.Stop(); OnPropertyChanged(nameof(IsTriggerSynced)); }
             catch (Exception ex) { _mainVM.AddLog($"[VISION] DropWatcher: 트리거 체인 정지 실패: {ex.Message}", LogLevel.Warning); }
+
+            // 정지하면 경고·실패 표시도 같이 내린다 — 남겨 두면 다음 기동 때 지난 회차의
+            // 경고를 지금 것으로 읽게 된다.
+            TriggerWarning    = "";
+            _chainStartFailed = false;
+            RefreshTriggerStatus();
 
             // 공급이 끊긴 뒤 카메라를 자유 실행으로 되돌린다 — 트리거 모드로 남으면 라이브뷰가 멎는다.
             try { _vision.SetHardwareTrigger(CamId, false); }
@@ -998,13 +1017,162 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 트리거 체인이 돌고 있으면 하드웨어 트리거 동기 프레임을 받는다 — 스트로브가 얼린
         // 그 순간의 액적이다. 체인이 없으면 자유 촬영으로 떨어지는데, 이때 찍히는 것은
         // 임의 위상의 화면이므로 속도값을 신뢰하면 안 된다(로그로 구분해 남긴다).
-        private Task<VisionImage> GrabAsync(CancellationToken ct)
-            => _trigger.IsRunning
-                ? _vision.WaitForHardwareTriggerAsync(CamId, ct)
-                : _vision.CaptureAsync(CamId, saveToDisk: false);
+        private async Task<VisionImage> GrabAsync(CancellationToken ct)
+        {
+            var image = _trigger.IsRunning
+                ? await _vision.WaitForHardwareTriggerAsync(CamId, ct)
+                : await _vision.CaptureAsync(CamId, saveToDisk: false);
+
+            // 프레임이 실제로 도착한 것만 센다 — 무효 프레임까지 세면 "오고는 있다" 로 보여
+            // 카메라가 트리거를 못 받는 상태를 정상으로 오판하게 된다.
+            if (image.IsValid) _frameRate.Mark(System.Diagnostics.Stopwatch.GetTimestamp());
+            return image;
+        }
 
         /// <summary>측정 결과에 트리거 동기 여부를 표시 — 비동기 촬영 결과는 참고값이다.</summary>
         public bool IsTriggerSynced => _trigger.IsRunning;
+
+        // ══ 트리거 상태 표시 ══════════════════════════════════════════════════
+        //
+        // 램프 하나로 "트리거 OK/NG" 만 띄우면 NG 일 때 어디가 끊겼는지를 여전히 모른다.
+        // 체인이 네 구간이라 뜯을 곳도 네 군데다:
+        //
+        //   PCC2-E ──PFI5──▶ [분주기 ctr1] ──▶ [LED ctr0] ──PFI12──┬─▶ iCore 조명 ─▶ 발광
+        //                                                          └─▶ 카메라 OPTO ─▶ 프레임
+        //
+        // 그래서 구간을 갈라 보여준다. 지금 소프트웨어만으로 잴 수 있는 것은 뒤쪽 세 점이고
+        // (체인 기동 / 조명 리드백 / 프레임 도착), 앞쪽 두 점(PFI5 입력·PFI12 출력)은 여유
+        // 카운터(ctr2·ctr3)로 에지를 세야 해서 NI-DAQmx 설치 후에 붙인다.
+
+        /// <summary>프레임 도착 계수기 — 분주비대로 오는지까지 본다("오는가"만으로는 부족하다).</summary>
+        private readonly RateMeter _frameRate = new();
+
+        /// <summary>조명 리드백 캐시. 폴링 때마다 Modbus 를 때리지 않으려고 들고 있는다.</summary>
+        private ushort? _lightMode;
+        private int _lightPollSkips;
+
+        /// <summary>체인 기동이 실패한 채로 멈춰 있는가. "안 눌렀다" 와 "눌렀는데 실패했다" 를 가른다.</summary>
+        private bool _chainStartFailed;
+
+        private TriggerLamp _chainLamp, _lightLamp, _frameLamp;
+
+        public TriggerLamp ChainLamp { get => _chainLamp; private set { _chainLamp = value; OnPropertyChanged(); } }
+        public TriggerLamp LightLamp { get => _lightLamp; private set { _lightLamp = value; OnPropertyChanged(); } }
+        public TriggerLamp FrameLamp { get => _frameLamp; private set { _frameLamp = value; OnPropertyChanged(); } }
+
+        private string _chainText = "정지", _lightText = "-", _frameText = "-";
+        private string _triggerDiagnosis = "", _triggerWarning = "";
+
+        /// <summary>체인 줄 — 기동 여부와 분주 결과. "기동했다"는 DAQmx 가 설정을 받아들였다는 뜻이다.</summary>
+        public string ChainText { get => _chainText; private set { _chainText = value; OnPropertyChanged(); } }
+
+        /// <summary>조명 줄 — 명령이 아니라 <b>리드백</b>이다. 전원이 빠져 있으면 여기서 드러난다.</summary>
+        public string LightText { get => _lightText; private set { _lightText = value; OnPropertyChanged(); } }
+
+        /// <summary>프레임 줄 — 실측 fps 와 기대 fps 를 같이 띄운다(램프만으로는 "느린 정상"을 못 가린다).</summary>
+        public string FrameText { get => _frameText; private set { _frameText = value; OnPropertyChanged(); } }
+
+        /// <summary>램프 조합이 가리키는 "볼 곳" 한 줄. 없으면 빈 문자열.</summary>
+        public string TriggerDiagnosis
+        {
+            get => _triggerDiagnosis;
+            private set { _triggerDiagnosis = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasTriggerDiagnosis)); }
+        }
+        public bool HasTriggerDiagnosis => !string.IsNullOrEmpty(_triggerDiagnosis);
+
+        /// <summary>
+        /// 기동 시 경고(마진·공유 펄스 폭). 지금까지 로그로만 갔는데 로그는 흘러가서 못 본다 —
+        /// 체인이 도는 동안 화면에 떠 있어야 한다.
+        /// </summary>
+        public string TriggerWarning
+        {
+            get => _triggerWarning;
+            private set { _triggerWarning = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasTriggerWarning)); }
+        }
+        public bool HasTriggerWarning => !string.IsNullOrEmpty(_triggerWarning);
+
+        /// <summary>
+        /// 프레임을 계속 받고 있는 상태인가. 라이브도 측정도 꺼져 있으면 프레임이 안 오는 것이
+        /// <b>정상</b>이다 — 여기서 빨간불을 켜면 "라이브를 껐다"는 이유로 고장 신고가 올라온다.
+        /// </summary>
+        private bool IsReceivingFrames => IsLiveView || IsBusy;
+
+        /// <summary>폴링 주기(500ms) 대비 조명 리드백 간격 — RS-485 는 느리고 2대가 한 포트를 나눠 쓴다.</summary>
+        private const int LightPollEveryNTicks = 4;   // 약 2초
+
+        /// <summary>
+        /// 라이브 뷰가 낼 수 있는 최대 프레임율[Hz] — <see cref="_liveTimer"/> 주기(200ms)가 정한다.
+        /// 트리거가 이보다 빨라도 화면은 이 이상 못 받으므로, 판정 기준을 여기로 낮춘다.
+        /// </summary>
+        private const double LiveFrameCeilingHz = 5.0;
+
+        /// <summary>
+        /// 트리거 상태 갱신. <see cref="_pollTimer"/> 가 500ms 마다 부른다.
+        ///
+        /// <para>조명 리드백만 주기를 늦춘다 — Modbus 는 한 포트에 컨트롤러 2대가 물려 있고
+        /// 2점 측정도 같은 버스를 쓴다. 500ms 마다 때리면 측정 중 지연 적용과 경합한다.
+        /// 측정 중(<see cref="IsBusy"/>)에는 아예 건너뛴다.</para>
+        /// </summary>
+        private void RefreshTriggerStatus()
+        {
+            bool running = _trigger.IsRunning;
+            double expected = _trigger.EffectiveFrameRateHz;
+
+            // ── 체인 ──
+            ChainLamp = running ? TriggerLamp.Ok
+                      : _chainStartFailed ? TriggerLamp.Fail
+                      : TriggerLamp.Idle;
+            ChainText = running ? $"1/{_trigCfg.DivideRatio} → {expected:F1} fps 기대"
+                      : _chainStartFailed ? "기동 실패"
+                      : "정지";
+
+            // ── 조명 ──
+            if (!running)
+            {
+                _lightMode = null;
+                LightLamp  = TriggerLamp.Idle;
+                LightText  = "-";
+            }
+            else if (!IsBusy && ++_lightPollSkips >= LightPollEveryNTicks)
+            {
+                _lightPollSkips = 0;
+                try { _lightMode = _strobe.ReadOperationMode(); }
+                catch { _lightMode = null; }   // 통신 예외 = 상태를 모른다 → Fail 로 떨어진다
+            }
+
+            if (running)
+            {
+                LightLamp = TriggerHealth.Light(_lightMode, _strobe.ExpectedRunMode);
+                LightText = _lightMode switch
+                {
+                    null => "읽기 실패",
+                    0    => "OFF",
+                    1    => "Continuous",
+                    2    => "Pulse",
+                    _    => $"모드 {_lightMode}",
+                };
+            }
+
+            // ── 프레임 ──
+            // ★기대치를 그대로 쓰면 안 된다. 라이브 뷰는 200ms 타이머라 5fps 가 상한이고,
+            //   분주 후 기대가 10fps 면 실측은 늘 절반이라 <b>항상 노란불</b>이 된다.
+            //   상시 경고는 아무도 안 보게 되므로, 라이브 중에는 타이머 상한과 비교한다.
+            //   (측정 중에는 트리거 대기로 받으므로 상한이 없다)
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            double measured = _frameRate.RateHz(now);
+            bool capped = !IsBusy && expected > LiveFrameCeilingHz;
+            double target = capped ? LiveFrameCeilingHz : expected;
+
+            FrameLamp = TriggerHealth.Frame(running, IsReceivingFrames, measured, target,
+                                            _frameRate.SecondsSinceLast(now));
+            FrameText = !running || !IsReceivingFrames
+                ? (running ? "라이브/측정 중에만 표시" : "-")
+                : capped
+                    ? $"{measured:F1} fps  (라이브 상한 {target:F1})"
+                    : $"{measured:F1} fps  (기대 {target:F1})";
+
+            TriggerDiagnosis = TriggerHealth.Diagnose(ChainLamp, LightLamp, FrameLamp) ?? "";
+        }
 
         // 새 측정용 취소 토큰. 이전 것은 정리하고 교체한다(Abort 가 이 토큰을 취소한다).
         private CancellationTokenSource NewMeasureCts()
@@ -1272,6 +1440,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 var image = await _vision.CaptureAsync(CamId, saveToDisk: false);
                 if (image.IsValid)
                 {
+                    _frameRate.Mark(System.Diagnostics.Stopwatch.GetTimestamp());
+
                     if (!_liveFirstFrameLogged)
                     {
                         _liveFirstFrameLogged = true;

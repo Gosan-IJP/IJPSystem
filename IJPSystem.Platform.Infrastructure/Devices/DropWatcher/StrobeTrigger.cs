@@ -30,6 +30,18 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         /// (LabVIEW 원본도 Write 후 Read Holding Registers 로 확인한다) 미지원/실패 시 null.
         /// </summary>
         uint? TryReadDelayRaw();
+
+        /// <summary>
+        /// 지금 <b>실제로</b> 어떤 모드로 켜져 있는가(0=OFF / 1=Continuous / 2=Pulse). 읽기 실패 시 null.
+        ///
+        /// <para><see cref="Enable"/> 를 호출했다는 사실만으로는 켜졌다고 말할 수 없다 — 전원이
+        /// 빠졌거나 sID 가 틀렸어도 호출 자체는 지나간다. 화면에 "조명 켜짐" 을 띄우려면
+        /// 명령이 아니라 <b>리드백</b>을 봐야 한다.</para>
+        /// </summary>
+        ushort? ReadOperationMode();
+
+        /// <summary>이 조명이 있어야 할 모드(드랍와처=2 Pulse, 글라스뷰=1 Continuous). 판정 기준값.</summary>
+        ushort ExpectedRunMode { get; }
     }
 
     /// <summary>
@@ -305,6 +317,10 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
             return r is { Length: > 0 } ? r[0] : null;
         }
 
+        public ushort? ReadOperationMode() => ReadOperation();
+
+        public ushort ExpectedRunMode => _dev.RunMode;
+
         /// <summary>
         /// 지연 레지스터 리드백(raw 비트). 커미셔닝 검증용 — 통신·주소가 맞는지 확인한다.
         /// float32 로 해석하려면 <see cref="ReadDelayMicroseconds"/> 를 쓸 것.
@@ -365,6 +381,15 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         /// <summary>가상은 마지막 적용값을 그대로 돌려준다(리드백 일치 시나리오 재현).</summary>
         public uint? TryReadDelayRaw() =>
             double.IsNaN(LastDelayMicroseconds) ? null : (uint)Math.Round(LastDelayMicroseconds);
+
+        /// <summary>
+        /// 가상은 Enable 한 대로 돌려준다 — 실물처럼 "명령과 리드백이 일치" 하는 정상 상태를 재현한다.
+        /// 덕분에 화면의 조명 램프를 가상 모드에서 그대로 확인할 수 있다.
+        /// </summary>
+        public ushort? ReadOperationMode() => IsEnabled ? ExpectedRunMode : (ushort)0;
+
+        /// <summary>가상 드랍와처는 실물과 같이 Pulse(2) 를 기준으로 둔다.</summary>
+        public ushort ExpectedRunMode => 2;
 
         public void Dispose() => IsConnected = false;
     }
