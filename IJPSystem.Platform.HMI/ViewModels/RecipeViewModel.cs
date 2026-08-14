@@ -316,11 +316,33 @@ namespace IJPSystem.Platform.HMI.ViewModels
             IJPSystem.Platform.Infrastructure.Config.MachineSettings.Current;
 
         private string _headName = "";
-        /// <summary>헤드 이름(예: <c>S3200</c>, <c>S800</c>). 표시·기록용 — 계산에는 쓰지 않는다.</summary>
+        /// <summary>
+        /// 헤드 이름(예: <c>EPSON-S3200</c>). 표시·기록용 — 계산에는 쓰지 않는다.
+        ///
+        /// <para>영문 대문자로 정규화한다. 화면 입력은 <c>CharacterCasing</c> 이 이미 대문자로
+        /// 바꾸지만, <b>붙여넣기와 옛 레시피 값</b>은 그 길로 오지 않는다 — 여기서 한 번 더 맞춰야
+        /// 같은 헤드가 대소문자만 다른 두 이름으로 갈리지 않는다.</para>
+        /// </summary>
         public string HeadName
         {
             get => _headName;
-            set { if (SetProperty(ref _headName, value ?? "") && !_isLoading) IsDirty = true; }
+            set
+            {
+                string v = (value ?? "").Trim().ToUpperInvariant();
+                if (SetProperty(ref _headName, v) && !_isLoading) IsDirty = true;
+            }
+        }
+
+        private double _headWidthMm;
+        /// <summary>
+        /// 헤드 폭[mm] — 스캔 방향 치수. 0=미입력.
+        /// <para>길이(<see cref="HeadLength"/>)가 노즐이 늘어선 방향이고, 폭은 그 직각이다.
+        /// S3200 은 칩이 스캔 방향으로 15.24mm 엇갈려 있어 폭이 그만큼 필요하다.</para>
+        /// </summary>
+        public double HeadWidthMm
+        {
+            get => _headWidthMm;
+            set { if (SetProperty(ref _headWidthMm, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
         }
 
         private double _nozzlePitchUm;
@@ -470,7 +492,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     v is string s && s.Length > 0 ? s
                     : machine ? Machine.GetString(key, fallback) : fallback;
 
-                HeadName         = row?.HeadName as string ?? "";
+                HeadName    = row?.HeadName as string ?? "";
+                HeadWidthMm = row?.HeadWidthMm != null ? Convert.ToDouble(row.HeadWidthMm) : 0;
+
                 NozzlePitchUm    = D(row?.NozzlePitchUm,     MachineKeys.NozzlePitchUm);
                 NozzleRows       = I(row?.NozzleRows,        MachineKeys.NozzleRows);
                 NozzleRowPitchUm = D(row?.NozzleRowPitchUm,  MachineKeys.NozzleRowPitchUm);
@@ -740,6 +764,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     "GlassOriginYMm REAL DEFAULT 0",
 
                     "HeadName TEXT",                     // 헤드 이름 — 어느 헤드로 찍은 레시피인지
+                    "HeadWidthMm REAL DEFAULT 0",        // 헤드 폭(스캔 방향). 길이는 HeadLength
                     "NozzlePitchUm REAL DEFAULT 0",
                     "NozzleRows INTEGER DEFAULT 0",
                     "NozzleRowPitchUm REAL DEFAULT 0",
@@ -752,6 +777,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     try { db.Execute($"ALTER TABLE Recipes ADD COLUMN {col}"); }
                     catch { /* 이미 존재하면 무시 */ }
                 }
+
+                // 복사 목록(RecipeColumns)에 있는 열이 실제 테이블에 다 있는지 확인한다.
+                // 없으면 복사 SQL 이 통째로 실패하므로, 조용히 지나가지 않고 로그로 알린다
+                // — 열을 만들고 위 목록에 넣는 것을 빠뜨렸다는 뜻이다.
+                try
+                {
+                    var actual = db.Query<string>("SELECT name FROM pragma_table_info('Recipes')")
+                                   .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var missing = RecipeColumns.Copyable.Where(c => !actual.Contains(c)).ToList();
+                    if (missing.Count > 0)
+                        _addLogAction?.Invoke(
+                            $"[RECIPE] Recipes 테이블에 없는 복사 대상 열: {string.Join(", ", missing)} — " +
+                            "마이그레이션 목록에 빠졌습니다. 레시피 복사가 실패합니다.",
+                            LogLevel.Error);
+                }
+                catch { /* pragma 미지원 등 — 진단이라 실패해도 앱은 계속 돈다 */ }
             }
         }
 
@@ -837,7 +878,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     // 글라스·노즐 정보 — 한 번의 조회로 가져온다(컬럼마다 왕복하면 열 번이 된다).
                     var spec = db.QueryFirstOrDefault(
                         @"SELECT GlassWidthMm, GlassHeightMm, GlassThicknessMm, GlassOriginXMm, GlassOriginYMm,
-                                 HeadName, NozzlePitchUm, NozzleRows, NozzleRowPitchUm,
+                                 HeadName, HeadWidthMm, NozzlePitchUm, NozzleRows, NozzleRowPitchUm,
                                  HeadChipCount, HeadNozzlesPerRow, HeadWaveform, NozzleCount
                           FROM Recipes WHERE Name=@recipeName", new { recipeName });
                     if (spec != null)
@@ -1176,7 +1217,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                          PurgeTime=@purgeTime, Swath=@swath, HeadLength=@headLength, PrintDirection=@printDir,
                                          GlassWidthMm=@gW, GlassHeightMm=@gH, GlassThicknessMm=@gT,
                                          GlassOriginXMm=@gX, GlassOriginYMm=@gY,
-                                         HeadName=@headName, NozzlePitchUm=@nPitch, NozzleRows=@nRows,
+                                         HeadName=@headName, HeadWidthMm=@headWidth, NozzlePitchUm=@nPitch, NozzleRows=@nRows,
                                          NozzleRowPitchUm=@nRowPitch, HeadChipCount=@chips,
                                          HeadNozzlesPerRow=@perRow, HeadWaveform=@wave, NozzleCount=@nCount
                                      WHERE Name=@name",
@@ -1186,7 +1227,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                 printDir = PrintDirectionIndex,
                                 gW = GlassWidthMm, gH = GlassHeightMm, gT = GlassThicknessMm,
                                 gX = GlassOriginXMm, gY = GlassOriginYMm,
-                                headName = HeadName, nPitch = NozzlePitchUm, nRows = NozzleRows,
+                                headName = HeadName, headWidth = HeadWidthMm, nPitch = NozzlePitchUm, nRows = NozzleRows,
                                 nRowPitch = NozzleRowPitchUm, chips = ChipCount,
                                 perRow = NozzlesPerRow, wave = Waveform, nCount = NozzleCount,
                                 name = SelectedRecipeName
@@ -1518,18 +1559,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         WHERE RecipeId = (SELECT Id FROM Recipes WHERE Name = @oldName)",
                             new { newId, oldName = SelectedRecipeName }, trans);
 
-                        // C. PurgeTime / Swath / HeadLength / PrintDirection + 노즐·글라스 정보 복사
-                        db.Execute(@"UPDATE Recipes SET
-                                         PurgeTime        = (SELECT PurgeTime        FROM Recipes WHERE Name=@oldName),
-                                         Swath            = (SELECT Swath            FROM Recipes WHERE Name=@oldName),
-                                         HeadLength       = (SELECT HeadLength       FROM Recipes WHERE Name=@oldName),
-                                         PrintDirection   = (SELECT PrintDirection   FROM Recipes WHERE Name=@oldName),
-                                         GlassWidthMm     = (SELECT GlassWidthMm     FROM Recipes WHERE Name=@oldName),
-                                         GlassHeightMm    = (SELECT GlassHeightMm    FROM Recipes WHERE Name=@oldName),
-                                         GlassThicknessMm = (SELECT GlassThicknessMm FROM Recipes WHERE Name=@oldName),
-                                         GlassOriginXMm   = (SELECT GlassOriginXMm   FROM Recipes WHERE Name=@oldName),
-                                         GlassOriginYMm   = (SELECT GlassOriginYMm   FROM Recipes WHERE Name=@oldName)
-                                     WHERE Id=@newId",
+                        // C. 인쇄 조건 + 헤드·글라스 사양 복사.
+                        //
+                        // ★ 컬럼을 새로 만들면 <b>여기에도 반드시 더할 것.</b> 빠뜨리면 복사본이
+                        //   그 항목만 비어 있는데, 화면은 멀쩡히 열리고 저장도 되기 때문에
+                        //   한참 뒤 "복사했더니 칩 수·헤드명이 안 따라왔다" 로 발견된다(2026-08-13).
+                        //   원본 한 줄을 통째로 읽어 넣는 편이 안전하지만, Id·Name·SortOrder 같은
+                        //   새 레시피 고유값을 덮어쓰면 안 되므로 열을 적어 준다.
+                        db.Execute(
+                            $"UPDATE Recipes SET\n{RecipeColumns.BuildCopySetClause()}\nWHERE Id=@newId",
                             new { oldName = SelectedRecipeName, newId }, trans);
 
                         // D. 티칭 포인트 복사

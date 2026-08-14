@@ -291,5 +291,20 @@ namespace IJPSystem.Platform.HMI.Views
                 tb.SelectAll();
             }
         }
+
+        /// <summary>
+        /// 헤드명 입력 — <b>영문 대문자·숫자·하이픈·밑줄·점</b>만 받는다(예: <c>EPSON-S3200</c>).
+        ///
+        /// <para>대문자로 바꾸는 것은 XAML 의 <c>CharacterCasing="Upper"</c> 가 하고, 여기서는
+        /// 허용 문자만 거른다. 소문자를 막지 않고 통과시키는 이유가 그것이다 — 막아 버리면
+        /// 소문자 키가 아무 반응이 없어 고장으로 보인다. 실제로는 눌리는 즉시 대문자로 들어간다.</para>
+        ///
+        /// <para>한글이 안 들어가는 것은 의도다. 헤드명은 벤더 표기를 그대로 적는 자리이고,
+        /// 나중에 파일명·로그에 섞여 나가므로 아스키로 묶어 둔다.</para>
+        /// </summary>
+        private void HeadNameBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
+        {
+            e.Handled = !Regex.IsMatch(e.Text, @"^[A-Za-z0-9\-_. ]+$");
+        }
     }
 }
