@@ -77,7 +77,12 @@ if ($distinct.Count -eq 1 -and $distinct[0] -ne '(없음)') {
 Head "설정 파일"
 $cfgOut = Join-Path $outDir 'Config'
 New-Item -ItemType Directory -Force -Path $cfgOut | Out-Null
-Get-ChildItem $cfgOut -Filter *.json -File | Remove-Item -Force
+
+# 통째로 비운다. 종전에는 *.json 만 지워서 그 밖의 것이 계속 쌓였고, 실제로 _old\ 폴더
+# (다른 호기의 MotorConfig/IO 백업)와 스크린샷 png 가 번들에 남아 있었다. 남의 호기 설정이
+# 현장에 따라가면 누군가 그것을 복원용으로 쓴다 — 6축기에 3축 MotorConfig 를 덮어 INITIALIZE
+# 가 멈춘 적이 있다. 이 폴더에는 이번에 -Config 로 지정한 것만 있어야 한다.
+Get-ChildItem $cfgOut -Force | Remove-Item -Recurse -Force
 if ($Config) {
     foreach ($name in $Config) {
         $src = Join-Path $repo ('Config\' + $name)

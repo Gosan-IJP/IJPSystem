@@ -437,7 +437,11 @@
       "Bash(iconv -f cp949 -t utf-8 out.txt)",
       "Bash(node -e \"const f=require\\('fs'\\);for\\(const p of ['Config/VisionConfig.json','Config/TriggerChainConfig.json']\\)JSON.parse\\(f.readFileSync\\(p,'utf8'\\)\\);console.log\\('JSON OK'\\)\")",
       "Bash(powershell.exe -NoProfile -Command \"Get-Content Config/VisionConfig.json -Raw | ConvertFrom-Json | Out-Null; Get-Content Config/TriggerChainConfig.json -Raw | ConvertFrom-Json | Out-Null; 'JSON OK'\")",
-      "Bash(grep -o -i -E \"\\(tcp|udp|socket|ethernet|port [0-9]+|ip address|shared memory|pipe|localhost|127\\\\.0\\\\.0\\\\.1\\)[^<]{0,80}\" lib/Meteor/x86/PrinterInterfaceCLS.xml lib/Meteor/x86/MeteorCLS.xml)"
+      "Bash(grep -o -i -E \"\\(tcp|udp|socket|ethernet|port [0-9]+|ip address|shared memory|pipe|localhost|127\\\\.0\\\\.0\\\\.1\\)[^<]{0,80}\" lib/Meteor/x86/PrinterInterfaceCLS.xml lib/Meteor/x86/MeteorCLS.xml)",
+      "Bash(pwsh -NoProfile -File Tools/Deploy/Build-Hotfix.ps1 -Config TriggerChainConfig.json -SkipPublish)",
+      "Bash(cd \"d:/IJP/IJPSystem\" && ls Installer/ | head -20; echo \"=== ISCC 확인 ===\"; ls \"/c/Program Files \\(x86\\)/Inno Setup 6/ISCC.exe\" 2>/dev/null || ls \"/c/Program Files/Inno Setup 6/ISCC.exe\" 2>/dev/null || echo \"Inno Setup 미설치\")",
+      "Bash(pwsh -NoProfile -File build-installer.ps1)",
+      "Bash(DOTNET_ROLL_FORWARD=LatestMajor \"/c/Program Files \\(x86\\)/dotnet/dotnet.exe\" trigprobe.dll)"
     ],
     "additionalDirectories": [
       "d:\\tmp",
