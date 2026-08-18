@@ -140,6 +140,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public bool IsSpitting => SpitService.IsSpitting;
         public ICommand SpitCommand { get; private set; } = null!;
 
+        /// <summary>
+        /// 선택된 노즐 요약 — Nozzle Select 버튼 라벨과 툴팁이 바인딩한다.
+        /// 장비 전역 값이라 네 화면이 같은 인스턴스를 본다.
+        /// </summary>
+        public Nozzle.NozzleSelectionWatcher NozzleSel => Nozzle.NozzleSelectionWatcher.Instance;
+
         // ── Purge 압력 (kPa) ──────────────────────────────────────────
         // 현재값(읽기 전용 표시) / 셋팅값(입력) / 적용된 셋팅값(Set Value 시 캡처)
         private double _purgeApplied;

@@ -834,7 +834,7 @@
                                 <!-- Row 2: SPITTING / DRAIN -->
                                 <Button Grid.Row="2" Grid.Column="0"
                                         Command="{Binding ToggleSpittingCommand}"
-                                        ToolTip="P&amp;ID 헤드 노즐 spit 애니메이션 ON/OFF">
+                                        ToolTip="{Binding NozzleSel.Detail}">
                                     <Button.Style>
                                         <Style TargetType="Button" BasedOn="{StaticResource MutedActionButtonStyle}">
                                             <Setter Property="Background" Value="#1E40AF"/>

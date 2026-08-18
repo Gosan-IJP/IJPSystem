@@ -328,10 +328,13 @@
 
                 <!-- ④ Start / Abort Spit -->
                 <StackPanel Grid.Column="6" VerticalAlignment="Center" Margin="14,14">
+                    <!-- 이 화면에는 Nozzle Select 버튼이 없다 — 다른 화면에서 고른 장비 전역 선택으로
+                         토출한다. 어느 노즐이 나갈지 여기서 확인할 수 있어야 한다. -->
                     <Button Command="{Binding StartSpitCommand}"
                             Height="40" Margin="0,0,0,8"
                             Style="{StaticResource MutedActionButtonStyle}"
-                            Background="#166534">
+                            Background="#166534"
+                            ToolTip="{Binding NozzleSel.Detail}">
                         <TextBlock Text="{DynamicResource Btn_StartSpit}" FontSize="13" FontWeight="Black" Foreground="White"/>
                     </Button>
                     <Button Command="{Binding AbortSpitCommand}"

@@ -65,6 +65,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand CloseAllHeadValvesCommand     { get; }
         public ICommand TogglePurgeCommand            { get; }
         public ICommand ToggleSpittingCommand         { get; }
+
+        /// <summary>
+        /// 선택된 노즐 요약 — Nozzle Select 버튼 라벨과 툴팁이 바인딩한다.
+        /// 장비 전역 값이라 네 화면이 같은 인스턴스를 본다.
+        /// </summary>
+        public Nozzle.NozzleSelectionWatcher NozzleSel => Nozzle.NozzleSelectionWatcher.Instance;
         public ICommand TogglePositivePressureCommand { get; }
         public ICommand ToggleVacuumCommand           { get; }
         public ICommand AutoPurgeCommand              { get; }

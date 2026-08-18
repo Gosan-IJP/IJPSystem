@@ -1032,6 +1032,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// <summary>측정 결과에 트리거 동기 여부를 표시 — 비동기 촬영 결과는 참고값이다.</summary>
         public bool IsTriggerSynced => _trigger.IsRunning;
 
+        /// <summary>
+        /// 선택된 노즐 요약 — Nozzle Select 버튼 라벨과 툴팁이 바인딩한다.
+        /// 장비 전역 값이라 네 화면이 같은 인스턴스를 본다.
+        /// </summary>
+        public Nozzle.NozzleSelectionWatcher NozzleSel => Nozzle.NozzleSelectionWatcher.Instance;
+
         // ══ 트리거 상태 표시 ══════════════════════════════════════════════════
         //
         // 램프 하나로 "트리거 OK/NG" 만 띄우면 NG 일 때 어디가 끊겼는지를 여전히 모른다.

@@ -916,8 +916,28 @@
                                         Background="#1D4ED8" BorderBrush="#3B82F6" Content="Set Voltage"
                                         Command="{Binding SetVoltageCommand}"/>
                             </Grid>
-                            <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,5" Content="Nozzle Select"
-                                    Click="NozzleSelect_Click"/>
+                            <!-- 창을 닫고 나면 선택 결과가 아무 데도 안 남아, Spit 을 눌러 실패해야
+                                 알 수 있었다. 개수를 라벨에 붙이고 미선택이면 주황으로 띄운다.
+                                 번호는 툴팁에 — 3200개까지 갈 수 있어 라벨에는 못 넣는다. -->
+                            <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,5"
+                                    Click="NozzleSelect_Click" ToolTip="{Binding NozzleSel.Detail}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Nozzle Select" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding NozzleSel.Summary}" Margin="8,0,0,0"
+                                               FontFamily="Consolas" FontSize="11" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#93C5FD"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding NozzleSel.IsEmpty}" Value="True">
+                                                        <Setter Property="Foreground" Value="#FB923C"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Button>
                             <Button Height="28" Margin="0,0,0,5" Content="Spit"
                                     Command="{Binding SpitCommand}">
                                 <Button.Style>
