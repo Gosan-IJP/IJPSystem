@@ -65,10 +65,30 @@ namespace IJPSystem.Platform.Infrastructure.Print.Waveform
         public int    SegmentCount => Segments.Count;
         public double TotalTimeUs  => Segments.Sum(s => s.TotalTimeUs);
 
+        /// <summary>
+        /// 세그먼트별 온도 보상 마스크(비트 하나 = 세그먼트 하나). 화면에서 편집하지 않지만
+        /// 파일에 있던 값을 그대로 되돌려 써야 해서 들고 있는다 — 저장할 때 0 으로 밀면
+        /// 온도 보상이 조용히 꺼진다.
+        /// </summary>
+        public int TempCompMask { get; set; }
+
         public EpsonWaveformPulse Clone()
         {
-            var p = new EpsonWaveformPulse();
+            var p = new EpsonWaveformPulse { TempCompMask = TempCompMask };
             foreach (var s in Segments) p.Segments.Add(s.Clone());
+            return p;
+        }
+
+        /// <summary>
+        /// New / Insert Pulse 가 넣는 기본 펄스. Vst 에서 시작해 Vst 로 돌아오는
+        /// 최소 형태다 — 돌아오지 않으면 파형에 DC 성분이 남아 헤드에 전압이 계속 걸린다.
+        /// </summary>
+        public static EpsonWaveformPulse CreateDefault(double vst)
+        {
+            var p = new EpsonWaveformPulse();
+            p.Segments.Add(new EpsonWaveformSegment { Slew = 0, HoldVoltage = vst,        HoldTimeUs = 2.00 });
+            p.Segments.Add(new EpsonWaveformSegment { Slew = 8, HoldVoltage = vst - 19.0, HoldTimeUs = 1.00 });
+            p.Segments.Add(new EpsonWaveformSegment { Slew = 8, HoldVoltage = vst,        HoldTimeUs = 2.00 });
             return p;
         }
     }
@@ -152,6 +172,47 @@ namespace IJPSystem.Platform.Infrastructure.Print.Waveform
         public GreyLevelMatrix GreyLevels { get; set; } = new();
 
         public EpsonComChannel ChannelOf(ComChannelId id) => id == ComChannelId.ComA ? ComA : ComB;
+
+        // ── 파일에서 따라오는 값 ──────────────────────────────────────────
+        // 화면에서 편집하지 않지만 저장할 때 그대로 되돌려 써야 한다. 기본값으로 덮어쓰면
+        // 헤드 종류나 온도 보상 설정이 조용히 바뀐다.
+
+        public string HeadType { get; set; } = "EPSON_S800";
+        public int    Version  { get; set; } = 1;
+
+        public TemperatureCompensation TempComp { get; set; } = new();
+
+        /// <summary>
+        /// 파일에 있던 노즐 행 마스크가 A ≠ B 였는가. 화면 배정표는 행을 구분하지 않으므로
+        /// 저장하면 두 행이 같아진다 — 그 사실을 알려 줘야 한다.
+        /// </summary>
+        public bool HadAsymmetricRowMasks { get; set; }
+
+        /// <summary>New — 기본 파형 한 벌.</summary>
+        public static EpsonWaveformDocument CreateDefault(double vst = 24.0, int pulseCount = 2)
+        {
+            var doc = new EpsonWaveformDocument { Vst = vst };
+            for (int i = 0; i < Math.Clamp(pulseCount, 1, EpsonComChannel.MaxPulses); i++)
+            {
+                doc.ComA.Pulses.Add(EpsonWaveformPulse.CreateDefault(vst));
+                doc.ComB.Pulses.Add(EpsonWaveformPulse.CreateDefault(vst));
+            }
+
+            // 배정이 하나도 없으면 어느 그레이 레벨로도 토출이 안 된다 — 첫 펄스만 걸어 둔다.
+            doc.GreyLevels[1, 0] = GreyLevelAssign.ComA;
+            return doc;
+        }
+    }
+
+    /// <summary>파일의 [TemperatureCompensation] 블록.</summary>
+    public sealed class TemperatureCompensation
+    {
+        public bool   Enabled    { get; set; }
+        public double TCompLow   { get; set; } = 40.0;
+        public double TCompHigh  { get; set; } = 45.0;
+        public double VCompStart { get; set; } = 24.0;
+        public double VCompEnd   { get; set; } = 29.5;
+        public double VTCoef     { get; set; } = -0.0146;
     }
 
     /// <summary>그래프 한 점.</summary>

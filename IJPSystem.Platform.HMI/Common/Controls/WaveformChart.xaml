@@ -12,7 +12,7 @@
         </Grid.RowDefinitions>
 
         <!-- Y축 레이블 "Voltage" -->
-        <TextBlock Grid.Column="0" Grid.Row="0"
+        <TextBlock x:Name="PART_YTitle" Grid.Column="0" Grid.Row="0"
                    Text="Voltage" Foreground="#64748B"
                    FontSize="10" FontWeight="SemiBold"
                    HorizontalAlignment="Center" VerticalAlignment="Center">

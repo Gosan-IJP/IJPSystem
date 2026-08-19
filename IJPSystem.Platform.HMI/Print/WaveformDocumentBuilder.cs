@@ -27,6 +27,8 @@ namespace IJPSystem.Platform.HMI.Print
             // 대기 전압은 파일에 따로 없다 — 첫 세그먼트의 시작 전압이 곧 Vst 다.
             doc.Vst = FirstStartVoltage(comA) ?? FirstStartVoltage(comB) ?? 24.0;
 
+            CarryMetadata(doc, comA ?? comB);
+
             Fill(doc.ComA, comA);
             Fill(doc.ComB, comB);
 
@@ -45,6 +47,31 @@ namespace IJPSystem.Platform.HMI.Print
         private static double? FirstStartVoltage(WaveformFile? f)
             => f?.Pulses.FirstOrDefault()?.Segments.FirstOrDefault()?.StartVoltage;
 
+        /// <summary>
+        /// 화면에서 편집하지 않는 값을 문서에 실어 둔다. 저장할 때 기본값으로 덮어쓰면
+        /// 헤드 종류·온도 보상 설정이 조용히 바뀐다.
+        /// </summary>
+        private static void CarryMetadata(EpsonWaveformDocument doc, WaveformFile? file)
+        {
+            if (file == null) return;
+
+            if (!string.IsNullOrWhiteSpace(file.HeadType)) doc.HeadType = file.HeadType;
+            if (file.Version > 0) doc.Version = file.Version;
+
+            doc.TempComp = new TemperatureCompensation
+            {
+                Enabled    = file.TempCompEnabled,
+                TCompLow   = file.TCompLow,
+                TCompHigh  = file.TCompHigh,
+                VCompStart = file.VCompStart,
+                VCompEnd   = file.VCompEnd,
+                VTCoef     = file.VTCoef,
+            };
+
+            // 화면 배정표는 노즐 행을 구분하지 않는다 — 행마다 다른 파일을 저장하면 같아진다.
+            doc.HadAsymmetricRowMasks = file.Pulses.Any(p => p.GLMask_A != p.GLMask_B);
+        }
+
         private static void Fill(EpsonComChannel channel, WaveformFile? file)
         {
             channel.Pulses.Clear();
@@ -53,7 +80,7 @@ namespace IJPSystem.Platform.HMI.Print
             // 최대 4 펄스 — 그 이상은 헤드가 받지 않으므로 잘라내되 조용히 버리지 않는다.
             foreach (var src in file.Pulses.Take(EpsonComChannel.MaxPulses))
             {
-                var p = new EpsonWaveformPulse();
+                var p = new EpsonWaveformPulse { TempCompMask = src.TempCompMask };
                 foreach (var s in src.Segments)
                 {
                     p.Segments.Add(new EpsonWaveformSegment

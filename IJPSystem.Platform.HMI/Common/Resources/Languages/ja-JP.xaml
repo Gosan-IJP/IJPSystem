@@ -41,9 +41,7 @@
     <!-- ボタン — ウェーブフォーム -->
     <system:String x:Key="Btn_Load">ロード</system:String>
     <system:String x:Key="Btn_Save">保存</system:String>
-    <system:String x:Key="Btn_ApplySpitParam">スピットパラメータ適用</system:String>
-    <system:String x:Key="Btn_StartSpit">スピット開始</system:String>
-    <system:String x:Key="Btn_AbortSpit">スピット中断</system:String>
+    <system:String x:Key="Btn_ApplyToRecipe">レシピに適用</system:String>
 
     <!-- ボタン — I/O モニター -->
     <system:String x:Key="Btn_Set">設定</system:String>

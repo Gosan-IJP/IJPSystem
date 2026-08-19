@@ -41,9 +41,7 @@
     <!-- 버튼 — 웨이브폼 -->
     <system:String x:Key="Btn_Load">로드</system:String>
     <system:String x:Key="Btn_Save">저장</system:String>
-    <system:String x:Key="Btn_ApplySpitParam">스핏 파라미터 적용</system:String>
-    <system:String x:Key="Btn_StartSpit">스핏 시작</system:String>
-    <system:String x:Key="Btn_AbortSpit">스핏 중단</system:String>
+    <system:String x:Key="Btn_ApplyToRecipe">레시피에 적용</system:String>
 
     <!-- 버튼 — I/O 모니터 -->
     <system:String x:Key="Btn_Set">설정</system:String>

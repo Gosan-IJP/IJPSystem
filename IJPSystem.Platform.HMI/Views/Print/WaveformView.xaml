@@ -111,10 +111,46 @@
         <DataTemplate x:Key="WfSegmentGrid">
             <Border Background="#1E293B" CornerRadius="0,4,4,4" Padding="8">
                 <StackPanel>
-                    <TextBlock Margin="0,0,0,6" FontSize="10" Foreground="#64748B">
-                        <Run Text="세그먼트 "/><Run Text="{Binding SegmentCountText, Mode=OneWay}"/>
-                        <Run Text="개 · 펄스 길이 "/><Run Text="{Binding TotalTimeText, Mode=OneWay}"/>
-                    </TextBlock>
+                    <!-- Segment Count + Copy pulse to — MetWaveEpson 의 펄스 탭 머리와 같은 자리 -->
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" Text="Segment Count" VerticalAlignment="Center"
+                                   FontSize="10.5" Foreground="#94A3B8" Margin="0,0,6,0"/>
+                        <ComboBox Grid.Column="1" Width="56" Height="24"
+                                  ItemsSource="{Binding SegmentCountOptions}"
+                                  SelectedItem="{Binding SegmentCount}"
+                                  Style="{StaticResource ModernComboBoxStyle}"
+                                  HorizontalAlignment="Left" FontSize="11" FontWeight="Normal"
+                                  ToolTip="마지막 Vst 복귀 구간은 그대로 두고 앞쪽이 늘거나 줄어듭니다."/>
+
+                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="10,0,6,0"
+                                   FontSize="10" Foreground="#64748B">
+                            <Run Text="펄스 길이 "/><Run Text="{Binding TotalTimeText, Mode=OneWay}"/>
+                        </TextBlock>
+
+                        <Button Grid.Column="3" Height="24" Padding="8,0" Click="OnCopyPulseClick"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B"
+                                ToolTip="이 펄스의 값을 다른 펄스 자리로 복사합니다. GL 배정은 그대로입니다.">
+                            <TextBlock Text="Copy pulse to ..." FontSize="10.5" FontWeight="Bold" Foreground="White"/>
+                            <Button.ContextMenu>
+                                <ContextMenu ItemsSource="{Binding CopyTargets}">
+                                    <ContextMenu.ItemContainerStyle>
+                                        <Style TargetType="MenuItem">
+                                            <Setter Property="Header" Value="{Binding Header}"/>
+                                            <Setter Property="Command" Value="{Binding Owner.CopyPulseCommand}"/>
+                                            <Setter Property="CommandParameter" Value="{Binding}"/>
+                                        </Style>
+                                    </ContextMenu.ItemContainerStyle>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+                    </Grid>
 
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <StackPanel Orientation="Horizontal">
@@ -185,22 +221,52 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- ══ 헤더: 타이틀 + 시리즈 토글 ══════════════════════════════════ -->
+        <!-- ══ 헤더: 타이틀 · 로드/저장 · 시리즈 토글 ══════════════════════════════════ -->
         <Border Grid.Row="0" Background="#111827" CornerRadius="12,12,0,0"
                 BorderBrush="#334155" BorderThickness="1,1,1,0" Padding="18,10">
             <Grid>
-                <StackPanel VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>   <!-- 제목 · 파일명 -->
+                    <ColumnDefinition Width="Auto"/>   <!-- 로드 / 저장 -->
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>   <!-- 시리즈 토글 -->
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
                     <TextBlock Text="Print Spit Waveform"
                                Foreground="White" FontSize="14" FontWeight="Bold"/>
-                    <TextBlock Text="{Binding LoadedBaseName, StringFormat='File: {0}'}"
+                    <TextBlock Text="{Binding TitleText}"
                                Foreground="#64748B" FontSize="10" Margin="0,2,0,0"/>
                 </StackPanel>
 
+                <!-- 파일 동작이라 파일명 옆에 둔다. 저장은 레시피에 경로만 기록한다 —
+                     편집한 파형 값은 아직 파일로 나가지 않는다. -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal"
+                            VerticalAlignment="Center" Margin="24,0,0,0">
+                    <Button Command="{Binding LoadCommand}"
+                            Width="92" Height="32" Margin="0,0,8,0"
+                            Style="{StaticResource MutedActionButtonStyle}"
+                            Background="#1E293B">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="□" FontSize="13" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Btn_Load}" FontSize="12" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding ApplyToRecipeCommand}"
+                            Width="132" Height="32"
+                            Style="{StaticResource MutedActionButtonStyle}"
+                            Background="#1E293B">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="■" FontSize="11" Margin="0,0,7,0" VerticalAlignment="Center" Foreground="#3B82F6"/>
+                            <TextBlock Text="{DynamicResource Btn_ApplyToRecipe}" FontSize="12" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
                 <!-- 시리즈 가시성 토글 -->
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right"
                             VerticalAlignment="Center">
                     <!-- ComA -->
                     <ToggleButton IsChecked="{Binding IsComAVisible}"
@@ -326,8 +392,8 @@
         <!-- ══ 차트 + 파형 구조 ═══════════════════════════════════════════
              MetWaveEpson 배치를 따른다 — 왼쪽 그래프, 오른쪽에 파형을 만드는 값들.
              그래프만 있으면 "왜 이 모양인지"를 화면에서 알 수 없다. -->
-        <Border Grid.Row="1" BorderBrush="#334155" BorderThickness="1,0,1,0"
-                Background="#0D1117">
+        <Border Grid.Row="1" BorderBrush="#334155" BorderThickness="1,0,1,1"
+                CornerRadius="0,0,12,12" Background="#0D1117">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"    MinWidth="320"/>
@@ -335,12 +401,129 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <ctrl:WaveformChart x:Name="WaveChart" Grid.Column="0" Margin="8,8,8,4"/>
+                <!-- 파형 + 그 위의 편집 명령 줄 -->
+                <Grid Grid.Column="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- ── 편집 명령 ──────────────────────────────────────
+                         MetWaveEpson 의 상단 버튼 줄. 그래프 바로 위에 두어
+                         "지금 보고 있는 이 파형"에 걸리는 동작임이 드러나게 한다.
+                         Save 는 고친 게 있거나 아직 파일이 없을 때만 켜진다. -->
+                    <Border Grid.Row="0" Background="#111827"
+                            BorderBrush="#334155" BorderThickness="0,0,0,1" Padding="10,8">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button Command="{Binding NewCommand}"
+                                    Width="106" Height="32" Margin="0,0,6,0"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B">
+                                <TextBlock Text="New" FontSize="12" FontWeight="Bold" Foreground="White"/>
+                            </Button>
+                            <Button Command="{Binding SaveCommand}"
+                                    Width="106" Height="32" Margin="0,0,6,0"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1D4ED8">
+                                <TextBlock Text="Save" FontSize="12" FontWeight="Bold" Foreground="White"/>
+                            </Button>
+                            <Button Command="{Binding SaveAsCommand}"
+                                    Width="106" Height="32" Margin="0,0,6,0"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B">
+                                <TextBlock Text="Save As" FontSize="12" FontWeight="Bold" Foreground="White"/>
+                            </Button>
+                            <Button Command="{Binding InsertPulseCommand}"
+                                    Width="106" Height="32" Margin="0,0,6,0"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B"
+                                    ToolTip="선택한 펄스 뒤에 넣습니다. GL 배정표 열도 함께 밀립니다.">
+                                <TextBlock Text="Insert Pulse" FontSize="12" FontWeight="Bold" Foreground="White"/>
+                            </Button>
+                            <Button Command="{Binding DeletePulseCommand}"
+                                    Width="106" Height="32"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B"
+                                    ToolTip="선택한 펄스를 지웁니다. GL 배정표 열도 함께 당겨집니다.">
+                                <TextBlock Text="Delete Pulse" FontSize="12" FontWeight="Bold" Foreground="White"/>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ComA / ComB 를 위아래로 나눠 그린다. 한 그래프에 겹치면
+                         선 색으로만 채널을 구분해야 해서 모양 비교가 어렵다.
+                         두 그래프는 같은 시간 눈금을 쓴다(코드 비하인드에서 맞춘다). -->
+                    <Grid Grid.Row="1" Margin="8,6,8,4">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="6"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <ctrl:WaveformChart x:Name="ChartA" Grid.Row="0"/>
+                        <ctrl:WaveformChart x:Name="ChartB" Grid.Row="2"/>
+                    </Grid>
+                </Grid>
                 <Rectangle Grid.Column="1" Fill="#334155"/>
 
                 <ScrollViewer Grid.Column="2" Width="520" VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled" Background="#111827">
                     <StackPanel Margin="14,12">
+
+                        <!-- ── 파일 ──────────────────────────────────────────
+                             MetWaveEpson 상단의 파일 관리부. 어떤 설정 파일을 쓰고 어느
+                             폴더의 목록인지가 보여야 "왜 이 목록인지"를 화면에서 알 수 있다. -->
+                        <TextBlock Text="FILE" Style="{StaticResource WfSectionTitle}"/>
+
+                        <TextBlock Text="Meteor configuration file"
+                                   Style="{StaticResource WfLabel}" Margin="0,0,0,3"/>
+                        <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1"
+                                CornerRadius="4" Padding="7,4" Margin="0,0,0,8">
+                            <TextBlock Text="{Binding MeteorConfigText}"
+                                       ToolTip="{Binding MeteorConfigPath}"
+                                       FontFamily="Consolas" FontSize="10.5"
+                                       TextTrimming="CharacterEllipsis">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#94A3B8"/>
+                                        <Style.Triggers>
+                                            <!-- 이 파일이 없으면 헤드가 조용히 가상으로 떨어진다. -->
+                                            <DataTrigger Binding="{Binding HasMeteorConfig}" Value="False">
+                                                <Setter Property="Foreground" Value="#F59E0B"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+
+                        <TextBlock Text="Waveform" Style="{StaticResource WfLabel}" Margin="0,0,0,3"/>
+                        <ComboBox ItemsSource="{Binding WaveformList}"
+                                  SelectedItem="{Binding SelectedWaveform}"
+                                  DisplayMemberPath="DisplayName"
+                                  Style="{StaticResource ModernComboBoxStyle}"
+                                  HorizontalAlignment="Stretch" Width="Auto" Height="28"
+                                  FontSize="11" FontWeight="Normal" Margin="0,0,0,6"/>
+
+                        <UniformGrid Columns="4" Margin="0,0,0,6">
+                            <Button Command="{Binding ImportCommand}" Height="30" Margin="0,0,4,0"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B">
+                                <TextBlock Text="Import" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                            </Button>
+                            <Button Command="{Binding RemoveCommand}" Height="30" Margin="2,0,2,0"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B">
+                                <TextBlock Text="Remove" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                            </Button>
+                            <Button Command="{Binding RenameCommand}" Height="30" Margin="2,0,2,0"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B">
+                                <TextBlock Text="Rename" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                            </Button>
+                            <Button Command="{Binding MakeDefaultCommand}" Height="30" Margin="4,0,0,0"
+                                    Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B">
+                                <TextBlock Text="Make Default" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                            </Button>
+                        </UniformGrid>
+
+                        <TextBlock Text="{Binding WaveformRoot, StringFormat='폴더: {0}'}"
+                                   ToolTip="{Binding WaveformRoot}"
+                                   Foreground="#64748B" FontSize="10"
+                                   TextTrimming="CharacterEllipsis" Margin="0,0,0,4"/>
+
+                        <Rectangle Style="{StaticResource WfDivider}"/>
 
                         <!-- ── 전역 파라미터 ─────────────────────────────── -->
                         <TextBlock Text="WAVEFORM" Style="{StaticResource WfSectionTitle}"/>
@@ -391,22 +574,76 @@
                         <TextBlock Text="{Binding Editor.ChannelTimeText}" Foreground="#64748B"
                                    FontFamily="Consolas" FontSize="10" Margin="0,0,0,6"/>
 
-                        <!-- Save 는 레시피에 '파일 경로'만 기록한다 — 파형 내용을 쓰지 않는다.
-                             이 사실을 안 적어 두면 편집하고 저장한 뒤 값이 사라진 것을 나중에 안다. -->
-                        <Border Background="#1E293B" CornerRadius="4" Padding="8,5" Margin="0,0,0,4">
+                        <!-- Scale Voltage — Vst 는 두고 진폭만 배율로 바꾼다. -->
+                        <Button Command="{Binding ScaleVoltageCommand}"
+                                Height="28" Margin="0,0,0,8" HorizontalAlignment="Stretch"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#1E293B"
+                                ToolTip="Vst 기준 진폭을 %로 키우거나 줄입니다. 대기 전압은 그대로 둡니다.">
+                            <TextBlock Text="Scale Voltage" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                        </Button>
+
+                        <!-- 저장은 파일에 쓴다. 다만 헤드로 내려보내는 경로는 아직 없다 —
+                             이 사실을 안 적어 두면 저장했는데 토출이 안 바뀐 이유를 화면에서 못 찾는다. -->
+                        <Border Background="#1E293B" CornerRadius="4" Padding="8,5" Margin="0,0,0,8">
                             <TextBlock Foreground="#F59E0B" FontSize="10" TextWrapping="Wrap"
-                                       Text="여기서 바꾼 값은 그래프와 계산에만 반영됩니다. 파형 파일로 저장하는 기능은 아직 없습니다 — Save 는 레시피에 파일 경로만 기록합니다."/>
+                                       Text="Save 는 파형 파일(.ComA/.ComB)에 씁니다. 다만 저장한 파형을 헤드로 전송하는 기능은 아직 없습니다 — 장비에 반영하려면 PCC 설정을 다시 읽혀야 합니다."/>
                         </Border>
 
-                        <!-- Com A/B · 노즐 행 모드 -->
-                        <WrapPanel Margin="0,0,0,10">
-                            <CheckBox Content="ComB = ComA 동기" Foreground="#94A3B8" FontSize="11"
-                                      Margin="0,0,16,0" IsChecked="{Binding Editor.IsSynchronous}"
-                                      ToolTip="켜면 ComB 는 ComA 의 복제가 됩니다. ComB 를 따로 편집해도 저장 시 덮어써집니다."/>
-                            <CheckBox Content="노즐 행 2색(Dual)" Foreground="#94A3B8" FontSize="11"
-                                      IsChecked="{Binding Editor.IsDualColour}"
-                                      ToolTip="노즐 행 A/B 를 서로 다른 잉크로 다룹니다."/>
-                        </WrapPanel>
+                        <!-- Com A/B · 노즐 행 모드 — MetWaveEpson 과 같이 라디오 두 벌.
+                             둘 중 하나만 성립하는 값이라 체크박스보다 라디오가 맞다. -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Grid.RowSpan="2" Text="Com A/B mode"
+                                       Style="{StaticResource WfLabel}" VerticalAlignment="Center"/>
+                            <RadioButton Grid.Row="0" Grid.Column="1" Content="Synchronous"
+                                         Foreground="#E2E8F0" FontSize="11" GroupName="ComAb"
+                                         IsChecked="{Binding Editor.IsSynchronous}"
+                                         ToolTip="ComB 를 ComA 의 복제로 둡니다. ComB 를 따로 편집해도 저장 시 덮어써집니다."/>
+                            <RadioButton Grid.Row="1" Grid.Column="1" Content="Independent"
+                                         Foreground="#E2E8F0" FontSize="11" GroupName="ComAb"
+                                         IsChecked="{Binding Editor.IsIndependent}"
+                                         ToolTip="ComA 와 ComB 를 따로 편집합니다."/>
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Grid.RowSpan="2" Text="Nozzle Row A/B mode"
+                                       Style="{StaticResource WfLabel}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                            <RadioButton Grid.Row="3" Grid.Column="1" Content="Single colour"
+                                         Foreground="#E2E8F0" FontSize="11" GroupName="NozzleRow"
+                                         IsChecked="{Binding Editor.IsSingleColour}"
+                                         ToolTip="노즐 행 A/B 가 같은 잉크입니다."/>
+                            <RadioButton Grid.Row="4" Grid.Column="1" Content="Dual colour"
+                                         Foreground="#E2E8F0" FontSize="11" GroupName="NozzleRow"
+                                         IsChecked="{Binding Editor.IsDualColour}"
+                                         ToolTip="노즐 행 A/B 를 서로 다른 잉크로 다룹니다."/>
+                        </Grid>
+
+                        <!-- Graph Highlight — 고른 펄스만 남기고 그래프를 어둡게 덮는다. -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Graph Highlight"
+                                       Style="{StaticResource WfLabel}"/>
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding Editor.HighlightOptions}"
+                                      SelectedItem="{Binding Editor.SelectedHighlight}"
+                                      DisplayMemberPath="Header"
+                                      Style="{StaticResource ModernComboBoxStyle}"
+                                      HorizontalAlignment="Stretch" Width="Auto" Height="26"
+                                      FontSize="11" FontWeight="Normal"
+                                      ToolTip="고른 펄스 구간만 밝게 두고 나머지를 덮습니다. 파형은 바뀌지 않습니다."/>
+                        </Grid>
 
                         <Rectangle Style="{StaticResource WfDivider}"/>
 
@@ -487,199 +724,6 @@
                                     DisplayMemberPath="Header"/>
                     </StackPanel>
                 </ScrollViewer>
-            </Grid>
-        </Border>
-
-        <!-- ══ 컨트롤 패널 ═══════════════════════════════════════════════ -->
-        <Border Grid.Row="2" Background="#111827" CornerRadius="0,0,12,12"
-                BorderBrush="#334155" BorderThickness="1,1,1,1" Padding="0">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="120"/>
-                    <ColumnDefinition Width="1"/>
-                    <ColumnDefinition Width="190"/>
-                    <ColumnDefinition Width="1"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="1"/>
-                    <ColumnDefinition Width="160"/>
-                </Grid.ColumnDefinitions>
-
-                <!-- ① Load / Save -->
-                <StackPanel Grid.Column="0" VerticalAlignment="Center"
-                            Margin="16,14">
-                    <Button Command="{Binding LoadCommand}"
-                            Height="38" Margin="0,0,0,8"
-                            Style="{StaticResource MutedActionButtonStyle}"
-                            Background="#1E293B">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="□" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Btn_Load}" FontSize="13" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Command="{Binding SaveCommand}"
-                            Height="38"
-                            Style="{StaticResource MutedActionButtonStyle}"
-                            Background="#1E293B">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="■" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#3B82F6"/>
-                            <TextBlock Text="{DynamicResource Btn_Save}" FontSize="13" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-
-                <Rectangle Grid.Column="1" Fill="#334155"/>
-
-                <!-- ② 히터 섹션 -->
-                <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,12">
-                    <!-- 온도 슬라이더 (10~45) -->
-                    <Grid Margin="0,0,0,4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Slider Minimum="10" Maximum="45"
-                                Value="{Binding TargetTemp}"
-                                TickFrequency="5" TickPlacement="BottomRight"
-                                IsSnapToTickEnabled="True"
-                                Foreground="#3B82F6"
-                                Height="18"/>
-                    </Grid>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
-                        <TextBlock Text="10" Foreground="#64748B" FontSize="9"/>
-                        <TextBlock Text="                    45" Foreground="#64748B" FontSize="9"/>
-                    </StackPanel>
-
-                    <!-- Current / Target Temp -->
-                    <Grid Margin="0,6,0,3">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Current Temp" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"/>
-                        <Border Grid.Column="1" Background="#0D1117" CornerRadius="4" Padding="6,3">
-                            <TextBlock Text="{Binding CurrentTemp, StringFormat={}{0:F1} °C}"
-                                       Foreground="#22C55E" FontSize="11" FontFamily="Consolas" FontWeight="Bold"/>
-                        </Border>
-                    </Grid>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Target Temp" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"/>
-                        <Border Grid.Column="1" Background="#0D1117" CornerRadius="4" Padding="4,2">
-                            <TextBox Text="{Binding TargetTemp, StringFormat={}{0:F1}, UpdateSourceTrigger=PropertyChanged}"
-                                     Width="60" FontSize="11" FontFamily="Consolas"
-                                     Background="Transparent" Foreground="White"
-                                     BorderThickness="0" TextAlignment="Right"/>
-                        </Border>
-                    </Grid>
-
-                    <Button Command="{Binding HeaterControlCommand}"
-                            Height="32" Style="{StaticResource MutedActionButtonStyle}"
-                            Background="#1E3A5F">
-                        <TextBlock Text="{Binding HeaterButtonText}" FontSize="11" FontWeight="Bold" Foreground="White"/>
-                    </Button>
-                </StackPanel>
-
-                <Rectangle Grid.Column="3" Fill="#334155"/>
-
-                <!-- ③ Voltage Offset + Jetting 파라미터 -->
-                <Grid Grid.Column="4" Margin="14,12">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="8"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <!-- Voltage offset + Apply -->
-                    <Grid Grid.Row="0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="60"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Voltage offset"
-                                   Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <Border Grid.Column="1" Background="#0D1117" CornerRadius="4" Padding="4,3">
-                            <TextBox Text="{Binding VoltageOffset, UpdateSourceTrigger=PropertyChanged}"
-                                     FontSize="11" FontFamily="Consolas"
-                                     Background="Transparent" Foreground="White"
-                                     BorderThickness="0" TextAlignment="Right"/>
-                        </Border>
-                        <TextBlock Grid.Column="2" Text="%" Foreground="#64748B"
-                                   FontSize="11" VerticalAlignment="Center" Margin="4,0,12,0"/>
-                        <Button Grid.Column="4" Command="{Binding ApplySpitCommand}"
-                                Height="34" Padding="14,0"
-                                Style="{StaticResource MutedActionButtonStyle}"
-                                Background="#1D4ED8">
-                            <TextBlock Text="{DynamicResource Btn_ApplySpitParam}" FontSize="11" FontWeight="Bold" Foreground="White"/>
-                        </Button>
-                    </Grid>
-
-                    <!-- Jetting 파라미터 -->
-                    <Grid Grid.Row="2">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="120"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Jetting Frequency" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"/>
-                        <Border Grid.Column="1" Background="#0D1117" CornerRadius="4" Padding="6,3">
-                            <TextBox Text="{Binding JettingFrequency, UpdateSourceTrigger=PropertyChanged}"
-                                     FontSize="11" FontFamily="Consolas"
-                                     Background="Transparent" Foreground="White"
-                                     BorderThickness="0" TextAlignment="Right"/>
-                        </Border>
-                    </Grid>
-                    <Grid Grid.Row="3" Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="120"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Jetting Time" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"/>
-                        <Border Grid.Column="1" Background="#0D1117" CornerRadius="4" Padding="6,3">
-                            <TextBlock Text="{Binding JettingTimeText}"
-                                       FontSize="11" FontFamily="Consolas" Foreground="#94A3B8" TextAlignment="Right"/>
-                        </Border>
-                    </Grid>
-                    <Grid Grid.Row="4" Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="120"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="N of Jetting Drops" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"/>
-                        <Border Grid.Column="1" Background="#0D1117" CornerRadius="4" Padding="6,3">
-                            <TextBox Text="{Binding JettingDropCount, UpdateSourceTrigger=PropertyChanged}"
-                                     FontSize="11" FontFamily="Consolas"
-                                     Background="Transparent" Foreground="White"
-                                     BorderThickness="0" TextAlignment="Right"/>
-                        </Border>
-                    </Grid>
-                </Grid>
-
-                <Rectangle Grid.Column="5" Fill="#334155"/>
-
-                <!-- ④ Start / Abort Spit -->
-                <StackPanel Grid.Column="6" VerticalAlignment="Center" Margin="14,14">
-                    <!-- 이 화면에는 Nozzle Select 버튼이 없다 — 다른 화면에서 고른 장비 전역 선택으로
-                         토출한다. 어느 노즐이 나갈지 여기서 확인할 수 있어야 한다. -->
-                    <Button Command="{Binding StartSpitCommand}"
-                            Height="40" Margin="0,0,0,8"
-                            Style="{StaticResource MutedActionButtonStyle}"
-                            Background="#166534"
-                            ToolTip="{Binding NozzleSel.Detail}">
-                        <TextBlock Text="{DynamicResource Btn_StartSpit}" FontSize="13" FontWeight="Black" Foreground="White"/>
-                    </Button>
-                    <Button Command="{Binding AbortSpitCommand}"
-                            Height="40"
-                            Style="{StaticResource MutedActionButtonStyle}"
-                            Background="#7F1D1D">
-                        <TextBlock Text="{DynamicResource Btn_AbortSpit}" FontSize="13" FontWeight="Black" Foreground="White"/>
-                    </Button>
-                </StackPanel>
             </Grid>
         </Border>
     </Grid>

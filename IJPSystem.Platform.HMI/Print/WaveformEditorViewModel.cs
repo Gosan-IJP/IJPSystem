@@ -20,8 +20,14 @@ namespace IJPSystem.Platform.HMI.Print
     /// </summary>
     public sealed class WaveformEditorViewModel : ViewModelBase
     {
-        /// <summary>편집값이 바뀌어 그래프를 다시 그려야 한다.</summary>
+        /// <summary>편집값이 바뀌어 그래프를 다시 그려야 한다. 파일 로드에서도 올라온다.</summary>
         public event Action? Changed;
+
+        /// <summary>
+        /// <b>사용자가</b> 값을 고쳤다. 저장하지 않은 변경(IsDirty) 판정에 쓴다 —
+        /// 로드까지 여기 섞으면 열자마자 "저장 안 됨"이 되어 표시가 의미를 잃는다.
+        /// </summary>
+        public event Action? Edited;
 
         private EpsonWaveformDocument _doc = new();
         private bool _suspend;
@@ -32,6 +38,7 @@ namespace IJPSystem.Platform.HMI.Print
                                       .Select(g => new GreyLevelRowVm(this, g))
                                       .ToList();
             ToggleGreyLevelCommand = new RelayCommand(p => ToggleGreyLevel(p as GreyLevelCellVm));
+            CopyPulseCommand       = new RelayCommand(p => CopyPulse(p as CopyTargetVm));
             LoadEmpty();
         }
 
@@ -70,6 +77,7 @@ namespace IJPSystem.Platform.HMI.Print
                 if (_doc.VoltageAdjustMode == mode) return;
                 _doc.VoltageAdjustMode = mode;
                 Recalculate();
+                OnPropertyChanged();
                 OnPropertyChanged(nameof(IsConstantDuration));
                 OnPropertyChanged(nameof(IsSlewEditable));
                 OnPropertyChanged(nameof(IsSlewTimeEditable));
@@ -92,6 +100,7 @@ namespace IJPSystem.Platform.HMI.Print
                 if (_doc.ComAbMode == m) return;
                 _doc.ComAbMode = m;
                 Recalculate();
+                OnPropertyChanged();
                 OnPropertyChanged(nameof(IsIndependent));
                 OnPropertyChanged(nameof(IsComBEditable));
             }
@@ -140,6 +149,7 @@ namespace IJPSystem.Platform.HMI.Print
             foreach (var row in GreyLevelRows) row.Refresh();
             OnPropertyChanged(nameof(UnassignedGreyLevelsText));
             OnPropertyChanged(nameof(HasUnassignedGreyLevel));
+            Edited?.Invoke();
         }
 
         /// <summary>
@@ -168,7 +178,7 @@ namespace IJPSystem.Platform.HMI.Print
         public PulseTabVm? SelectedComAPulse
         {
             get => _selectedComA;
-            set { _selectedComA = value; OnPropertyChanged(); }
+            set { _selectedComA = value; OnPropertyChanged(); OnPropertyChanged(nameof(SelectedPulseIndex)); }
         }
         public PulseTabVm? SelectedComBPulse
         {
@@ -184,6 +194,133 @@ namespace IJPSystem.Platform.HMI.Print
             if (_suspend) return;
             EpsonWaveformCalculator.ResolveDocument(_doc);
             RefreshAll();
+            Edited?.Invoke();
+        }
+
+        // ── 구조 편집 (Insert / Delete Pulse) ─────────────────────────────
+
+        public int PulseCount => _doc.ComA.Pulses.Count;
+
+        /// <summary>Insert / Delete 의 기준이 되는 현재 펄스(ComA 탭 선택).</summary>
+        public int SelectedPulseIndex => _selectedComA?.Index ?? 0;
+
+        public bool CanInsertPulse => EpsonWaveformEditor.CanInsertPulse(_doc);
+        public bool CanDeletePulse => EpsonWaveformEditor.CanDeletePulse(_doc);
+
+        /// <summary>선택한 펄스 <b>뒤</b>에 기본 펄스를 넣는다. GL 배정표 열도 함께 밀린다.</summary>
+        public bool InsertPulse()
+        {
+            if (!EpsonWaveformEditor.InsertPulse(_doc, SelectedPulseIndex + 1)) return false;
+            AfterStructureChange();
+            return true;
+        }
+
+        /// <summary>선택한 펄스를 지운다. GL 배정표 열도 함께 당겨진다.</summary>
+        public bool DeletePulse()
+        {
+            if (!EpsonWaveformEditor.DeletePulse(_doc, SelectedPulseIndex)) return false;
+            AfterStructureChange();
+            return true;
+        }
+
+        private void AfterStructureChange()
+        {
+            RefreshAll();
+            Edited?.Invoke();
+        }
+
+        /// <summary>Segment Count — 세그먼트 개수를 맞춘다.</summary>
+        public void SetSegmentCount(ComChannelId channel, int pulseIndex, int count)
+        {
+            if (_suspend) return;
+            if (!EpsonWaveformEditor.SetSegmentCount(_doc, channel, pulseIndex, count)) return;
+            AfterStructureChange();
+        }
+
+        /// <summary>Scale Voltage — Vst 기준 진폭 배율.</summary>
+        public bool ScaleVoltage(double factor)
+        {
+            if (!EpsonWaveformEditor.ScaleVoltage(_doc, factor)) return false;
+            AfterStructureChange();
+            return true;
+        }
+
+        // ── Copy pulse to ─────────────────────────────────────────────────
+
+        public ICommand CopyPulseCommand { get; }
+
+        private void CopyPulse(CopyTargetVm? t)
+        {
+            if (t == null) return;
+            if (!EpsonWaveformEditor.CopyPulse(_doc, t.FromChannel, t.FromIndex, t.ToChannel, t.ToIndex)) return;
+            AfterStructureChange();
+        }
+
+        /// <summary>이 펄스를 덮어쓸 수 있는 자리들(자기 자신 제외).</summary>
+        internal IReadOnlyList<CopyTargetVm> CopyTargetsFor(ComChannelId from, int fromIndex)
+        {
+            var list = new List<CopyTargetVm>();
+            foreach (var ch in new[] { ComChannelId.ComA, ComChannelId.ComB })
+            {
+                var pulses = _doc.ChannelOf(ch).Pulses;
+                for (int i = 0; i < pulses.Count; i++)
+                {
+                    if (ch == from && i == fromIndex) continue;
+                    list.Add(new CopyTargetVm(this, from, fromIndex, ch, i));
+                }
+            }
+            return list;
+        }
+
+        // ── Graph Highlight ───────────────────────────────────────────────
+
+        public ObservableCollection<HighlightOptionVm> HighlightOptions { get; } = new();
+
+        private HighlightOptionVm? _highlight;
+
+        /// <summary>강조할 펄스. 고르면 그 구간만 남기고 그래프가 어두워진다.</summary>
+        public HighlightOptionVm? SelectedHighlight
+        {
+            get => _highlight;
+            set
+            {
+                if (!SetProperty(ref _highlight, value)) return;
+                OnPropertyChanged(nameof(HighlightRangeComA));
+                OnPropertyChanged(nameof(HighlightRangeComB));
+                Changed?.Invoke();     // 그래프만 다시 그린다(편집이 아니므로 IsDirty 는 그대로)
+            }
+        }
+
+        public (double StartUs, double EndUs)? HighlightRangeComA => RangeFor(ComChannelId.ComA);
+        public (double StartUs, double EndUs)? HighlightRangeComB => RangeFor(ComChannelId.ComB);
+
+        /// <summary>강조 구간 — 그 채널에서 고른 펄스가 차지하는 시간대.</summary>
+        private (double StartUs, double EndUs)? RangeFor(ComChannelId ch)
+        {
+            if (_highlight is not { PulseIndex: >= 0 } h) return null;
+
+            var pulses = _doc.ChannelOf(ch).Pulses;
+            if (h.PulseIndex >= pulses.Count) return null;
+
+            double start = 0;
+            for (int i = 0; i < h.PulseIndex; i++) start += pulses[i].TotalTimeUs;
+            return (start, start + pulses[h.PulseIndex].TotalTimeUs);
+        }
+
+        /// <summary>펄스 수가 바뀌면 목록도 다시 만든다. 고르고 있던 펄스가 없어지면 None 으로.</summary>
+        private void RebuildHighlightOptions()
+        {
+            int keep = _highlight?.PulseIndex ?? -1;
+
+            HighlightOptions.Clear();
+            HighlightOptions.Add(new HighlightOptionVm(-1, "None"));
+            for (int i = 0; i < _doc.ComA.Pulses.Count; i++)
+                HighlightOptions.Add(new HighlightOptionVm(i, $"Pulse {i + 1}"));
+
+            _highlight = HighlightOptions.FirstOrDefault(o => o.PulseIndex == keep) ?? HighlightOptions[0];
+            OnPropertyChanged(nameof(SelectedHighlight));
+            OnPropertyChanged(nameof(HighlightRangeComA));
+            OnPropertyChanged(nameof(HighlightRangeComB));
         }
 
         private void RefreshAll()
@@ -193,6 +330,7 @@ namespace IJPSystem.Platform.HMI.Print
             {
                 RebuildPulseTabs(_doc.ComA, ComAPulses, ref _selectedComA);
                 RebuildPulseTabs(_doc.ComB, ComBPulses, ref _selectedComB);
+                RebuildHighlightOptions();
                 foreach (var row in GreyLevelRows) row.Refresh();
             }
             finally { _suspend = false; }
@@ -204,6 +342,10 @@ namespace IJPSystem.Platform.HMI.Print
             OnPropertyChanged(nameof(SelectedComBPulse));
             OnPropertyChanged(nameof(UnassignedGreyLevelsText));
             OnPropertyChanged(nameof(HasUnassignedGreyLevel));
+            OnPropertyChanged(nameof(PulseCount));
+            OnPropertyChanged(nameof(SelectedPulseIndex));
+            OnPropertyChanged(nameof(CanInsertPulse));
+            OnPropertyChanged(nameof(CanDeletePulse));
             Changed?.Invoke();
         }
 
@@ -225,13 +367,17 @@ namespace IJPSystem.Platform.HMI.Print
     /// <summary>펄스 탭 하나 — 그 안에 세그먼트 행이 들어간다.</summary>
     public sealed class PulseTabVm
     {
+        private readonly WaveformEditorViewModel _owner;
+
         public PulseTabVm(WaveformEditorViewModel owner, ComChannelId ch, int index, EpsonWaveformPulse pulse)
         {
+            _owner  = owner;
             Channel = ch;
             Index   = index;
             Header  = $"Pulse {index + 1}";
             Segments = new ObservableCollection<SegmentRowVm>(
                 pulse.Segments.Select((s, i) => new SegmentRowVm(owner, s, i, i == pulse.Segments.Count - 1)));
+            SegmentCount     = pulse.Segments.Count;
             SegmentCountText = $"{pulse.Segments.Count}";
             TotalTimeText    = $"{pulse.TotalTimeUs:F2} µs";
         }
@@ -241,6 +387,29 @@ namespace IJPSystem.Platform.HMI.Print
         public string Header { get; }
         public ObservableCollection<SegmentRowVm> Segments { get; }
         public string SegmentCountText { get; }
+
+        /// <summary>고를 수 있는 세그먼트 개수.</summary>
+        public static IReadOnlyList<int> SegmentCountOptions { get; } =
+            Enumerable.Range(EpsonWaveformEditor.MinSegments,
+                             EpsonWaveformEditor.MaxSegments - EpsonWaveformEditor.MinSegments + 1).ToList();
+
+        /// <summary>Segment Count. 바꾸면 마지막 Vst 복귀 구간은 그대로 두고 앞쪽이 늘고 준다.</summary>
+        private int _segmentCount;
+        public int SegmentCount
+        {
+            get => _segmentCount;
+            set
+            {
+                if (_segmentCount == value) return;
+                _segmentCount = value;
+                _owner.SetSegmentCount(Channel, Index, value);
+            }
+        }
+
+        /// <summary>"Copy pulse to ..." 로 덮어쓸 수 있는 자리들.</summary>
+        public IReadOnlyList<CopyTargetVm> CopyTargets => _owner.CopyTargetsFor(Channel, Index);
+
+        public ICommand CopyPulseCommand => _owner.CopyPulseCommand;
 
         /// <summary>이 펄스가 차지하는 시간 — 최대 주파수가 왜 그 값인지 여기서 읽힌다.</summary>
         public string TotalTimeText { get; }
@@ -340,5 +509,41 @@ namespace IJPSystem.Platform.HMI.Print
         public bool IsOn => _owner.Document.GreyLevels[GreyLevel, PulseIndex] == Assign;
 
         public void Refresh() => OnPropertyChanged(nameof(IsOn));
+    }
+
+    /// <summary>"Copy pulse to ..." 메뉴 한 줄 — 어디서 어디로 복사할지.</summary>
+    public sealed class CopyTargetVm
+    {
+        public CopyTargetVm(WaveformEditorViewModel owner,
+                            ComChannelId fromChannel, int fromIndex,
+                            ComChannelId toChannel,   int toIndex)
+        {
+            Owner       = owner;
+            FromChannel = fromChannel;
+            FromIndex   = fromIndex;
+            ToChannel   = toChannel;
+            ToIndex     = toIndex;
+            Header      = $"{(toChannel == ComChannelId.ComA ? "ComA" : "ComB")} Pulse {toIndex + 1}";
+        }
+
+        public WaveformEditorViewModel Owner { get; }
+        public ComChannelId FromChannel { get; }
+        public int          FromIndex   { get; }
+        public ComChannelId ToChannel   { get; }
+        public int          ToIndex     { get; }
+        public string       Header      { get; }
+    }
+
+    /// <summary>Graph Highlight 목록의 한 줄. <see cref="PulseIndex"/> 가 -1 이면 강조 없음.</summary>
+    public sealed class HighlightOptionVm
+    {
+        public HighlightOptionVm(int pulseIndex, string header)
+        {
+            PulseIndex = pulseIndex;
+            Header     = header;
+        }
+
+        public int    PulseIndex { get; }
+        public string Header     { get; }
     }
 }
