@@ -4,6 +4,183 @@
              xmlns:ctrl="clr-namespace:IJPSystem.Platform.HMI.Common.Controls"
              Background="#0B0F1A">
 
+    <UserControl.Resources>
+
+        <!-- ── 파형 구조 패널 공통 ─────────────────────────────────────── -->
+        <Style x:Key="WfSectionTitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#3B82F6"/>
+            <Setter Property="FontSize"   Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin"     Value="0,0,0,8"/>
+        </Style>
+        <Style x:Key="WfLabel" TargetType="TextBlock">
+            <Setter Property="Foreground"         Value="#94A3B8"/>
+            <Setter Property="FontSize"           Value="11"/>
+            <Setter Property="VerticalAlignment"  Value="Center"/>
+        </Style>
+        <Style x:Key="WfUnit" TargetType="TextBlock">
+            <Setter Property="Foreground"        Value="#64748B"/>
+            <Setter Property="FontSize"          Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="WfBox" TargetType="TextBox">
+            <Setter Property="Background"                  Value="Transparent"/>
+            <Setter Property="Foreground"                  Value="#E2E8F0"/>
+            <Setter Property="CaretBrush"                  Value="#E2E8F0"/>
+            <Setter Property="BorderThickness"             Value="0"/>
+            <Setter Property="FontFamily"                  Value="Consolas"/>
+            <Setter Property="FontSize"                    Value="11"/>
+            <Setter Property="TextAlignment"               Value="Right"/>
+            <Setter Property="VerticalContentAlignment"    Value="Center"/>
+            <Setter Property="Padding"                     Value="4,0"/>
+            <Style.Triggers>
+                <!-- 계산값은 회색으로 — 입력칸처럼 보이면 넣어도 안 바뀐다고 오해한다. -->
+                <Trigger Property="IsReadOnly" Value="True">
+                    <Setter Property="Foreground" Value="#64748B"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="WfDivider" TargetType="Rectangle">
+            <Setter Property="Height" Value="1"/>
+            <Setter Property="Fill"   Value="#334155"/>
+            <Setter Property="Margin" Value="0,12"/>
+        </Style>
+        <Style x:Key="WfMatrixHead" TargetType="TextBlock">
+            <Setter Property="Foreground"          Value="#64748B"/>
+            <Setter Property="FontSize"            Value="10"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- 배정표 한 칸 — 세 상태 토글의 켜짐/꺼짐만 보이면 된다. -->
+        <Style x:Key="WfMatrixCell" TargetType="Button">
+            <Setter Property="FontSize"   Value="9"/>
+            <Setter Property="Foreground" Value="#64748B"/>
+            <Setter Property="Cursor"     Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="#0F172A" BorderBrush="#334155"
+                                BorderThickness="1" CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#475569"/>
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsOn}" Value="True">
+                                <Setter TargetName="Bd" Property="Background"  Value="#1D4ED8"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#3B82F6"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="WfTabs" TargetType="TabControl">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style x:Key="WfTabItem" TargetType="TabItem">
+            <Setter Property="Foreground" Value="#94A3B8"/>
+            <Setter Property="FontSize"   Value="11"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Bd" Background="#0F172A" BorderBrush="#334155"
+                                BorderThickness="1" CornerRadius="4,4,0,0" Padding="10,4" Margin="0,0,3,0">
+                            <ContentPresenter ContentSource="Header"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background"  Value="#1E293B"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#3B82F6"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 세그먼트 그리드 — 왼쪽 라벨 한 줄 + 세그먼트마다 세로 한 칸.
+             MetWaveEpson 과 같은 배치라 값을 그대로 대조할 수 있다. -->
+        <DataTemplate x:Key="WfSegmentGrid">
+            <Border Background="#1E293B" CornerRadius="0,4,4,4" Padding="8">
+                <StackPanel>
+                    <TextBlock Margin="0,0,0,6" FontSize="10" Foreground="#64748B">
+                        <Run Text="세그먼트 "/><Run Text="{Binding SegmentCountText, Mode=OneWay}"/>
+                        <Run Text="개 · 펄스 길이 "/><Run Text="{Binding TotalTimeText, Mode=OneWay}"/>
+                    </TextBlock>
+
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal">
+
+                            <!-- 라벨 열 -->
+                            <StackPanel Margin="0,0,6,0">
+                                <TextBlock Text=" "             Height="20"/>
+                                <TextBlock Text="Slew (V/µs)"   Height="26" Style="{StaticResource WfLabel}"/>
+                                <TextBlock Text="Slew Time (µs)" Height="26" Style="{StaticResource WfLabel}"/>
+                                <TextBlock Text="Hold Voltage (V)" Height="26" Style="{StaticResource WfLabel}"/>
+                                <TextBlock Text="Hold Time (µs)" Height="26" Style="{StaticResource WfLabel}"/>
+                            </StackPanel>
+
+                            <ItemsControl ItemsSource="{Binding Segments}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Width="74" Margin="0,0,4,0">
+                                            <TextBlock Text="{Binding Header}" Height="20" FontSize="10"
+                                                       Foreground="#94A3B8" FontWeight="Bold"
+                                                       HorizontalAlignment="Center"/>
+
+                                            <Border Height="24" Margin="0,0,0,2" Background="#0F172A"
+                                                    BorderBrush="#334155" BorderThickness="1" CornerRadius="3">
+                                                <TextBox Style="{StaticResource WfBox}"
+                                                         Text="{Binding Slew, StringFormat=F2, UpdateSourceTrigger=LostFocus}"
+                                                         IsReadOnly="{Binding DataContext.Editor.IsSlewTimeEditable,
+                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </Border>
+
+                                            <Border Height="24" Margin="0,0,0,2" Background="#0F172A"
+                                                    BorderBrush="#334155" BorderThickness="1" CornerRadius="3">
+                                                <TextBox Style="{StaticResource WfBox}"
+                                                         Text="{Binding SlewTimeUs, StringFormat=F2, UpdateSourceTrigger=LostFocus}"
+                                                         IsReadOnly="{Binding DataContext.Editor.IsSlewEditable,
+                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </Border>
+
+                                            <!-- 마지막 세그먼트는 Vst 복귀가 강제라 입력을 막는다. -->
+                                            <Border Height="24" Margin="0,0,0,2" Background="#0F172A"
+                                                    BorderBrush="#334155" BorderThickness="1" CornerRadius="3">
+                                                <TextBox Style="{StaticResource WfBox}"
+                                                         Text="{Binding HoldVoltage, StringFormat=F2, UpdateSourceTrigger=LostFocus}"
+                                                         IsReadOnly="{Binding IsLast}"
+                                                         ToolTip="마지막 세그먼트는 Vst 로 복귀해야 하므로 값을 바꿀 수 없습니다."/>
+                                            </Border>
+
+                                            <Border Height="24" Background="#0F172A"
+                                                    BorderBrush="#334155" BorderThickness="1" CornerRadius="3">
+                                                <TextBox Style="{StaticResource WfBox}"
+                                                         Text="{Binding HoldTimeUs, StringFormat=F2, UpdateSourceTrigger=LostFocus}"/>
+                                            </Border>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+    </UserControl.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -146,11 +323,170 @@
             </Grid>
         </Border>
 
-        <!-- ══ 차트 영역 ═════════════════════════════════════════════════ -->
+        <!-- ══ 차트 + 파형 구조 ═══════════════════════════════════════════
+             MetWaveEpson 배치를 따른다 — 왼쪽 그래프, 오른쪽에 파형을 만드는 값들.
+             그래프만 있으면 "왜 이 모양인지"를 화면에서 알 수 없다. -->
         <Border Grid.Row="1" BorderBrush="#334155" BorderThickness="1,0,1,0"
                 Background="#0D1117">
             <Grid>
-                <ctrl:WaveformChart x:Name="WaveChart" Margin="8,8,8,4"/>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"    MinWidth="320"/>
+                    <ColumnDefinition Width="1"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <ctrl:WaveformChart x:Name="WaveChart" Grid.Column="0" Margin="8,8,8,4"/>
+                <Rectangle Grid.Column="1" Fill="#334155"/>
+
+                <ScrollViewer Grid.Column="2" Width="520" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled" Background="#111827">
+                    <StackPanel Margin="14,12">
+
+                        <!-- ── 전역 파라미터 ─────────────────────────────── -->
+                        <TextBlock Text="WAVEFORM" Style="{StaticResource WfSectionTitle}"/>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="30"/>
+                                <RowDefinition Height="26"/>
+                                <RowDefinition Height="26"/>
+                                <RowDefinition Height="24"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Vst (대기 전압)"
+                                       Style="{StaticResource WfLabel}"/>
+                            <Border Grid.Row="0" Grid.Column="1" Width="86" Height="24"
+                                    Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="4">
+                                <TextBox Text="{Binding Editor.Vst, StringFormat=F2, UpdateSourceTrigger=LostFocus}"
+                                         Style="{StaticResource WfBox}"/>
+                            </Border>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text=" V" Style="{StaticResource WfUnit}"/>
+
+                            <!-- 둘 중 하나는 반드시 계산값이다 — 같이 입력받으면 ΔV 와 모순된다. -->
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="전압 조정"
+                                       Style="{StaticResource WfLabel}"/>
+                            <RadioButton Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                         Content="Constant Slew" Foreground="#E2E8F0" FontSize="11"
+                                         GroupName="VAdj" IsChecked="{Binding Editor.IsConstantSlew}"
+                                         ToolTip="기울기를 고정하고 천이 시간을 계산합니다. Slew Time 칸은 읽기 전용이 됩니다."/>
+                            <RadioButton Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                                         Content="Constant Duration" Foreground="#E2E8F0" FontSize="11"
+                                         GroupName="VAdj" IsChecked="{Binding Editor.IsConstantDuration}"
+                                         ToolTip="천이 시간을 고정하고 기울기를 계산합니다. Slew 칸은 읽기 전용이 됩니다."/>
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Wfm Max Frequency"
+                                       Style="{StaticResource WfLabel}"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                                       Text="{Binding Editor.MaxFrequencyText}"
+                                       Foreground="#22C55E" FontFamily="Consolas" FontSize="12" FontWeight="Bold"
+                                       VerticalAlignment="Center"
+                                       ToolTip="긴 쪽 채널의 한 주기로 정해집니다. 짧은 채널은 기다립니다."/>
+                        </Grid>
+
+                        <TextBlock Text="{Binding Editor.ChannelTimeText}" Foreground="#64748B"
+                                   FontFamily="Consolas" FontSize="10" Margin="0,0,0,6"/>
+
+                        <!-- Save 는 레시피에 '파일 경로'만 기록한다 — 파형 내용을 쓰지 않는다.
+                             이 사실을 안 적어 두면 편집하고 저장한 뒤 값이 사라진 것을 나중에 안다. -->
+                        <Border Background="#1E293B" CornerRadius="4" Padding="8,5" Margin="0,0,0,4">
+                            <TextBlock Foreground="#F59E0B" FontSize="10" TextWrapping="Wrap"
+                                       Text="여기서 바꾼 값은 그래프와 계산에만 반영됩니다. 파형 파일로 저장하는 기능은 아직 없습니다 — Save 는 레시피에 파일 경로만 기록합니다."/>
+                        </Border>
+
+                        <!-- Com A/B · 노즐 행 모드 -->
+                        <WrapPanel Margin="0,0,0,10">
+                            <CheckBox Content="ComB = ComA 동기" Foreground="#94A3B8" FontSize="11"
+                                      Margin="0,0,16,0" IsChecked="{Binding Editor.IsSynchronous}"
+                                      ToolTip="켜면 ComB 는 ComA 의 복제가 됩니다. ComB 를 따로 편집해도 저장 시 덮어써집니다."/>
+                            <CheckBox Content="노즐 행 2색(Dual)" Foreground="#94A3B8" FontSize="11"
+                                      IsChecked="{Binding Editor.IsDualColour}"
+                                      ToolTip="노즐 행 A/B 를 서로 다른 잉크로 다룹니다."/>
+                        </WrapPanel>
+
+                        <Rectangle Style="{StaticResource WfDivider}"/>
+
+                        <!-- ── GL × Pulse 배정표 ─────────────────────────── -->
+                        <TextBlock Text="GREY LEVEL × PULSE" Style="{StaticResource WfSectionTitle}"/>
+                        <TextBlock Text="그레이 레벨마다 어느 펄스를 어느 Com 라인으로 쏠지 — 액적 크기를 정합니다."
+                                   Foreground="#64748B" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6"/>
+
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <UniformGrid Grid.Column="1" Columns="4">
+                                <TextBlock Text="Pulse 1" Style="{StaticResource WfMatrixHead}"/>
+                                <TextBlock Text="Pulse 2" Style="{StaticResource WfMatrixHead}"/>
+                                <TextBlock Text="Pulse 3" Style="{StaticResource WfMatrixHead}"/>
+                                <TextBlock Text="Pulse 4" Style="{StaticResource WfMatrixHead}"/>
+                            </UniformGrid>
+                        </Grid>
+
+                        <ItemsControl ItemsSource="{Binding Editor.GreyLevelRows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,3">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="34"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding Header}"
+                                                   Foreground="#94A3B8" FontSize="11" FontWeight="Bold"
+                                                   VerticalAlignment="Center"/>
+                                        <ItemsControl Grid.Column="1" ItemsSource="{Binding Cells}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><UniformGrid Columns="8"/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Content="{Binding Label}" Height="22" Margin="1"
+                                                            Style="{StaticResource WfMatrixCell}"
+                                                            Command="{Binding DataContext.Editor.ToggleGreyLevelCommand,
+                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- 배정이 없는 GL 은 토출 자체가 안 되는데 화면에는 이상이 없어 보인다. -->
+                        <Border Background="#1E293B" CornerRadius="4" Padding="8,5" Margin="0,6,0,0"
+                                Visibility="{Binding Editor.HasUnassignedGreyLevel,
+                                             Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="{Binding Editor.UnassignedGreyLevelsText}"
+                                       Foreground="#FCD34D" FontSize="10" TextWrapping="Wrap"/>
+                        </Border>
+
+                        <Rectangle Style="{StaticResource WfDivider}"/>
+
+                        <!-- ── 세그먼트 ──────────────────────────────────── -->
+                        <TextBlock Text="SEGMENTS · ComA" Style="{StaticResource WfSectionTitle}"/>
+                        <TabControl ItemsSource="{Binding Editor.ComAPulses}"
+                                    SelectedItem="{Binding Editor.SelectedComAPulse}"
+                                    Style="{StaticResource WfTabs}"
+                                    ItemContainerStyle="{StaticResource WfTabItem}"
+                                    ContentTemplate="{StaticResource WfSegmentGrid}"
+                                    DisplayMemberPath="Header"/>
+
+                        <TextBlock Text="SEGMENTS · ComB" Style="{StaticResource WfSectionTitle}" Margin="0,12,0,8"/>
+                        <TabControl ItemsSource="{Binding Editor.ComBPulses}"
+                                    SelectedItem="{Binding Editor.SelectedComBPulse}"
+                                    IsEnabled="{Binding Editor.IsComBEditable}"
+                                    Style="{StaticResource WfTabs}"
+                                    ItemContainerStyle="{StaticResource WfTabItem}"
+                                    ContentTemplate="{StaticResource WfSegmentGrid}"
+                                    DisplayMemberPath="Header"/>
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
         </Border>
 

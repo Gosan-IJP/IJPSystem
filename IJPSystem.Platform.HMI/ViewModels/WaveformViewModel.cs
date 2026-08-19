@@ -1,6 +1,7 @@
 using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.HMI.Common;
 using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
+using IJPSystem.Platform.Infrastructure.Print.Waveform;
 using Microsoft.Win32;
 using System;
 using System.Threading.Tasks;
@@ -135,6 +136,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// </summary>
         public Nozzle.NozzleSelectionWatcher NozzleSel => Nozzle.NozzleSelectionWatcher.Instance;
 
+        /// <summary>
+        /// 구동 파형 편집기 — Vst · 전압 조정 모드 · GL 배정표 · 세그먼트 그리드.
+        /// 화면 그래프는 파일이 아니라 <b>이 편집기가 계산한 값</b>을 그린다.
+        /// </summary>
+        public Print.WaveformEditorViewModel Editor { get; } = new();
+
         public ICommand LoadCommand          { get; }
         public ICommand SaveCommand          { get; }
         public ICommand ApplySpitCommand     { get; }
@@ -158,7 +165,27 @@ namespace IJPSystem.Platform.HMI.ViewModels
             AbortSpitCommand     = new RelayCommand(async _ => await ExecuteAbortSpitAsync(), _ => IsSpitting);
             HeaterControlCommand = new RelayCommand(_ => ExecuteToggleHeater());
 
+            // 편집값이 바뀌면 파일을 다시 읽지 않고 계산 결과로 그래프를 갱신한다 —
+            // 화면 그래프와 헤드로 내려갈 값이 같은 계산에서 나와야 한다.
+            Editor.Changed += RedrawFromEditor;
+
             AutoLoadForActiveRecipe();
+        }
+
+        /// <summary>편집기 문서 → 차트 시리즈. Vst 는 문서 값으로 수평선을 긋는다.</summary>
+        private void RedrawFromEditor()
+        {
+            var doc = Editor.Document;
+
+            SeriesComA.Points = EpsonWaveformCalculator.BuildTrace(doc.ComA, doc.Vst)
+                                    .Select(p => (p.TimeUs, p.Volts)).ToList();
+            SeriesComB.Points = EpsonWaveformCalculator.BuildTrace(doc.ComB, doc.Vst)
+                                    .Select(p => (p.TimeUs, p.Volts)).ToList();
+
+            double span = Math.Max(doc.ComA.TotalTimeUs, doc.ComB.TotalTimeUs);
+            if (span > 0) SeriesVst.SetFlat(doc.Vst, span);
+
+            RefreshChart();
         }
 
         // ── 자동 로드 (화면 진입 시) ──────────────────────────────────────
@@ -199,10 +226,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         private void LoadWaveformFiles(string dir, string baseName, bool auto)
         {
-            bool any = false;
-            any |= TryLoad(dir, baseName, "ComA", SeriesComA);
-            any |= TryLoad(dir, baseName, "ComB", SeriesComB);
-            any |= TryLoad(dir, baseName, "Vst",  SeriesVst);
+            var fileA = TryLoad(dir, baseName, "ComA", SeriesComA);
+            var fileB = TryLoad(dir, baseName, "ComB", SeriesComB);
+            var fileV = TryLoad(dir, baseName, "Vst",  SeriesVst);
+            bool any = fileA != null || fileB != null || fileV != null;
+
+            // 편집기에 같은 내용을 올린다. 이후 그래프는 편집기 계산 결과가 그린다 —
+            // 파일 파싱값과 편집 계산값이 갈라지면 화면과 실제 토출이 달라진다.
+            if (fileA != null || fileB != null)
+                Editor.Load(Print.WaveformDocumentBuilder.Build(fileA, fileB, baseName));
 
             if (SeriesVst.Points.Count == 0 && SeriesComA.Points.Count > 0)
             {
@@ -224,10 +256,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
-        private bool TryLoad(string dir, string baseName, string type, WaveformSeries target)
+        /// <summary>파싱한 파일을 돌려준다(편집기 구성에 쓴다). 없거나 실패하면 null.</summary>
+        private Models.WaveformFile? TryLoad(string dir, string baseName, string type, WaveformSeries target)
         {
             string path = Path.Combine(dir, $"{baseName}.{type}");
-            if (!File.Exists(path)) return false;
+            if (!File.Exists(path)) return null;
 
             try
             {
@@ -235,13 +268,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 // repeats:1 — 파일 내 전체 펄스 시퀀스를 1회만 그린다(MetWaveEpson 과 동일).
                 target.LoadFromFile(file, repeats: 1);
                 _mainVM.AddLog($"[WAVEFORM] {type} 파싱 완료 ({file.Pulses.Count} pulse)", LogLevel.Info);
-                return true;
+                return file;
             }
             catch (Exception ex)
             {
                 _mainVM.AddLog($"[WAVEFORM] {type} 로드 실패: {ex.Message}", LogLevel.Error);
                 _mainVM.AlarmVM.RaiseAlarm("LOG-WAVEFORM-LOAD-FAIL");
-                return false;
+                return null;
             }
         }
 
