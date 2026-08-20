@@ -437,167 +437,314 @@
                         </Style>
                     </Border.Style>
 
-                    <!-- 왼쪽 열: Purge Time(위) + 프린트 설정(아래). Purge 가 세로를 다 쓰고 있어
-                         오른쪽이 통째로 비어 있었다 → Purge 를 위쪽 절반만 쓰게 하고, 비운 자리에
-                         프린트 설정을 내려 두고, 남은 오른쪽을 노즐/글라스 정보가 채운다. -->
+                    <!-- 왼쪽 열: Purge Time · 프린트 설정 · 웨이브폼 정보(표시 전용).
+                         오른쪽은 노즐/글라스 정보. 두 열 다 각자 스크롤한다 — 화면이 낮으면
+                         카드가 잘리는데, 잘린 자리에 값이 있으면 없는 값처럼 보인다. -->
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>  <!-- Purge + 프린트 설정 -->
                             <ColumnDefinition Width="*"/>     <!-- 노즐 / 글라스 정보 -->
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <!-- ── Purge Time 카드 (왼쪽 위) ── -->
-                        <Border Grid.Column="0" Grid.Row="0" Background="#1E293B" CornerRadius="10"
-                                BorderBrush="#334155" BorderThickness="1" Width="300"
-                                Margin="20,20,20,10" Padding="16">
-                            <StackPanel VerticalAlignment="Center">
-
-                                <!-- 타이틀 — 값 표시와 한 줄에 두어 세로를 줄인다 -->
-                                <DockPanel Margin="0,0,0,10">
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock Text="⏱" FontSize="14" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="PURGE TIME" Foreground="White"
-                                                   FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
-                                    </StackPanel>
-
-                                    <!-- 현재 값 표시 -->
-                                    <Border Background="#0F172A" CornerRadius="8"
-                                            BorderBrush="#3B82F6" BorderThickness="2"
-                                            Padding="12,4" HorizontalAlignment="Right">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="{Binding PurgeTime}"
-                                                       Foreground="#60A5FA" FontSize="26" FontWeight="Black"
-                                                       FontFamily="Consolas" VerticalAlignment="Center"/>
-                                            <TextBlock Text=" sec" Foreground="#64748B"
-                                                       FontSize="13" FontWeight="Bold"
-                                                       VerticalAlignment="Bottom" Margin="0,0,0,4"/>
-                                        </StackPanel>
-                                    </Border>
-                                </DockPanel>
-
-                                <!-- 슬라이더 -->
-                                <Slider Minimum="0" Maximum="60"
-                                        IsSnapToTickEnabled="False"
-                                        Value="{Binding PurgeTime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                        Margin="4,0,4,4" Height="26">
-                                    <Slider.Style>
-                                        <Style TargetType="Slider">
-                                            <Setter Property="Template">
-                                                <Setter.Value>
-                                                    <ControlTemplate TargetType="Slider">
-                                                        <Grid>
-                                                            <Border Height="6" CornerRadius="3"
-                                                                    Background="#0F172A" BorderBrush="#334155" BorderThickness="1"
-                                                                    VerticalAlignment="Center"/>
-                                                            <Track x:Name="PART_Track">
-                                                                <Track.DecreaseRepeatButton>
-                                                                    <RepeatButton Command="Slider.DecreaseLarge"
-                                                                                  Background="Transparent" BorderThickness="0" Opacity="0"/>
-                                                                </Track.DecreaseRepeatButton>
-                                                                <Track.Thumb>
-                                                                    <Thumb Cursor="Hand">
-                                                                        <Thumb.Template>
-                                                                            <ControlTemplate TargetType="Thumb">
-                                                                                <Ellipse Fill="#3B82F6" Stroke="#93C5FD" StrokeThickness="2"
-                                                                                         Width="20" Height="20">
-                                                                                    <Ellipse.Effect>
-                                                                                        <DropShadowEffect Color="#3B82F6" BlurRadius="8" ShadowDepth="0"/>
-                                                                                    </Ellipse.Effect>
-                                                                                </Ellipse>
-                                                                            </ControlTemplate>
-                                                                        </Thumb.Template>
-                                                                    </Thumb>
-                                                                </Track.Thumb>
-                                                                <Track.IncreaseRepeatButton>
-                                                                    <RepeatButton Command="Slider.IncreaseLarge"
-                                                                                  Background="Transparent" BorderThickness="0" Opacity="0"/>
-                                                                </Track.IncreaseRepeatButton>
-                                                            </Track>
-                                                        </Grid>
-                                                    </ControlTemplate>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </Style>
-                                    </Slider.Style>
-                                </Slider>
-
-                                <!-- 눈금 레이블 -->
-                                <Grid Margin="4,0,4,16">
-                                    <TextBlock Text="0" Foreground="#475569" FontSize="10" FontFamily="Consolas" HorizontalAlignment="Left"/>
-                                    <TextBlock Text="30" Foreground="#475569" FontSize="10" FontFamily="Consolas" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="60" Foreground="#475569" FontSize="10" FontFamily="Consolas" HorizontalAlignment="Right"/>
-                                </Grid>
-
-                                <!-- 직접 입력 -->
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="직접 입력" Foreground="#64748B" FontSize="12"
-                                               VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <Border BorderBrush="#475569" BorderThickness="1" CornerRadius="6"
-                                            Background="#0F172A" Width="60">
-                                        <TextBox Text="{Binding PurgeTime, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                                 Foreground="White" Background="Transparent"
-                                                 BorderThickness="0" FontSize="15" FontFamily="Consolas"
-                                                 TextAlignment="Center" VerticalContentAlignment="Center"
-                                                 Padding="0,5"
-                                                 Style="{StaticResource NumericEditingStyle}"/>
-                                    </Border>
-                                    <TextBlock Text=" sec" Foreground="#64748B" FontSize="12"
-                                               VerticalAlignment="Center" Margin="5,0,0,0"/>
-                                </StackPanel>
-
-                            </StackPanel>
-                        </Border>
-
-                        <!-- ── 프린트 설정 카드 (Purge 를 줄여 비운 자리) ── -->
-                        <Border Grid.Column="0" Grid.Row="1" Background="#1E293B" CornerRadius="10"
-                                BorderBrush="#334155" BorderThickness="1" Width="300"
-                                Margin="20,0,20,20" Padding="16"
-                                VerticalAlignment="Top">
+                        <!-- 왼쪽 열은 세로가 모자란다 — 카드가 화면 높이를 넘으면 아래가
+                             그냥 잘려 나간다(웨이브폼 정보가 그랬다). 통째로 스크롤한다. -->
+                        <ScrollViewer Grid.Column="0"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ScrollViewer.Resources>
+                                <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
+                            </ScrollViewer.Resources>
                             <StackPanel>
-                                <!-- 타이틀 -->
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
-                                    <TextBlock Text="🖨" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{DynamicResource Lbl_PrintSettings}" Foreground="White"
-                                               FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
-                                </StackPanel>
+                                <!-- ── Purge Time 카드 (왼쪽 위) ── -->
+                                <Border Background="#1E293B" CornerRadius="10"
+                                        BorderBrush="#334155" BorderThickness="1" Width="300"
+                                        Margin="20,20,20,10" Padding="16">
+                                    <StackPanel VerticalAlignment="Center">
 
-                                <!-- 프린팅수 (Swath) -->
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                                    <TextBlock Text="{DynamicResource Lbl_Swath}" Foreground="#94A3B8" FontSize="13"
-                                               Width="118" VerticalAlignment="Center"/>
-                                    <ComboBox Width="110" Height="32"
-                                              Style="{StaticResource ModernComboBoxStyle}"
-                                              ItemsSource="{Binding SwathOptions}"
-                                              SelectedItem="{Binding SwathCount, Mode=TwoWay}"/>
-                                </StackPanel>
+                                        <!-- 타이틀 — 값 표시와 한 줄에 두어 세로를 줄인다 -->
+                                        <DockPanel Margin="0,0,0,10">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="⏱" FontSize="14" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="PURGE TIME" Foreground="White"
+                                                           FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            </StackPanel>
 
-                                <!-- Head 길이·폭은 [노즐 정보] 로 옮겼다(2026-08-13) — 헤드 치수라
-                                     노즐 사양과 같이 있어야 헤드를 바꿀 때 한 자리에서 끝난다. -->
+                                            <!-- 현재 값 표시 -->
+                                            <Border Background="#0F172A" CornerRadius="8"
+                                                    BorderBrush="#3B82F6" BorderThickness="2"
+                                                    Padding="12,4" HorizontalAlignment="Right">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding PurgeTime}"
+                                                               Foreground="#60A5FA" FontSize="26" FontWeight="Black"
+                                                               FontFamily="Consolas" VerticalAlignment="Center"/>
+                                                    <TextBlock Text=" sec" Foreground="#64748B"
+                                                               FontSize="13" FontWeight="Bold"
+                                                               VerticalAlignment="Bottom" Margin="0,0,0,4"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DockPanel>
 
-                                <!-- 프린팅 방향 (0=단방향, 1=양방향) -->
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{DynamicResource Lbl_PrintDirection}" Foreground="#94A3B8" FontSize="13"
-                                               Width="118" VerticalAlignment="Center"/>
-                                    <ComboBox Width="110" Height="32"
-                                              Style="{StaticResource ModernComboBoxStyle}"
-                                              SelectedIndex="{Binding PrintDirectionIndex, Mode=TwoWay}">
-                                        <ComboBoxItem Content="{DynamicResource Opt_Unidirectional}"/>
-                                        <ComboBoxItem Content="{DynamicResource Opt_Bidirectional}"/>
-                                    </ComboBox>
-                                </StackPanel>
+                                        <!-- 슬라이더 -->
+                                        <Slider Minimum="0" Maximum="60"
+                                                IsSnapToTickEnabled="False"
+                                                Value="{Binding PurgeTime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                Margin="4,0,4,4" Height="26">
+                                            <Slider.Style>
+                                                <Style TargetType="Slider">
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate TargetType="Slider">
+                                                                <Grid>
+                                                                    <Border Height="6" CornerRadius="3"
+                                                                            Background="#0F172A" BorderBrush="#334155" BorderThickness="1"
+                                                                            VerticalAlignment="Center"/>
+                                                                    <Track x:Name="PART_Track">
+                                                                        <Track.DecreaseRepeatButton>
+                                                                            <RepeatButton Command="Slider.DecreaseLarge"
+                                                                                          Background="Transparent" BorderThickness="0" Opacity="0"/>
+                                                                        </Track.DecreaseRepeatButton>
+                                                                        <Track.Thumb>
+                                                                            <Thumb Cursor="Hand">
+                                                                                <Thumb.Template>
+                                                                                    <ControlTemplate TargetType="Thumb">
+                                                                                        <Ellipse Fill="#3B82F6" Stroke="#93C5FD" StrokeThickness="2"
+                                                                                                 Width="20" Height="20">
+                                                                                            <Ellipse.Effect>
+                                                                                                <DropShadowEffect Color="#3B82F6" BlurRadius="8" ShadowDepth="0"/>
+                                                                                            </Ellipse.Effect>
+                                                                                        </Ellipse>
+                                                                                    </ControlTemplate>
+                                                                                </Thumb.Template>
+                                                                            </Thumb>
+                                                                        </Track.Thumb>
+                                                                        <Track.IncreaseRepeatButton>
+                                                                            <RepeatButton Command="Slider.IncreaseLarge"
+                                                                                          Background="Transparent" BorderThickness="0" Opacity="0"/>
+                                                                        </Track.IncreaseRepeatButton>
+                                                                    </Track>
+                                                                </Grid>
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Style>
+                                            </Slider.Style>
+                                        </Slider>
+
+                                        <!-- 눈금 레이블 -->
+                                        <Grid Margin="4,0,4,16">
+                                            <TextBlock Text="0" Foreground="#475569" FontSize="10" FontFamily="Consolas" HorizontalAlignment="Left"/>
+                                            <TextBlock Text="30" Foreground="#475569" FontSize="10" FontFamily="Consolas" HorizontalAlignment="Center"/>
+                                            <TextBlock Text="60" Foreground="#475569" FontSize="10" FontFamily="Consolas" HorizontalAlignment="Right"/>
+                                        </Grid>
+
+                                        <!-- 직접 입력 -->
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="직접 입력" Foreground="#64748B" FontSize="12"
+                                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <Border BorderBrush="#475569" BorderThickness="1" CornerRadius="6"
+                                                    Background="#0F172A" Width="60">
+                                                <TextBox Text="{Binding PurgeTime, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                         Foreground="White" Background="Transparent"
+                                                         BorderThickness="0" FontSize="15" FontFamily="Consolas"
+                                                         TextAlignment="Center" VerticalContentAlignment="Center"
+                                                         Padding="0,5"
+                                                         Style="{StaticResource NumericEditingStyle}"/>
+                                            </Border>
+                                            <TextBlock Text=" sec" Foreground="#64748B" FontSize="12"
+                                                       VerticalAlignment="Center" Margin="5,0,0,0"/>
+                                        </StackPanel>
+
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- ── 프린트 설정 카드 (Purge 를 줄여 비운 자리) ── -->
+                                <Border Background="#1E293B" CornerRadius="10"
+                                        BorderBrush="#334155" BorderThickness="1" Width="300"
+                                        Margin="20,0,20,10" Padding="16"
+                                        VerticalAlignment="Top">
+                                    <StackPanel>
+                                        <!-- 타이틀 -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                            <TextBlock Text="🖨" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{DynamicResource Lbl_PrintSettings}" Foreground="White"
+                                                       FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                                        </StackPanel>
+
+                                        <!-- 프린팅수 (Swath) -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                            <TextBlock Text="{DynamicResource Lbl_Swath}" Foreground="#94A3B8" FontSize="13"
+                                                       Width="118" VerticalAlignment="Center"/>
+                                            <ComboBox Width="110" Height="32"
+                                                      Style="{StaticResource ModernComboBoxStyle}"
+                                                      ItemsSource="{Binding SwathOptions}"
+                                                      SelectedItem="{Binding SwathCount, Mode=TwoWay}"/>
+                                        </StackPanel>
+
+                                        <!-- Head 길이·폭은 [노즐 정보] 로 옮겼다(2026-08-13) — 헤드 치수라
+                                             노즐 사양과 같이 있어야 헤드를 바꿀 때 한 자리에서 끝난다. -->
+
+                                        <!-- 프린팅 방향 (0=단방향, 1=양방향) -->
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{DynamicResource Lbl_PrintDirection}" Foreground="#94A3B8" FontSize="13"
+                                                       Width="118" VerticalAlignment="Center"/>
+                                            <ComboBox Width="110" Height="32"
+                                                      Style="{StaticResource ModernComboBoxStyle}"
+                                                      SelectedIndex="{Binding PrintDirectionIndex, Mode=TwoWay}">
+                                                <ComboBoxItem Content="{DynamicResource Opt_Unidirectional}"/>
+                                                <ComboBoxItem Content="{DynamicResource Opt_Bidirectional}"/>
+                                            </ComboBox>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- ── 웨이브폼 정보 카드 (표시 전용) ───────────────────────────
+                                     [웨이브폼] 화면에서 [레시피에 적용]을 누르면 이 레시피에 파형 파일
+                                     경로가 적힌다. 여기서는 그 결과만 보여 준다 — 같은 파형을 두 화면에서
+                                     고칠 수 있으면 헤드로 내려간 값이 어느 쪽인지 알 수 없어진다.
+                                     값은 레시피가 아니라 파형 파일에서 직접 읽는다. 그래서 파일이 지워지거나
+                                     다른 헤드용 파형이 걸리면 아래에 그대로 드러난다. -->
+                                <Border Background="#1E293B" CornerRadius="10"
+                                        BorderBrush="#334155" BorderThickness="1" Width="300"
+                                        Margin="20,0,20,20" Padding="16"
+                                        VerticalAlignment="Top">
+                                    <Border.Resources>
+                                        <Style x:Key="WfLabel" TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#94A3B8"/>
+                                            <Setter Property="FontSize"   Value="12"/>
+                                            <Setter Property="Margin"     Value="0,0,10,5"/>
+                                        </Style>
+                                        <Style x:Key="WfValue" TargetType="TextBlock">
+                                            <Setter Property="Foreground"    Value="#E2E8F0"/>
+                                            <Setter Property="FontSize"      Value="12"/>
+                                            <Setter Property="FontFamily"    Value="Consolas"/>
+                                            <Setter Property="Margin"        Value="0,0,0,5"/>
+                                            <Setter Property="TextTrimming"  Value="CharacterEllipsis"/>
+                                        </Style>
+                                    </Border.Resources>
+
+                                    <StackPanel>
+                                        <!-- 타이틀 -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                            <TextBlock Text="∿" FontSize="16" Foreground="#38BDF8"
+                                                       Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="웨이브폼 정보" Foreground="White"
+                                                       FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <TextBlock Text="표시 전용" Foreground="#475569" FontSize="11"
+                                                       VerticalAlignment="Center" Margin="10,1,0,0"
+                                                       ToolTip="파형 편집과 적용은 [웨이브폼] 화면에서 합니다."/>
+                                        </StackPanel>
+
+                                        <!-- 아직 적용된 파형이 없을 때 -->
+                                        <TextBlock Text="지정된 파형이 없습니다.&#10;[웨이브폼] 화면에서 [레시피에 적용]을 누르세요."
+                                                   Foreground="#64748B" FontSize="12" TextWrapping="Wrap">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasWaveformFile}" Value="False">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <StackPanel>
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasWaveformFile}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+
+                                            <!-- 파형 이름 — 전체 경로는 툴팁으로(폴더가 길어 한 줄에 안 들어간다) -->
+                                            <Border Background="#0F172A" CornerRadius="6"
+                                                    BorderBrush="#334155" BorderThickness="1"
+                                                    Padding="10,5" Margin="0,0,0,8">
+                                                <TextBlock Text="{Binding WaveformFileName}"
+                                                           ToolTip="{Binding WaveformFullPath}"
+                                                           Foreground="#60A5FA" FontSize="13" FontWeight="Bold"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </Border>
+
+                                            <!-- 레시피에는 적혀 있는데 파일이 없다 -->
+                                            <TextBlock Text="⚠ 파형 파일을 찾을 수 없습니다. 폴더가 바뀌었거나 지워졌습니다."
+                                                       Foreground="#F59E0B" FontSize="11" TextWrapping="Wrap"
+                                                       Margin="0,0,0,10">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsWaveformMissing}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="78"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>   <!-- 0 헤드 -->
+                                                    <RowDefinition Height="Auto"/>   <!-- 1 펄스 -->
+                                                    <RowDefinition Height="Auto"/>   <!-- 2 대기 전압 -->
+                                                    <RowDefinition Height="Auto"/>   <!-- 3 구동 시간 -->
+                                                    <RowDefinition Height="Auto"/>   <!-- 4 사용 계조 -->
+                                                </Grid.RowDefinitions>
+
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="헤드"
+                                                           Style="{StaticResource WfLabel}"/>
+                                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding WaveformHeadType}"
+                                                           Style="{StaticResource WfValue}"
+                                                           ToolTip="파형 파일에 적힌 헤드 종류입니다. 위 [헤드명]과 다르면 다른 헤드용 파형입니다."/>
+
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="펄스"
+                                                           Style="{StaticResource WfLabel}"/>
+                                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding WaveformPulseText}"
+                                                           Style="{StaticResource WfValue}"
+                                                           ToolTip="노즐 열 A / B 각각의 펄스 개수입니다."/>
+
+                                                <TextBlock Grid.Row="2" Grid.Column="0" Text="대기 전압"
+                                                           Style="{StaticResource WfLabel}"/>
+                                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding WaveformVstText}"
+                                                           Style="{StaticResource WfValue}"
+                                                           ToolTip="Vst — 토출하지 않을 때 유지하는 전압입니다."/>
+
+                                                <TextBlock Grid.Row="3" Grid.Column="0" Text="구동 시간"
+                                                           Style="{StaticResource WfLabel}"/>
+                                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding WaveformDurationText}"
+                                                           Style="{StaticResource WfValue}"
+                                                           ToolTip="한 주기 길이(두 열 중 긴 쪽). 최대 토출 주파수를 정합니다."/>
+
+                                                <TextBlock Grid.Row="4" Grid.Column="0" Text="사용 계조"
+                                                           Style="{StaticResource WfLabel}"/>
+                                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding WaveformGreyLevelText}"
+                                                           Style="{StaticResource WfValue}"
+                                                           ToolTip="펄스가 배정된 계조입니다. 여기 없는 계조로 찍으면 아무것도 나오지 않습니다."/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
-                        </Border>
+                        </ScrollViewer>
 
                         <!-- ── 노즐 정보 / 글라스 정보 (오른쪽 빈 공간) ──────────────────
                              헤드 사양과 글라스 치수를 레시피에 함께 둔다. 헤드를 바꾸면 피치·열
                              구성이 통째로 달라지고 인쇄 조건도 같이 바뀌므로, 한 곳에 묶여 있어야
                              헤드 교체가 레시피 전환으로 끝난다.
                              값 0 = 미입력이며, 아직 어떤 동작에도 쓰이지 않는다(입력·보관만). -->
-                        <ScrollViewer Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
+                        <ScrollViewer Grid.Column="1"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled" Margin="0,20,20,20">
                             <ScrollViewer.Resources>

@@ -175,36 +175,31 @@
                                                        Foreground="#94A3B8" FontWeight="Bold"
                                                        HorizontalAlignment="Center"/>
 
-                                            <Border Height="24" Margin="0,0,0,2" Background="#0F172A"
-                                                    BorderBrush="#334155" BorderThickness="1" CornerRadius="3">
-                                                <TextBox Style="{StaticResource WfBox}"
-                                                         Text="{Binding Slew, StringFormat=F2, UpdateSourceTrigger=LostFocus}"
-                                                         IsReadOnly="{Binding DataContext.Editor.IsSlewTimeEditable,
-                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-                                            </Border>
+                                            <!-- Step 은 그 값의 양자화 격자와 같다(기울기 0.01 · 시간·전압 0.05).
+                                                 격자와 다른 폭으로 올리면 저장 직전 계산에서 다시 반올림되어
+                                                 화면 숫자와 실제 값이 어긋난다. -->
+                                            <ctrl:NumericSpinner Height="24" Margin="0,0,0,2"
+                                                                 Value="{Binding Slew, Mode=TwoWay}"
+                                                                 Step="0.01" Minimum="0"
+                                                                 IsReadOnly="{Binding DataContext.Editor.IsSlewTimeEditable,
+                                                                              RelativeSource={RelativeSource AncestorType=UserControl}}"/>
 
-                                            <Border Height="24" Margin="0,0,0,2" Background="#0F172A"
-                                                    BorderBrush="#334155" BorderThickness="1" CornerRadius="3">
-                                                <TextBox Style="{StaticResource WfBox}"
-                                                         Text="{Binding SlewTimeUs, StringFormat=F2, UpdateSourceTrigger=LostFocus}"
-                                                         IsReadOnly="{Binding DataContext.Editor.IsSlewEditable,
-                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-                                            </Border>
+                                            <ctrl:NumericSpinner Height="24" Margin="0,0,0,2"
+                                                                 Value="{Binding SlewTimeUs, Mode=TwoWay}"
+                                                                 Step="0.05" Minimum="0"
+                                                                 IsReadOnly="{Binding DataContext.Editor.IsSlewEditable,
+                                                                              RelativeSource={RelativeSource AncestorType=UserControl}}"/>
 
                                             <!-- 마지막 세그먼트는 Vst 복귀가 강제라 입력을 막는다. -->
-                                            <Border Height="24" Margin="0,0,0,2" Background="#0F172A"
-                                                    BorderBrush="#334155" BorderThickness="1" CornerRadius="3">
-                                                <TextBox Style="{StaticResource WfBox}"
-                                                         Text="{Binding HoldVoltage, StringFormat=F2, UpdateSourceTrigger=LostFocus}"
-                                                         IsReadOnly="{Binding IsLast}"
-                                                         ToolTip="마지막 세그먼트는 Vst 로 복귀해야 하므로 값을 바꿀 수 없습니다."/>
-                                            </Border>
+                                            <ctrl:NumericSpinner Height="24" Margin="0,0,0,2"
+                                                                 Value="{Binding HoldVoltage, Mode=TwoWay}"
+                                                                 Step="0.05" Minimum="0"
+                                                                 IsReadOnly="{Binding IsLast}"
+                                                                 ToolTip="마지막 세그먼트는 Vst 로 복귀해야 하므로 값을 바꿀 수 없습니다."/>
 
-                                            <Border Height="24" Background="#0F172A"
-                                                    BorderBrush="#334155" BorderThickness="1" CornerRadius="3">
-                                                <TextBox Style="{StaticResource WfBox}"
-                                                         Text="{Binding HoldTimeUs, StringFormat=F2, UpdateSourceTrigger=LostFocus}"/>
-                                            </Border>
+                                            <ctrl:NumericSpinner Height="24"
+                                                                 Value="{Binding HoldTimeUs, Mode=TwoWay}"
+                                                                 Step="0.05" Minimum="0"/>
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -543,11 +538,9 @@
 
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Vst (대기 전압)"
                                        Style="{StaticResource WfLabel}"/>
-                            <Border Grid.Row="0" Grid.Column="1" Width="86" Height="24"
-                                    Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="4">
-                                <TextBox Text="{Binding Editor.Vst, StringFormat=F2, UpdateSourceTrigger=LostFocus}"
-                                         Style="{StaticResource WfBox}"/>
-                            </Border>
+                            <ctrl:NumericSpinner Grid.Row="0" Grid.Column="1" Width="86" Height="24"
+                                                 Value="{Binding Editor.Vst, Mode=TwoWay}"
+                                                 Step="0.05" Minimum="0"/>
                             <TextBlock Grid.Row="0" Grid.Column="2" Text=" V" Style="{StaticResource WfUnit}"/>
 
                             <!-- 둘 중 하나는 반드시 계산값이다 — 같이 입력받으면 ΔV 와 모순된다. -->

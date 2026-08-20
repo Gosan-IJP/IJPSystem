@@ -455,6 +455,136 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
+        // ── 웨이브폼 정보 (표시 전용) ────────────────────────────────────
+        // [웨이브폼] 화면에서 [레시피에 적용]을 누르면 파형 파일 경로가 이 레시피에 적힌다.
+        // 여기서는 그 결과만 보여 준다 — 고칠 수 있게 하면 같은 파형을 두 화면에서 고치게 되고,
+        // 어느 쪽이 헤드로 내려간 값인지 알 수 없어진다.
+
+        private string _waveformFileName = "";
+        /// <summary>레시피에 적용된 파형 파일의 베이스명(확장자 없음). 지정 전이면 빈 문자열.</summary>
+        public string WaveformFileName
+        {
+            get => _waveformFileName;
+            private set
+            {
+                if (SetProperty(ref _waveformFileName, value))
+                    OnPropertyChanged(nameof(HasWaveformFile));
+            }
+        }
+
+        /// <summary>파형이 지정되어 있나. 아니면 안내문을 대신 띄운다.</summary>
+        public bool HasWaveformFile => !string.IsNullOrEmpty(_waveformFileName);
+
+        private string _waveformFullPath = "";
+        /// <summary>파형 파일의 전체 경로(확장자 없는 베이스 경로). 툴팁으로만 보여 준다.</summary>
+        public string WaveformFullPath
+        {
+            get => _waveformFullPath;
+            private set => SetProperty(ref _waveformFullPath, value);
+        }
+
+        private bool _isWaveformMissing;
+        /// <summary>레시피에는 적혀 있는데 파일이 없다 — 폴더째 옮겼거나 지운 경우다.</summary>
+        public bool IsWaveformMissing
+        {
+            get => _isWaveformMissing;
+            private set => SetProperty(ref _isWaveformMissing, value);
+        }
+
+        private string _waveformHeadType = "-";
+        /// <summary>파형 파일에 적힌 헤드 종류. 헤드명과 다르면 다른 헤드용 파형이다.</summary>
+        public string WaveformHeadType
+        {
+            get => _waveformHeadType;
+            private set => SetProperty(ref _waveformHeadType, value);
+        }
+
+        private string _waveformPulseText = "-";
+        /// <summary>ComA / ComB 펄스 개수.</summary>
+        public string WaveformPulseText
+        {
+            get => _waveformPulseText;
+            private set => SetProperty(ref _waveformPulseText, value);
+        }
+
+        private string _waveformVstText = "-";
+        /// <summary>대기 전압(Vst).</summary>
+        public string WaveformVstText
+        {
+            get => _waveformVstText;
+            private set => SetProperty(ref _waveformVstText, value);
+        }
+
+        private string _waveformDurationText = "-";
+        /// <summary>한 주기 길이(두 채널 중 긴 쪽).</summary>
+        public string WaveformDurationText
+        {
+            get => _waveformDurationText;
+            private set => SetProperty(ref _waveformDurationText, value);
+        }
+
+        private string _waveformGreyLevelText = "-";
+        /// <summary>펄스가 배정된 계조. 여기 없는 계조로 쏘면 아무것도 나오지 않는다.</summary>
+        public string WaveformGreyLevelText
+        {
+            get => _waveformGreyLevelText;
+            private set => SetProperty(ref _waveformGreyLevelText, value);
+        }
+
+        /// <summary>
+        /// 레시피에 적힌 파형 파일을 읽어 요약값을 채운다. 표시 전용이라 실패해도
+        /// 레시피 로드를 막지 않는다 — 값이 '-' 로 남고 파일 없음만 표시된다.
+        /// </summary>
+        public void LoadWaveformInfo(string recipeName)
+        {
+            string? basePath = GetWaveformPath(recipeName);
+
+            WaveformFullPath = basePath ?? "";
+            WaveformFileName = string.IsNullOrWhiteSpace(basePath)
+                ? "" : Path.GetFileName(basePath!);
+
+            ClearWaveformSummary();
+            if (string.IsNullOrWhiteSpace(basePath)) { IsWaveformMissing = false; return; }
+
+            string comAPath = basePath + ".ComA";
+            string comBPath = basePath + ".ComB";
+            if (!File.Exists(comAPath)) { IsWaveformMissing = true; return; }
+
+            IsWaveformMissing = false;
+
+            try
+            {
+                var comA = WaveformParser.Parse(comAPath);
+                var comB = File.Exists(comBPath) ? WaveformParser.Parse(comBPath) : null;
+                var doc  = Print.WaveformDocumentBuilder.Build(comA, comB, WaveformFileName);
+
+                WaveformHeadType     = string.IsNullOrWhiteSpace(doc.HeadType) ? "-" : doc.HeadType;
+                WaveformPulseText    = $"A {doc.ComA.Pulses.Count} / B {doc.ComB.Pulses.Count}";
+                WaveformVstText      = doc.Vst.ToString("F1") + " V";
+                WaveformDurationText = Math.Max(doc.ComA.TotalTimeUs, doc.ComB.TotalTimeUs).ToString("F2") + " µs";
+
+                var used = Enumerable.Range(0, Infrastructure.Print.Waveform.GreyLevelMatrix.Levels)
+                                     .Where(gl => doc.GreyLevels.HasAnyPulse(gl))
+                                     .Select(gl => "GL" + gl)
+                                     .ToList();
+                WaveformGreyLevelText = used.Count > 0 ? string.Join(" · ", used) : "없음";
+            }
+            catch (Exception ex)
+            {
+                ClearWaveformSummary();
+                _addLogAction?.Invoke($"[RECIPE] 파형 정보 읽기 실패: {ex.Message}", LogLevel.Warning);
+            }
+        }
+
+        private void ClearWaveformSummary()
+        {
+            WaveformHeadType      = "-";
+            WaveformPulseText     = "-";
+            WaveformVstText       = "-";
+            WaveformDurationText  = "-";
+            WaveformGreyLevelText = "-";
+        }
+
         private int _nozzleCount;
         /// <summary>헤드 전체 노즐 수.</summary>
         public int NozzleCount
@@ -824,6 +954,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 _addLogAction?.Invoke($"[RECIPE] 웨이브폼 경로 저장 실패: {ex.Message}", LogLevel.Error);
             }
+
+            // 레시피 화면이 이미 그 레시피를 열어 두고 있으면 바로 다시 읽는다 —
+            // 화면을 나갔다 들어와야 바뀌면 적용이 안 된 것으로 보인다.
+            if (recipeName == SelectedRecipeName) LoadWaveformInfo(recipeName);
         }
 
         private void LoadActiveRecipeOnStartup()
@@ -897,6 +1031,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 // 활성 레시피를 불러왔을 때만 장비에 비춘다. 편집하려고 다른 레시피를 열어 본 것만으로
                 // 토출·노즐 선택이 그 헤드로 바뀌면, 보기만 했는데 장비가 따라 움직이는 셈이 된다.
                 if (recipeName == ActiveRecipeName) ApplyHeadSpecToMachine();
+
+                // 파형은 레시피에 경로만 적혀 있다 — 화면에 보이는 요약은 그 파일에서 읽는다.
+                LoadWaveformInfo(recipeName);
 
                 LoadTeachingPoints(recipeName);
 

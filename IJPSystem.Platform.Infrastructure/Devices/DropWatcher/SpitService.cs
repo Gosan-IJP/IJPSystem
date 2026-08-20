@@ -140,7 +140,8 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
             {
                 try
                 {
-                    string cfg = PathUtils.GetConfigPath(AppConstants.MeteorConfigFile);
+                    string cfg = PathUtils.ResolveConfigPath(
+                        AppSettingsService.Current?.MeteorConfigPath, AppConstants.MeteorConfigFile);
                     var meteor = new MeteorSpit(cfg, count, msg => Log?.Invoke(msg), firstNozzle: first);
                     Log?.Invoke($"헤드 토출 = Meteor ({cfg}, 노즐 {first}~{first + count - 1})");
                     return meteor;

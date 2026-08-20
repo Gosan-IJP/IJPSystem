@@ -9,11 +9,15 @@
   "OperatorPassword": "11",
   "LogSaveDays": 30,
   "IsDoorCheckEnabled": false,
+
+  "_comment3": "MeteorConfigPath = PCC 가 읽는 PrintEngine 설정(.cfg). 비우면 Config/PrintEngine.cfg 를 찾는다. 상대경로는 Config 폴더 기준, 절대경로는 그대로 — 제어PC 는 C:/Users/Public/Documents/Meteor/Config/PccE/... 를 그대로 가리킬 것.",
+  "MeteorConfigPath": "PccE/DefaultEpsonS3200_PccE.cfg",
+
   "DriverMode": {
     "IO": "Virtual",
     "Motion": "Virtual",
     "Vision": "Virtual",
-    "Head": "None",
+    "Head": "Virtual",
     "Meniscus": "Virtual"
   }
 }

@@ -44,13 +44,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private LogWindowView? _logWindowView;
 
         // Meteor 헤드(PCC) 연결 모니터 — 읽기 전용 attach. 네이티브 DLL 없으면 스스로 비활성(개발PC 안전).
-        private readonly MeteorStatusMonitor _headMonitor = new();
+        // 헤드 상태를 어디서 읽을지는 설정이 정한다. 실물이 실패해도 가상으로
+        // 떨어지지 않는다 — 안 붙은 헤드가 초록불로 보이는 것이 가장 위험하다.
+        private readonly IMeteorStatusSource? _headMonitor = CreateHeadSource();
 
-        // AppConfig.json 의 DriverMode.Head 가 "Meteor" 일 때만 폴링한다.
-        // 헤드가 없는 장비에서 500ms 마다 PiOpenPrinter 를 두드리지 않게 하는 스위치.
-        private readonly bool _headEnabled = string.Equals(
-            AppSettingsService.Current?.DriverMode?.Head?.Trim(), "Meteor",
-            StringComparison.OrdinalIgnoreCase);
+        private static IMeteorStatusSource? CreateHeadSource()
+        {
+            string mode = AppSettingsService.Current?.DriverMode?.Head?.Trim() ?? "None";
+
+            if (string.Equals(mode, "Meteor",  StringComparison.OrdinalIgnoreCase)) return new MeteorStatusMonitor();
+            if (string.Equals(mode, "Virtual", StringComparison.OrdinalIgnoreCase)) return new VirtualMeteorStatusMonitor();
+            return null;   // None — 폴링 자체를 하지 않는다
+        }
+
+        /// <summary>PCC-E 화면이 상황을 바꿔 볼 수 있도록 노출한다(가상일 때만 의미가 있다).</summary>
+        public IMeteorStatusSource? HeadSource => _headMonitor;
+
 
         private bool _hasActiveAlarm;
         public bool HasActiveAlarm
@@ -164,11 +173,21 @@ namespace IJPSystem.Platform.HMI.ViewModels
             private set => SetProperty(ref _headStatusText, value);
         }
 
+        private MeteorHeadStatus? _lastHeadStatus;
+        /// <summary>마지막 폴링 결과 원본. PCC-E 화면이 자세한 값을 보려고 쓴다 —
+        /// 화면이 따로 폴링하면 프린터 점유를 두 곳에서 잡게 된다(한 프로세스만 소유 가능).</summary>
+        public MeteorHeadStatus? LastHeadStatus
+        {
+            get => _lastHeadStatus;
+            private set => SetProperty(ref _lastHeadStatus, value);
+        }
+
         /// <summary>MeteorSpit 배선 시 호출 — PCC 부착 상태를 상태바 HEAD 점/툴팁에 반영.</summary>
-        public void SetHeadConnection(bool connected, string status)
+        public void SetHeadConnection(bool connected, string status, MeteorHeadStatus? snapshot = null)
         {
             HeadConnected  = connected;
             HeadStatusText = status;
+            if (snapshot != null) LastHeadStatus = snapshot;
         }
 
         private string _lastLogMessage = "System Ready...";
@@ -682,10 +701,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 네이티브 DLL 미탑재/엔진 미실행/점유중이면 회색 + 사유 툴팁으로 조용히 표시(예외 없음).
         private void UpdateHeadConnection()
         {
-            if (!_headEnabled) return;   // DriverMode.Head=None — 헤드 미탑재 장비
+            if (_headMonitor == null) return;   // DriverMode.Head=None — 헤드 미탑재 장비
             var s = _headMonitor.Poll();
             System.Windows.Application.Current?.Dispatcher.Invoke(
-                () => SetHeadConnection(s.Connected, s.Detail));
+                () => SetHeadConnection(s.Connected, s.Detail, s));
         }
 
         private void ExecuteForceOutput(IOViewModel vm)
@@ -803,6 +822,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     SelectedSubMenu = "WAVEFORM";
                     CurrentView = new WaveformViewModel(this);
                     AddLog(TLog("Log_Waveform"), LogLevel.Info);
+                    break;
+
+                // PCC-E(프린트 엔진) — 보기 전용. 매번 새로 만들어 파일을 다시 읽는다.
+                case "PCCE":
+                    IsPrintSubMenuVisible = true;
+                    SelectedMenu    = "PRINT";
+                    SelectedSubMenu = "PCCE";
+                    CurrentView = new PccEViewModel(this);
+                    AddLog(TLog("Log_MovePccE"), LogLevel.Info);
                     break;
 
                 case "PATTERN_PRINT":
@@ -1028,7 +1056,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _slowTimer.Stop();
 
             // Meteor 프린터 점유 해제(열려 있었다면 PiClosePrinter)
-            _headMonitor.Dispose();
+            _headMonitor?.Dispose();
 
             // 종료 전 램프 소등 (드라이버 정리는 App.OnExit에서 일괄 처리)
             _controller?.GetMachine()?.SetSystemStatus(MachineState.Idle);

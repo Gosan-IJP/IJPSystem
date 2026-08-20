@@ -45,6 +45,10 @@
                 <views:WaveformView />
             </DataTemplate>
 
+            <DataTemplate DataType="{x:Type vm:PccEViewModel}">
+                <views:PccEView />
+            </DataTemplate>
+
             <DataTemplate DataType="{x:Type vm:PatternPrintViewModel}">
                 <views:PatternPrintView />
             </DataTemplate>

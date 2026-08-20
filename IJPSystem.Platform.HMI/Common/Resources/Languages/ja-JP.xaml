@@ -114,6 +114,7 @@
     <system:String x:Key="Menu_Main">メイン画面</system:String>
     <system:String x:Key="Menu_Print">プリント</system:String>
     <system:String x:Key="SubMenu_Waveform">ウェーブフォーム</system:String>
+    <system:String x:Key="SubMenu_PccE">PCC-E</system:String>
     <system:String x:Key="SubMenu_PatternPrint">パターン印刷</system:String>
     <system:String x:Key="SubMenu_PrintDropWatcher">ドロップウォッチャー</system:String>
     <system:String x:Key="SubMenu_PrintGlassView">グラスビュー</system:String>
@@ -200,6 +201,7 @@
     <system:String x:Key="Log_MovePositionTeach">[NAV] 位置ティーチング画面へ移動します。</system:String>
     <system:String x:Key="Log_MoveNJI">[NAV] ビジョン &gt; NJI 画面へ移動します。</system:String>
     <system:String x:Key="Log_MoveGlassView">[NAV] ビジョン &gt; グラスビュー画面へ移動します。</system:String>
+    <system:String x:Key="Log_MovePccE">[NAV] プリント &gt; PCC-E 画面へ移動します。</system:String>
     <system:String x:Key="Log_MoveDropWatcher">[NAV] ビジョン &gt; ドロップウォッチャー画面へ移動します。</system:String>
     <system:String x:Key="Log_MovePNID">[NAV] P&amp;ID 画面へ移動します。</system:String>
     <system:String x:Key="Log_Sequence">[NAV] シーケンス画面へ移動します。</system:String>

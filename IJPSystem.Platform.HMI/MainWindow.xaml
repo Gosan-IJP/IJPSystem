@@ -221,6 +221,9 @@
                 <Button Content="{DynamicResource SubMenu_Waveform}"
                         Style="{StaticResource PrintSubButtonStyle}"
                         Command="{Binding MoveWindowCommand}" CommandParameter="WAVEFORM"/>
+                <Button Content="{DynamicResource SubMenu_PccE}"
+                        Style="{StaticResource PrintSubButtonStyle}"
+                        Command="{Binding MoveWindowCommand}" CommandParameter="PCCE"/>
                 <Button Content="{DynamicResource SubMenu_Initialize}"
                         Style="{StaticResource PrintSubButtonStyle}"
                         Command="{Binding MoveWindowCommand}" CommandParameter="PRINT_INITIALIZE"/>

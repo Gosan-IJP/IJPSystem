@@ -2,6 +2,7 @@ using IJPSystem.Platform.Common.Constants;
 using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.HMI.Common;
+using IJPSystem.Platform.Infrastructure.Config;
 using IJPSystem.Platform.Infrastructure.Print.Waveform;
 using Microsoft.Win32;
 using System;
@@ -147,8 +148,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// <summary>
         /// PCC 가 읽는 PrintEngine 설정 파일. 우리가 만드는 파일이 아니라 위치만 보여 준다.
         /// </summary>
-        public string MeteorConfigPath { get; } =
-            PathUtils.GetConfigPath(AppConstants.MeteorConfigFile);
+        public string MeteorConfigPath { get; } = PathUtils.ResolveConfigPath(
+            AppSettingsService.Current?.MeteorConfigPath, AppConstants.MeteorConfigFile);
 
         public bool HasMeteorConfig => File.Exists(MeteorConfigPath);
 

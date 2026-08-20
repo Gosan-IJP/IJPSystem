@@ -33,6 +33,19 @@ namespace IJPSystem.Platform.Domain.Models.Config
         // true 면 가동 전 도어 잠금 체크 활성 / false 면 우회 (현장 안전키 미연결 환경)
         public bool   IsDoorCheckEnabled { get; set; } = true;
 
+        /// <summary>
+        /// PCC 가 읽는 Meteor PrintEngine 설정(.cfg) 경로. <b>비우면</b> 예전대로
+        /// <c>Config\PrintEngine.cfg</c> 를 찾는다.
+        ///
+        /// <para><b>왜 설정으로 뺐나</b>: 이 파일은 Meteor 설치가 관리하는 파일이고 이름도
+        /// 헤드마다 다르다(<c>DefaultEpsonS3200_PccE.cfg</c>). 우리 Config 로 복사해 두면
+        /// 원본과 두 벌이 되어 현장에서 어느 쪽이 쓰이는지 알 수 없게 된다.</para>
+        ///
+        /// <para>상대 경로면 <c>Config</c> 폴더 기준, 절대 경로면 그대로 쓴다 —
+        /// 제어 PC 는 <c>C:\Users\Public\Documents\Meteor\Config\PccE\...</c> 를 그대로 가리키면 된다.</para>
+        /// </summary>
+        public string MeteorConfigPath { get; set; } = "";
+
         // ── 메니스커스 DMD — 옛 위치(하위호환 전용) ────────────────────────────
         // ★새 설정은 Config/MeniscusConfig.json + DriverMode.Meniscus 다. 여기 값은 쓰지 말 것.
         //
@@ -74,8 +87,12 @@ namespace IJPSystem.Platform.Domain.Models.Config
         //   ※ 값이 비어 있으면 옛 AppConfig 의 MeniscusEnabled 를 따른다(하위호환).
         public string Meniscus { get; set; } = "";
 
-        // 프린트 헤드(Meteor PCC). "None" 이면 스플래시 확인·상태바 폴링을 아예 하지 않는다
-        // — 헤드가 없는 장비에서 불필요한 PiOpenPrinter 점유/지연을 막기 위함.
+        // 프린트 헤드(Meteor PCC).
+        //   "Meteor"  = 실물 폴링
+        //   "Virtual" = 헤드 없이 PCC-E 화면을 확인하기 위한 가상 값(화면에 계속 '가상'으로 표시된다)
+        //   그 외("None") = 폴링 자체를 하지 않음. 헤드가 없는 장비에서 불필요한
+        //                   PiOpenPrinter 점유/지연을 막기 위함.
+        // ※ 실물이 실패해도 Virtual 로 떨어지지 않는다 — 안 붙은 헤드가 초록불로 보이면 안 된다.
         public string Head   { get; set; } = "None";
     }
 }

@@ -114,6 +114,7 @@
     <system:String x:Key="Menu_Main">MAIN</system:String>
     <system:String x:Key="Menu_Print">PRINT</system:String>
     <system:String x:Key="SubMenu_Waveform">WAVEFORM</system:String>
+    <system:String x:Key="SubMenu_PccE">PCC-E</system:String>
     <system:String x:Key="SubMenu_PatternPrint">PATTERN PRINT</system:String>
     <system:String x:Key="SubMenu_PrintDropWatcher">DROP WATCHER</system:String>
     <system:String x:Key="SubMenu_PrintGlassView">GLASS VIEW</system:String>
@@ -200,6 +201,7 @@
     <system:String x:Key="Log_MovePositionTeach">[NAV] Navigating to Position Teach.</system:String>
     <system:String x:Key="Log_MoveNJI">[NAV] Navigating to Vision &gt; NJI.</system:String>
     <system:String x:Key="Log_MoveGlassView">[NAV] Navigating to Vision &gt; Glass View.</system:String>
+    <system:String x:Key="Log_MovePccE">[NAV] Navigating to Print &gt; PCC-E.</system:String>
     <system:String x:Key="Log_MoveDropWatcher">[NAV] Navigating to Vision &gt; Drop Watcher.</system:String>
     <system:String x:Key="Log_MovePNID">[NAV] Navigating to P&amp;ID.</system:String>
     <system:String x:Key="Log_Sequence">[NAV] Navigating to Sequence.</system:String>

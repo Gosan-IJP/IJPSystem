@@ -132,12 +132,20 @@ namespace IJPSystem.Platform.HMI
                 // 미부착은 실패가 아니라 경고(!)로 표시하고 기동은 계속한다(엔진 없이도 HMI 는 떠야 함).
                 // Head=None(미사용 구성)이어도 항목 자체는 항상 표시한다 — 단계가 통째로 사라지면
                 // "확인을 못 한 건지, 안 쓰는 구성인지" 화면에서 구분할 수 없다.
-                bool headEnabled = DriverMode(d => d.Head) == "meteor";
+                // 가상도 한 단계로 보여 준다 — 스플래시에서 "미사용"으로 지나가면
+                // 화면에 가상 값이 뜨는 이유를 알 수 없다.
+                string headMode  = DriverMode(d => d.Head);
+                bool headEnabled = headMode == "meteor";
+                bool headVirtual = headMode == "virtual";
                 await splashVM.RunStepAsync(
                     "Print Head",
-                    headEnabled ? "Meteor 헤드 PCC 부착 상태 확인" : "미사용 — DriverMode.Head=None",
+                    headEnabled ? "Meteor 헤드 PCC 부착 상태 확인"
+                    : headVirtual ? "가상 헤드 — 실물 없이 화면 확인용"
+                    : "미사용 — DriverMode.Head=None",
                     () =>
                     {
+                        if (headVirtual)
+                            return (Enabled: true, Connected: false, Detail: "가상 헤드 — 화면의 값은 실물이 아닙니다");
                         if (!headEnabled)
                             return (Enabled: false, Connected: false, Detail: "미사용 — DriverMode.Head=None");
                         var s = ProbeMeteorHead();
