@@ -57,6 +57,7 @@ namespace IJPSystem.Platform.HMI.Views
             if (DataContext is not MotorTeachingViewModel vm) return;
             var axis = ResolveAxis(sender);
             if (axis == null) return;   // 구성에 없는 축(예: 3축 구성의 T) 버튼은 무동작
+            if (!axis.CanJog) return;   // 서보 OFF·알람·이동 중이면 차단 (버튼은 이미 비활성이지만 안전망)
 
             _ = axis.JogMoveAsync(isForward, stepOverride: vm.JogStepFor(axis));
         }

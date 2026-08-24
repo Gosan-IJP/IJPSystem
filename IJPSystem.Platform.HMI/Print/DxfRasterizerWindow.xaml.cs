@@ -35,11 +35,16 @@ namespace IJPSystem.Platform.HMI.Print
                     ? (dlg.WidthMm, dlg.LengthMm)
                     : ((double, double)?)null;
             };
-            vm.OpenEditPanel = (w, l) =>
+            vm.OpenEditPanel = (w, l, target) =>
             {
-                var edit = new EditPanelWindow(w, l, vm.DropPerInchX) { Owner = this };
+                var edit = new EditPanelWindow(w, l, vm.DropPerInchX, target) { Owner = this };
                 edit.ShowDialog();
+                return edit.SavedImagePath;   // 그린 것을 래스터라이저가 이어받는다
             };
+
+            // 알림 상자 — 이 창이 모달이라 소유자를 여기서 잡아 줘야 뒤로 숨지 않는다.
+            vm.Notify = (caption, text) =>
+                MessageBox.Show(this, text, caption, MessageBoxButton.OK, MessageBoxImage.Information);
 
             // 창 열 때 현재 선택된 노즐 수 표시 + 초기 DXF 경로
             vm.InitUsingNozzles(NozzleControlGlobal.Instance.UsingNozzle.UsingNozzles);
@@ -203,17 +208,24 @@ namespace IJPSystem.Platform.HMI.Print
         }
 
         /// <summary>
-        /// 패턴 미리보기 — 지금 선택된 노즐과 변환된 BMP 로 발사 지도를 만들어 보여 준다.
-        /// BMP 가 아직 없으면 창에서 직접 이미지를 고를 수 있다.
+        /// 패턴 미리보기 — 변환한 그 패턴을 그대로 띄운다.
+        ///
+        /// <para>변환 전이라면 이미지에서 만들어 볼 수 있게 예전처럼 연다. 다만 그때는
+        /// 창 안의 값으로 다시 RIP 하는 것이라 화면 설정과 다를 수 있다.</para>
         /// </summary>
         private void PatternPreview_Click(object sender, RoutedEventArgs e)
         {
             var vm = DataContext as DxfRasterizerViewModel;
-            new PatternPreviewWindow(vm?.BmpPath,
-                                     NozzleControlGlobal.Instance.UsingNozzle.UsingNozzles)
-            {
-                Owner = this
-            }.ShowDialog();
+            var pattern = vm?.LastPattern;
+
+            var win = pattern != null
+                ? new PatternPreviewWindow(pattern, vm!.LastLayout, vm.LastIgnoredNozzles,
+                                           $"변환 결과 — {System.IO.Path.GetFileName(vm.BmpPath)}")
+                : new PatternPreviewWindow(vm?.BmpPath,
+                                           NozzleControlGlobal.Instance.UsingNozzle.UsingNozzles);
+
+            win.Owner = this;
+            win.ShowDialog();
         }
     }
 }

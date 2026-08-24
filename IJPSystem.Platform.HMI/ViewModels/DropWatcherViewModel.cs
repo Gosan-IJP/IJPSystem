@@ -32,6 +32,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         private readonly IVisionDriver _vision;
         private readonly MainViewModel _mainVM;
+
+        /// <summary>조그 팝업처럼 같은 축을 써야 하는 창이 받아 간다.</summary>
+        public MainViewModel MainVM => _mainVM;
         private readonly DispatcherTimer _pollTimer;
         private readonly DispatcherTimer _liveTimer;   // Live View 연속 캡쳐
         private int _liveInvalidCount;                 // 라이브 무효 프레임 연속 횟수

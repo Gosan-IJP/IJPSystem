@@ -26,9 +26,21 @@ namespace IJPSystem.Platform.HMI.Print
     {
         private string? _dxfPath;
 
-        public string OutputRoot { get; set; } =
+        /// <summary>
+        /// 인쇄 산출물이 쌓이는 자리. 변환은 <c>AW_IMG_Data</c>(그림)와
+        /// <c>IMG_TEMP\&lt;시각&gt;</c>(패턴·인쇄 데이터)에 남긴다.
+        ///
+        /// <para>인쇄 화면이 "가장 최근 저장물"을 찾을 때도 같은 자리를 본다 — 두 화면이
+        /// 서로 다른 폴더를 보면 방금 저장한 것이 안 보인다.</para>
+        /// </summary>
+        public static string DefaultOutputRoot { get; } =
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                          "GS_Inkjet");
+
+        /// <summary>인쇄 데이터(패턴 폴더)가 쌓이는 자리.</summary>
+        public static string PatternRoot => Path.Combine(DefaultOutputRoot, "IMG_TEMP");
+
+        public string OutputRoot { get; set; } = DefaultOutputRoot;
 
         /// <summary>닫힌 도형 내부를 채울지. (사용자 선택: 채움)</summary>
         public bool Fill { get; set; } = true;
@@ -77,7 +89,7 @@ namespace IJPSystem.Platform.HMI.Print
 
             // 채움 비트맵은 "무엇을 찍을 것인가" 일 뿐이다. 실제로 인쇄하려면 그것을 노즐 격자로
             // 옮기고(어느 노즐이 어느 X 를 맡는가) 헤드가 낼 수 있는 방울 단계로 낮춰야 한다.
-            var pattern = BuildPattern(r, param, stamp, out string? patternPath, out int steps);
+            var pattern = BuildPattern(r.OutputPath!, param, stamp, out string? patternPath, out int steps);
             progress?.Report(0.95);
 
             var result = new RasterizeResult
@@ -96,9 +108,60 @@ namespace IJPSystem.Platform.HMI.Print
             return result;
         }
 
+        /// <summary>
+        /// 이미 이미지가 있을 때의 변환 — DXF 단계를 건너뛰고 토출 패턴만 만든다.
+        ///
+        /// <para>
+        /// DXF 는 "무엇을 찍을 것인가"를 그림으로 만드는 ①단계에만 쓰인다. BMP 를 열었거나
+        /// Edit Panel 로 직접 그렸다면 ①은 이미 끝나 있으므로 ②(노즐 격자 → 하프톤)부터 하면 된다.
+        /// 원본에서도 빈 레이어에 그려 저장하는 것이 정상 흐름이었다(기본 파일명 "Empty BMP_…").
+        /// </para>
+        /// </summary>
+        public RasterizeResult ConvertImage(string imagePath, ConvertParameters param,
+                                            IProgress<double>? progress = null)
+        {
+            if (!File.Exists(imagePath))
+                throw new FileNotFoundException("이미지 파일이 없습니다.", imagePath);
+
+            progress?.Report(0.2);
+            var src = LoadPreview(imagePath)
+                ?? throw new InvalidOperationException("이미지를 읽지 못했습니다: " + Path.GetFileName(imagePath));
+
+            int wpx = src.PixelWidth, hpx = src.PixelHeight;
+            string stamp = DateTime.Now.ToString("yyMMdd_HHmmss");
+
+            progress?.Report(0.4);
+            var pattern = BuildPattern(imagePath, param, stamp, out string? patternPath, out int steps);
+            progress?.Report(0.95);
+
+            // 이미지에는 치수가 없다 — 화소 수와 DPI 로 되짚는다. DXF 처럼 도면 단위가
+            // 있는 게 아니라서, DPI 를 잘못 두면 여기서 바로 크기가 틀어진다.
+            var result = new RasterizeResult
+            {
+                LineCount     = steps > 0 ? steps : hpx,
+                RealXLengthMm = wpx * 25.4 / Math.Max(1e-6, param.DropPerInchX),
+                RealYLengthMm = hpx * 25.4 / Math.Max(1e-6, param.DropPerInchY),
+                BmpPath       = imagePath,
+                PatternPath   = patternPath,
+                PreviewImage  = src,
+            };
+            progress?.Report(1.0);
+            _lastPattern = pattern;
+            return result;
+        }
+
         /// <summary>마지막 변환의 토출 패턴(1패스). 미리보기·전송이 다시 만들지 않고 이걸 쓴다.</summary>
         public PrintPattern? LastPattern => _lastPattern;
         private PrintPattern? _lastPattern;
+
+        // Save 가 만들 인쇄 데이터(.dat)에 들어갈 값들 — 변환 시점의 것을 그대로 들고 있어야 한다.
+        // 저장할 때 화면 값을 다시 읽으면, 변환 뒤에 DPI 를 만진 경우 패턴과 파라미터가 어긋난다.
+        private ConvertParameters? _lastParam;
+        private NozzleLayout?      _lastLayout;
+        private double             _lastScanStepUm;
+
+        /// <summary>마지막 변환에 쓰인 노즐 배열. 미리보기가 같은 값으로 보여 줘야 한다.</summary>
+        public NozzleLayout? LastLayout => _lastLayout;
 
         /// <summary>마지막 변환의 모든 패스. Interval 이 1 이면 한 개다.</summary>
         public IReadOnlyList<PrintPattern> LastPasses { get; private set; } = Array.Empty<PrintPattern>();
@@ -114,7 +177,7 @@ namespace IJPSystem.Platform.HMI.Print
         /// 노즐 미선택처럼 흔한 상황에서 "DXF 변환 실패"가 뜨면 원인을 엉뚱한 데서 찾게 된다.
         /// </para>
         /// </summary>
-        private PrintPattern? BuildPattern(DxfRasterResult raster, ConvertParameters param,
+        private PrintPattern? BuildPattern(string imagePath, ConvertParameters param,
                                            string stamp, out string? patternPath, out int steps)
         {
             patternPath = null;
@@ -131,7 +194,7 @@ namespace IJPSystem.Platform.HMI.Print
 
             try
             {
-                var gray = LoadGray(raster.OutputPath!);
+                var gray = LoadGray(imagePath);
                 if (gray == null) { PatternMessage = "변환 결과 이미지를 다시 읽지 못했습니다."; return null; }
 
                 var layout = HeadLayout();
@@ -175,11 +238,15 @@ namespace IJPSystem.Platform.HMI.Print
                 LastPasses = passes;
                 steps = pattern.Steps;
 
+                _lastParam      = param;
+                _lastLayout     = layout;
+                _lastScanStepUm = scanStep;
+
                 string folder = Path.Combine(OutputRoot, "IMG_TEMP", stamp);
                 PrintPatternFile.Save(folder, passes, new PrintPatternFile.PatternMeta
                 {
                     DropLevels     = settings.DropLevels,
-                    SourceImage    = raster.OutputPath,
+                    SourceImage    = imagePath,
                     SourceDpiX     = param.DropPerInchX,
                     SourceDpiY     = param.DropPerInchY,
                     CreatedAt      = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
@@ -260,16 +327,54 @@ namespace IJPSystem.Platform.HMI.Print
             return g;
         }
 
-        public RasterizeResult CreateEmptyLayer(ConvertParameters param)
+        /// <summary>
+        /// 빈 캔버스를 <b>실제 파일로</b> 만든다. (Create Empty Layer)
+        ///
+        /// <para>
+        /// 예전에는 경로만 정해 놓고 파일을 안 만들었다. 그러면 Edit Panel 로 그림을 그려도
+        /// 래스터라이저가 읽을 것이 없어 변환도 저장도 못 한다 — 빈 레이어 흐름이 통째로 막혔다.
+        /// 흰 이미지를 실제로 써 두면 그 뒤는 BMP 를 연 것과 똑같이 흘러간다.
+        /// </para>
+        /// </summary>
+        public RasterizeResult CreateEmptyLayer(ConvertParameters param, double widthMm, double lengthMm)
         {
-            // 빈 레이어(빈 캔버스) — DXF 없이 흰 배경만. Edit Panel 로 직접 그릴 용도.
-            // 크기는 호출부(CanvasSizeDialog)가 정하지만, 여기선 결과 골격만 만든다.
             string stamp = DateTime.Now.ToString("yyMMdd_HHmmss");
+            string dir   = Path.Combine(OutputRoot, "AW_IMG_Data");
+            Directory.CreateDirectory(dir);
+            string path  = Path.Combine(dir, $"Empty_{stamp}.bmp");
+
+            int w = (int)Math.Round(widthMm  * Math.Max(1e-6, param.DropPerInchX) / 25.4);
+            int h = (int)Math.Round(lengthMm * Math.Max(1e-6, param.DropPerInchY) / 25.4);
+            w = Math.Max(1, w);
+            h = Math.Max(1, h);
+
+            WriteWhiteBmp(path, w, h);
+
             return new RasterizeResult
             {
-                BmpPath     = Path.Combine(OutputRoot, "AW_IMG_Data", $"Empty_{stamp}.png"),
-                PatternPath = null,
+                RealXLengthMm = widthMm,
+                RealYLengthMm = lengthMm,
+                BmpPath       = path,
+                PatternPath   = null,     // 아직 아무것도 안 그렸다 — 변환해야 패턴이 생긴다
+                PreviewImage  = LoadPreview(path),
             };
+        }
+
+        /// <summary>흰 8비트 BMP 한 장. 빈 캔버스라 화소가 전부 255 다.</summary>
+        private static void WriteWhiteBmp(string path, int w, int h)
+        {
+            var bmp = new System.Windows.Media.Imaging.WriteableBitmap(
+                w, h, 96, 96, System.Windows.Media.PixelFormats.Gray8, null);
+            var row = new byte[w];
+            for (int x = 0; x < w; x++) row[x] = 255;
+            for (int y = 0; y < h; y++)
+                bmp.WritePixels(new System.Windows.Int32Rect(0, y, w, 1), row, w, 0);
+            bmp.Freeze();
+
+            var enc = new System.Windows.Media.Imaging.BmpBitmapEncoder();
+            enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+            using var fs = File.Create(path);
+            enc.Save(fs);
         }
 
         public RasterizeResult OpenBmp(string bmpPath)
@@ -279,11 +384,72 @@ namespace IJPSystem.Platform.HMI.Print
             return new RasterizeResult { BmpPath = bmpPath, PreviewImage = LoadPreview(bmpPath) };
         }
 
-        public void Save(RasterizeResult result)
+        /// <summary>
+        /// 인쇄 데이터를 굳힌다. (LabVIEW 저장 버튼 대응)
+        ///
+        /// <para>
+        /// 변환은 이미 <c>pattern.json</c> + <c>pattern.bin</c> 을 남겼다. 저장이 따로 있는 이유는
+        /// 원본이 그랬듯 <b>인쇄기가 읽을 형태</b>로 한 벌 더 내보내기 때문이다 —
+        /// 패턴 비트맵(눈으로 확인) + POS.dat(노즐 위치) + Print_Para.dat(인쇄 파라미터).
+        /// </para>
+        /// <para>
+        /// 원본은 이 셋을 <c>AW_IMG_Data</c> 에 흩어 놓았지만 여기서는 패턴 폴더 안에 같이 둔다.
+        /// 한 번의 변환에서 나온 것들이 한 폴더에 모여 있어야 나중에 무엇으로 찍었는지 되짚을 수 있다.
+        /// </para>
+        /// </summary>
+        public SavedPrintData Save(RasterizeResult result)
         {
-            // 변환 시 이미 파일로 저장되므로(BmpPath) 별도 동작 없음.
-            // 다른 경로로 내보내기가 필요하면 여기서 복사한다.
             if (result == null) throw new ArgumentNullException(nameof(result));
+
+            var pattern = _lastPattern;
+            if (pattern == null || _lastParam == null || _lastLayout == null)
+                throw new InvalidOperationException(
+                    "저장할 토출 패턴이 없습니다 — Convert 를 먼저 실행하세요. " +
+                    "(BMP 만 연 경우에도 패턴은 만들어지지 않습니다)");
+
+            string folder = result.PatternPath
+                ?? throw new InvalidOperationException("패턴 폴더 경로가 없습니다.");
+
+            var layout = _lastLayout;
+            int dropLevels = Math.Max(2, _lastParam.DropLevels);
+
+            // 인쇄물 크기는 이미지가 아니라 패턴에서 구한다 — 실제로 찍히는 것은 노즐이 닿는
+            // 범위와 스텝 수이지, 원본 도면의 크기가 아니다.
+            double widthMm = 0;
+            if (pattern.Columns.Count > 0)
+            {
+                double min = double.MaxValue, max = double.MinValue;
+                foreach (var c in pattern.Columns)
+                {
+                    if (c.XUm < min) min = c.XUm;
+                    if (c.XUm > max) max = c.XUm;
+                }
+                widthMm = (max - min) / 1000.0;
+            }
+            double heightMm = pattern.Steps * _lastScanStepUm / 1000.0;
+
+            var para = new PrintDataSet.PrintPara
+            {
+                DpiX          = _lastParam.DropPerInchX,
+                DpiY          = _lastParam.DropPerInchY,
+                WidthPx       = pattern.Nozzles,
+                HeightPx      = pattern.Steps,
+                WidthMm       = widthMm,
+                HeightMm      = heightMm,
+                HeadCount     = layout.HeadCount,
+                NozzlePerHead = layout.Rows * layout.NozzlesPerRow,
+                BitsPerPixel  = dropLevels <= 2 ? 1 : 8,
+                HeadPack      = 0,
+                Overlap       = _lastParam.BlendHeadSeams ? 1 : 0,
+                SubPixelX     = Math.Max(1, _lastParam.Interval),
+                SubPixelY     = Math.Max(1, _lastParam.Interval),
+            };
+
+            string baseName = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
+            if (string.IsNullOrEmpty(baseName)) baseName = "Pattern";
+
+            var (bmp, pos, parp) = PrintDataSet.Save(folder, baseName, pattern, para, dropLevels);
+            return new SavedPrintData(folder, bmp, pos, parp, pattern.Steps, pattern.Nozzles);
         }
 
         // 미리보기는 저장 파일 그대로다 — 흰 바탕(비인쇄) + 검은 잉크(인쇄).

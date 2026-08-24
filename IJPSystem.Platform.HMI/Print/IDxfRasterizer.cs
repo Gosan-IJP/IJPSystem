@@ -22,13 +22,25 @@ namespace IJPSystem.Platform.HMI.Print
         RasterizeResult Convert(IReadOnlyList<string> selectedLayers,
             ConvertParameters param, IProgress<double>? progress = null);
 
-        /// <summary>빈 레이어(빈 BMP) 생성. (Create Empty Layer)</summary>
-        RasterizeResult CreateEmptyLayer(ConvertParameters param);
+        /// <summary>
+        /// 빈 레이어(흰 캔버스) 생성. (Create Empty Layer)
+        /// 경로만 잡는 게 아니라 실제 흰 이미지를 쓴다 — 그려 넣을 대상이 있어야 한다.
+        /// </summary>
+        RasterizeResult CreateEmptyLayer(ConvertParameters param, double widthMm, double lengthMm);
+
+        /// <summary>
+        /// 이미지에서 바로 토출 패턴을 만든다 — DXF 가 없는 경로(Open BMP / Edit Panel).
+        /// </summary>
+        RasterizeResult ConvertImage(string imagePath, ConvertParameters param,
+                                     IProgress<double>? progress = null);
 
         /// <summary>기존 BMP 열어 미리보기/사용. (Open BMP)</summary>
         RasterizeResult OpenBmp(string bmpPath);
 
-        /// <summary>결과(BMP + 패턴) 저장. (Save)</summary>
-        void Save(RasterizeResult result);
+        /// <summary>
+        /// 인쇄 데이터 저장. (Save)
+        /// 패턴 비트맵 + POS.dat + Print_Para.dat 세 벌을 만든다 — 원본 저장 버튼과 같다.
+        /// </summary>
+        SavedPrintData Save(RasterizeResult result);
     }
 }

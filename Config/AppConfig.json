@@ -17,7 +17,9 @@
     "IO": "Virtual",
     "Motion": "Virtual",
     "Vision": "Virtual",
+    "Head1": "None",
     "Head": "Virtual",
+
     "Meniscus": "Virtual"
   }
 }

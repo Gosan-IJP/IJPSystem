@@ -5,6 +5,7 @@ using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.HMI.Common;
 using IJPSystem.Platform.HMI.Services;
 using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
+using IJPSystem.Platform.Infrastructure.Print;
 using static IJPSystem.Platform.HMI.Common.Loc;
 using System;
 using System.Collections.ObjectModel;
@@ -487,6 +488,149 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set => SetProperty(ref _printDataPath, value);
         }
 
+        // ── 인쇄 데이터 로드 (랩뷰 6_WIZ_Print 의 "Load Print data") ──
+        //
+        // Meteor 가 파일을 읽는 게 아니다. PCC 는 PC 의 파일시스템을 모른다 —
+        // 여기서 우리가 읽어 PCC 메모리로 올리고, Print 는 이미 올라간 것을 쏠 뿐이다.
+        // 그래서 저장과 인쇄가 갈라져 있고, 저장해 둔 것을 나중에 여러 번 찍을 수 있다.
+        private readonly PrintJobController _printJob =
+            new PrintJobController(new NullPrintDataDownloader());
+
+        private string _printDataState = "대기";
+        /// <summary>READY / 대기 / 오류 — 지금 PCC 에 무엇이 올라가 있는지.</summary>
+        public string PrintDataStateText
+        {
+            get => _printDataState;
+            private set => SetProperty(ref _printDataState, value);
+        }
+
+        private string _printDataSummary = "저장해 둔 인쇄 데이터를 불러오세요.";
+        public string PrintDataSummary
+        {
+            get => _printDataSummary;
+            private set => SetProperty(ref _printDataSummary, value);
+        }
+
+        private string _printDataBrush = "#94A3B8";
+        public string PrintDataStateBrush
+        {
+            get => _printDataBrush;
+            private set => SetProperty(ref _printDataBrush, value);
+        }
+
+        /// <summary>인쇄 데이터가 PCC 에 올라가 있는가.</summary>
+        public bool IsPrintDataReady => _printJob.CanPrint;
+
+        /// <summary>인쇄 데이터가 쌓이는 자리. 래스터라이저가 저장하는 곳과 같아야 한다.</summary>
+        private static string PatternRoot => Print.DxfRasterizer.PatternRoot;
+
+        /// <summary>최근 저장된 인쇄 데이터 — 새것부터. 옛것을 다시 찍을 때 고른다.</summary>
+        public ObservableCollection<PrintDataEntry> RecentPrintData { get; } = new();
+
+        private PrintDataEntry? _selectedPrintData;
+        /// <summary>목록에서 고른 것. 고르면 바로 불러온다.</summary>
+        public PrintDataEntry? SelectedPrintData
+        {
+            get => _selectedPrintData;
+            set
+            {
+                if (!SetProperty(ref _selectedPrintData, value)) return;
+                // 목록을 다시 채우면서 선택을 되돌릴 때 또 불러오지 않도록 막는다.
+                if (value != null && !_syncingPrintData) LoadFrom(value.Folder);
+            }
+        }
+
+        private bool _syncingPrintData;
+
+        /// <summary>목록을 다시 읽는다. 화면에 들어올 때·저장 직후에 부른다.</summary>
+        public void RefreshRecentPrintData()
+        {
+            _syncingPrintData = true;
+            try
+            {
+                var found = PrintJobFile.FindRecent(PatternRoot, 5);
+                RecentPrintData.Clear();
+                foreach (var e in found) RecentPrintData.Add(e);
+
+                // 이미 올라가 있는 것이 목록에 있으면 그대로 짚어 둔다.
+                string? cur = _printJob.CurrentJob?.Folder;
+                _selectedPrintData = cur == null
+                    ? null
+                    : RecentPrintData.FirstOrDefault(e => string.Equals(e.Folder, cur,
+                                                          StringComparison.OrdinalIgnoreCase));
+                OnPropertyChanged(nameof(SelectedPrintData));
+            }
+            finally { _syncingPrintData = false; }
+        }
+
+
+        private void LoadPrintData()
+        {
+            // 폴더를 고르게 하지 않는다 — 인쇄 직전에 날짜 폴더를 뒤지면 엉뚱한 걸 고르기 쉽다.
+            // 방금 저장한 것을 그대로 올린다. 옛것은 옆 목록에서 고른다.
+            RefreshRecentPrintData();
+
+            string? folder = PrintJobFile.FindLatest(PatternRoot);
+            if (folder == null)
+            {
+                PrintDataStateText  = "없음";
+                PrintDataStateBrush = "#F87171";
+                PrintDataSummary    = $"저장된 인쇄 데이터가 없습니다 — {PatternRoot}";
+                _mainVM.AddLog($"[PRINT] 인쇄 데이터 없음 — {PatternRoot}", LogLevel.Warning);
+
+                Dialogs.Show("저장된 인쇄 데이터가 없습니다.\n\n" +
+                             $"찾은 자리\n{PatternRoot}\n\n" +
+                             "[Print Image Design] 에서 변환하고 Save 를 먼저 하세요.",
+                             "Load Print data",
+                             System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+
+                OnPropertyChanged(nameof(IsPrintDataReady));
+                (PrintCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                return;
+            }
+
+            LoadFrom(folder);
+        }
+
+        /// <summary>폴더 하나를 읽어 PCC 로 올린다. 최근 것이든 목록에서 고른 것이든 여기로 온다.</summary>
+        private void LoadFrom(string folder)
+        {
+            _mainVM.AddLog($"[PRINT] 인쇄 데이터 로드: {folder}", LogLevel.Info);
+            var job = _printJob.LoadAndDownload(folder);
+
+            if (job == null)
+            {
+                PrintDataStateText  = "오류";
+                PrintDataStateBrush = "#F87171";
+                PrintDataSummary    = _printJob.Message +
+                    (_printJob.Problems.Count > 1 ? $" (그 밖 {_printJob.Problems.Count - 1}건)" : "");
+                _mainVM.AddLog("[PRINT] 인쇄 데이터 로드 실패 — " + _printJob.Message, LogLevel.Warning);
+
+                Dialogs.Show("인쇄 데이터를 불러오지 못했습니다.\n\n" +
+                             $"{folder}\n\n" +
+                             string.Join("\n", _printJob.Problems.Count > 0
+                                               ? _printJob.Problems : new[] { _printJob.Message }),
+                             "Load Print data",
+                             System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
+            else
+            {
+                PrintDataPath       = folder;
+                PrintDataStateText  = "READY TO PRINT";
+                PrintDataStateBrush = "#34D399";
+                PrintDataSummary    =
+                    $"{System.IO.Path.GetFileName(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar))} · " +
+                    $"{job.Steps}스텝 × {job.Nozzles}노즐 · " +
+                    $"{job.Para.WidthMm:F1}×{job.Para.HeightMm:F1}mm · 방울 {job.DropCount:N0}개 · " +
+                    $"{_printJob.DownloaderName}";
+                _mainVM.AddLog($"[PRINT] READY — {job}", LogLevel.Success);
+            }
+
+            RefreshRecentPrintData();
+            OnPropertyChanged(nameof(IsPrintDataReady));
+            (PrintCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        }
+
         // ── Load Image (Visual Monitor 에 띄울 이미지) ────────────────
         private string _loadedImagePath = "";
         /// <summary>불러온 이미지의 전체 경로. 비어 있으면 아직 불러오지 않은 상태.</summary>
@@ -507,6 +651,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         // ── Commands ─────────────────────────────────────────────────
         public ICommand PrintCommand          { get; }
+        public ICommand LoadPrintDataCommand  { get; }
         public ICommand AbortCommand          { get; }
         public ICommand LoadImageCommand      { get; private set; } = null!;
 
@@ -524,6 +669,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             PrintCommand          = new RelayCommand(async _ => await RunPatternPrintAsync(),
                                                      _ => IsOriginSet && !IsPrinting);
             AbortCommand          = new RelayCommand(_ => _printCts?.Cancel(), _ => IsPrinting);
+            LoadPrintDataCommand  = new RelayCommand(_ => LoadPrintData(), _ => !IsPrinting);
 
             // Motion 패널 (활성화는 버튼 IsEnabled="SelectedMotionAxis.CanMove" 바인딩으로 처리)
             MotionMoveCommand     = new RelayCommand(async _ => await MotionMoveAsync());

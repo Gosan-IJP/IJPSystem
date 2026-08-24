@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using IJPSystem.Platform.Infrastructure.Print;
 using Microsoft.Win32;
 
 namespace IJPSystem.Platform.HMI.Print
@@ -25,7 +26,17 @@ namespace IJPSystem.Platform.HMI.Print
         public Func<(double widthMm, double lengthMm)?>? RequestCanvasSize { get; set; }
 
         /// <summary>지정 크기로 Edit Panel(Drawing Panel) 편집 창 열기. 외부 주입.</summary>
-        public Action<double, double>? OpenEditPanel { get; set; }
+        /// <summary>
+        /// 알림 상자(제목, 본문). 창이 채워 준다 — 이 창은 모달이라 소유자를 제대로 잡아야
+        /// 상자가 뒤로 숨지 않는다. 그래서 VM 이 직접 MessageBox 를 띄우지 않는다.
+        /// </summary>
+        public Action<string, string>? Notify { get; set; }
+
+        /// <summary>
+        /// 편집 창을 띄운다. 인자는 (가로mm, 세로mm, 저장할 자리) — 그린 그림이 저장된 경로를 돌려준다.
+        /// 돌려받지 못하면(취소) 빈 캔버스 그대로 남는다.
+        /// </summary>
+        public Func<double, double, string?, string?>? OpenEditPanel { get; set; }
 
         public DxfRasterizerViewModel(IDxfRasterizer rasterizer)
         {
@@ -34,10 +45,10 @@ namespace IJPSystem.Platform.HMI.Print
             LoadDxfCommand          = new RelayCommand(_ => LoadDxf());
             IntervalChangeCommand   = new RelayCommand(_ => IntervalChange());
             NozzleSelectCommand     = new RelayCommand(_ => NozzleSelect());
-            ConvertCommand          = new RelayCommand(_ => Convert(), _ => Layers.Any(l => l.IsSelected));
+            ConvertCommand          = new RelayCommand(_ => Convert(), _ => CanConvert);
             CreateEmptyLayerCommand = new RelayCommand(_ => CreateEmptyLayer());
             OpenBmpCommand          = new RelayCommand(_ => OpenBmp());
-            SaveCommand             = new RelayCommand(_ => Save(), _ => _lastResult != null);
+            SaveCommand             = new RelayCommand(_ => Save(), _ => _lastResult?.PatternPath != null);
             ZoomToFitCommand        = new RelayCommand(_ => ZoomToFitRequested?.Invoke(this, EventArgs.Empty));
             ToggleGridCommand       = new RelayCommand(_ => ShowGrid = !ShowGrid);
         }
@@ -178,6 +189,14 @@ namespace IJPSystem.Platform.HMI.Print
 
         private RasterizeResult? _lastResult;
 
+
+        // ---- 미리보기 ----
+        // 미리보기는 변환 결과를 그대로 보여야 한다. 이미지에서 다시 만들면 그 창의 입력값으로
+        // RIP 이 한 번 더 돌아, 저장한 것과 다른 그림을 보면서 맞다고 판단하게 된다.
+        public PrintPattern? LastPattern => (_rip as DxfRasterizer)?.LastPattern;
+        public NozzleLayout? LastLayout  => (_rip as DxfRasterizer)?.LastLayout;
+        public IReadOnlyList<int> LastIgnoredNozzles =>
+            (_rip as DxfRasterizer)?.LastIgnoredNozzles ?? Array.Empty<int>();
         // ---- 커맨드 ----
         public ICommand LoadDxfCommand { get; }
         public ICommand IntervalChangeCommand { get; }
@@ -209,6 +228,7 @@ namespace IJPSystem.Platform.HMI.Print
             try
             {
                 var names = _rip.LoadDxf(path);
+                _hasDxf = true;
                 DxfPath = path;
                 Layers.Clear();
                 foreach (string name in names)
@@ -259,13 +279,33 @@ namespace IJPSystem.Platform.HMI.Print
             set { _dropLevels = Math.Max(2, value); OnPropertyChanged(); }
         }
 
+        /// <summary>
+        /// 변환. DXF 를 열었으면 도면부터, 아니면 지금 이미지에서 토출 패턴만 만든다.
+        ///
+        /// <para>Open BMP·Edit Panel 로 들어온 그림도 변환할 수 있어야 한다 — DXF 는 ①단계에만
+        /// 필요하고, 그림이 이미 있으면 ②(노즐 격자 → 하프톤)부터 하면 된다.</para>
+        /// </summary>
         private void Convert()
         {
             try
             {
                 var progress = new Progress<double>(p => LoadingProgress = p);
-                var selected = Layers.Where(l => l.IsSelected).Select(l => l.Name).ToList();
-                _lastResult = _rip.Convert(selected, BuildParams(), progress);
+
+                if (HasDxf)
+                {
+                    var selected = Layers.Where(l => l.IsSelected).Select(l => l.Name).ToList();
+                    _lastResult = _rip.Convert(selected, BuildParams(), progress);
+                }
+                else
+                {
+                    string? img = _lastResult?.BmpPath;
+                    if (string.IsNullOrEmpty(img))
+                    {
+                        StatusText = "변환할 것이 없습니다 — DXF 를 열거나 BMP 를 여세요.";
+                        return;
+                    }
+                    _lastResult = _rip.ConvertImage(img!, BuildParams(), progress);
+                }
 
                 // 패턴 생성 결과를 함께 띄운다 — 노즐 미선택 등으로 패턴만 빠져도 화면에는
                 // "변환 완료"로만 보여, 인쇄 직전에야 패턴이 없다는 걸 알게 된다.
@@ -277,6 +317,14 @@ namespace IJPSystem.Platform.HMI.Print
             catch (Exception ex) { StatusText = "변환 실패: " + ex.Message; }
         }
 
+        /// <summary>DXF 를 열어 레이어를 고를 수 있는 상태인가.</summary>
+        private bool HasDxf => _hasDxf && Layers.Any(l => l.IsSelected);
+        private bool _hasDxf;
+
+        /// <summary>변환할 거리가 있는가 — 도면이든 그림이든.</summary>
+        private bool CanConvert =>
+            HasDxf || (!string.IsNullOrEmpty(_lastResult?.BmpPath) && File.Exists(_lastResult!.BmpPath!));
+
         private void CreateEmptyLayer()
         {
             // 1) 캔버스 크기 입력 (Set size of canvas). 취소 시 중단.
@@ -286,13 +334,18 @@ namespace IJPSystem.Platform.HMI.Print
 
             try
             {
-                // 2) 빈 레이어 결과 생성 + Layer Select 목록에 등록
-                _lastResult = _rip.CreateEmptyLayer(BuildParams());
-                Layers.Add(new LayerItem { Name = $"Empty ({w:0.#}×{l:0.#}mm)", IsSelected = true });
-                ApplyResult($"빈 레이어 생성 ({w:0.#}×{l:0.#}mm)");
+                // 2) 흰 캔버스를 실제 파일로 만든다. DXF 가 아니므로 레이어 선택은 쓰지 않는다.
+                _hasDxf = false;
+                Layers.Clear();
+                _lastResult = _rip.CreateEmptyLayer(BuildParams(), w, l);
+                ApplyResult($"빈 레이어 생성 ({w:0.#}×{l:0.#}mm) — 그린 뒤 Convert 하세요");
 
-                // 3) Edit Panel(Drawing Panel) 편집 창 열기
-                OpenEditPanel?.Invoke(w, l);
+                // 3) Edit Panel — 그린 그림은 방금 만든 그 파일에 덮어쓴다.
+                string? drawn = OpenEditPanel?.Invoke(w, l, _lastResult.BmpPath);
+                if (string.IsNullOrEmpty(drawn)) { StatusText = "빈 캔버스 그대로입니다 — 그리지 않았습니다."; return; }
+
+                _lastResult = _rip.OpenBmp(drawn!);
+                ApplyResult("그림 반영: " + Path.GetFileName(drawn!) + " — Convert 하면 패턴이 만들어집니다");
             }
             catch (Exception ex) { StatusText = "실패: " + ex.Message; }
         }
@@ -309,16 +362,49 @@ namespace IJPSystem.Platform.HMI.Print
             {
                 // 미리보기는 래스터라이저가 범례 색으로 칠해서 준다 — 여기서 원본을 따로 읽으면
                 // 열었을 때와 변환했을 때 같은 파일이 다른 색으로 보인다.
+                // 그림을 직접 열었으면 도면 경로가 아니다 — 레이어가 남아 있으면 변환이 DXF 쪽으로 간다.
+                _hasDxf = false;
+                Layers.Clear();
                 _lastResult = _rip.OpenBmp(dlg.FileName);
                 ApplyResult("BMP 열기: " + Path.GetFileName(dlg.FileName));
             }
             catch (Exception ex) { StatusText = "실패: " + ex.Message; }
         }
 
+        /// <summary>
+        /// 인쇄 데이터를 굳힌다 — 원본 저장 버튼과 같은 자리다.
+        ///
+        /// <para>변환만으로도 패턴 파일은 남지만, 인쇄기가 읽는 세 벌(.bmp · POS.dat ·
+        /// Print_Para.dat)은 여기서 만들어진다. 그래서 설정을 바꿨으면 <b>다시 변환하고
+        /// 다시 저장</b>해야 새 인쇄 데이터가 된다 — 저장만 눌러서는 옛 패턴이 그대로 나간다.</para>
+        /// </summary>
         private void Save()
         {
-            try { _rip.Save(_lastResult!); StatusText = "저장 완료"; }
-            catch (Exception ex) { StatusText = "저장 실패: " + ex.Message; }
+            if (_lastResult == null) { StatusText = "저장할 것이 없습니다 — 먼저 Convert 하세요."; return; }
+
+            try
+            {
+                var saved = _rip.Save(_lastResult);
+                PatternPath = saved.Folder;
+
+                string files = $"{Path.GetFileName(saved.BmpPath)}\n" +
+                               $"{Path.GetFileName(saved.NozzlePosPath)}\n" +
+                               $"{Path.GetFileName(saved.PrintParaPath)}";
+
+                StatusText = $"저장 완료 — {saved.Steps}스텝 × {saved.Nozzles}노즐 · " +
+                             files.Replace("\n", " + ");
+
+                Notify?.Invoke("Save",
+                    $"인쇄 데이터를 저장했습니다.\n\n" +
+                    $"패턴  {saved.Steps}스텝 × {saved.Nozzles}노즐\n\n" +
+                    $"저장 위치\n{saved.Folder}\n\n" +
+                    $"파일\n{files}");
+            }
+            catch (Exception ex)
+            {
+                StatusText = "저장 실패: " + ex.Message;
+                Notify?.Invoke("Save", "저장하지 못했습니다.\n\n" + ex.Message);
+            }
         }
 
         private void ApplyResult(string msg)

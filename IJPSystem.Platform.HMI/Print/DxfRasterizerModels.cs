@@ -82,4 +82,13 @@ namespace IJPSystem.Platform.HMI.Print
         /// <summary>미리보기용 이미지(WPF BitmapSource 등). 구현체에서 채움.</summary>
         public object? PreviewImage { get; set; }
     }
+
+    /// <summary>저장(Save)이 만든 인쇄 데이터 한 벌.</summary>
+    /// <param name="Folder">세 파일이 들어 있는 폴더.</param>
+    /// <param name="BmpPath">토출 패턴 비트맵 — 눈으로 확인하는 용도.</param>
+    /// <param name="NozzlePosPath">POS.dat — 노즐 X 위치.</param>
+    /// <param name="PrintParaPath">Print_Para.dat — DPI·치수·헤드 구성.</param>
+    public readonly record struct SavedPrintData(
+        string Folder, string BmpPath, string NozzlePosPath, string PrintParaPath,
+        int Steps, int Nozzles);
 }

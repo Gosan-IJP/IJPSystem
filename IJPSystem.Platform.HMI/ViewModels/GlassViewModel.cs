@@ -232,6 +232,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand CaptureCommand    { get; }
         public ICommand LightOnCommand    { get; }
         public ICommand LightOffCommand   { get; }
+        public ICommand ToggleLightCommand { get; }
         public ICommand OpenImageCommand  { get; }
         public ICommand ToggleCrossLineCommand { get; }
         public ICommand CenterCrossCommand     { get; }
@@ -276,6 +277,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             CaptureCommand    = new RelayCommand(async _ => await ExecuteCaptureAsync(), _ => !IsBusy);
             LightOnCommand   = new RelayCommand(_ => ExecuteLight(true),  _ => !IsBusy);
             LightOffCommand  = new RelayCommand(_ => ExecuteLight(false), _ => !IsBusy);
+            // 상단 버튼은 토글 하나 — 두 버튼으로 나누면 지금 켜져 있는지 화면에서 알 수 없다.
+            ToggleLightCommand = new RelayCommand(_ => ExecuteLight(!IsLightOn), _ => !IsBusy);
             OpenImageCommand = new RelayCommand(_ => ExecuteOpenImage(),  _ => !IsLiveMode);
             // 크로스라인은 카메라와 무관한 화면 오버레이라 조건 없이 언제나 조작 가능하다.
             ToggleCrossLineCommand = new RelayCommand(_ => CrossLineVisible = !CrossLineVisible);
@@ -291,7 +294,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _liveTimer.Tick += async (_, _) => await LiveTickAsync();
 
             CamStatus = _vision.GetStatus(CamId);
+
+            // 정렬(패턴 매칭)은 별도 VM 이 맡는다 — 카메라·조명·조그와 성격이 다르고,
+            // 화면 없이 값만 검증할 수 있어야 한다.
+            Align = new Vision.PatternAlignViewModel(() => CurrentFrame, _mainVM.AddLog);
         }
+
+        /// <summary>글라스 정렬 — 패턴 등록·저장·찾기.</summary>
+        public Vision.PatternAlignViewModel Align { get; }
 
         // ── 라이브 시작 / 정지 ────────────────────────────────────────────────
         private void StartLive()
@@ -376,8 +386,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // ※ 이전에는 _vision.SetLight() 만 불렀는데, 실장 드라이버(eBUS/Hikrobot)의 SetLight 는
         //   상태 플래그만 바꾸고 하드웨어로 나가지 않는다 — 화면 LED 만 켜지고 조명은 그대로였다.
         //   카메라 상태 표시는 유지하되(화면 LED), 실제 점등은 컨트롤러가 담당한다.
+        private bool _isLightOn;
+        /// <summary>
+        /// 조명이 켜져 있나. 하드웨어에 되물을 수 없어 <b>우리가 보낸 마지막 명령</b>을 기억한다 —
+        /// 화면 밖에서 꺼지면 어긋날 수 있지만, 상태 표시가 아예 없는 것보다는 낫다.
+        /// </summary>
+        public bool IsLightOn
+        {
+            get => _isLightOn;
+            private set => SetProperty(ref _isLightOn, value);
+        }
+
         private void ExecuteLight(bool on)
         {
+            IsLightOn = on;
             _vision.SetLight(CamId, on);
             if (on) _vision.SetLightIntensity(CamId, LightIntensity);
             CamStatus = _vision.GetStatus(CamId);

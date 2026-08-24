@@ -36,6 +36,35 @@ namespace IJPSystem.Platform.HMI.Print
             if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath)) LoadImage(imagePath!);
         }
 
+        /// <summary>
+        /// 이미 변환된 패턴을 바로 보여 준다.
+        ///
+        /// <para>여기가 중요하다 — 창을 열어 놓고 [패턴 만들기]를 누르면 이 화면의 입력값으로
+        /// <b>다시</b> RIP 을 한다. 그 값이 변환 때와 다르면, 저장한 것과 다른 그림을 보면서
+        /// 맞다고 판단하게 된다. 변환 결과를 그대로 받아 띄우면 그럴 일이 없다.</para>
+        /// </summary>
+        public PatternPreviewWindow(PrintPattern pattern, NozzleLayout? layout,
+                                    IReadOnlyList<int>? ignored, string sourceLabel)
+        {
+            InitializeComponent();
+            _usedNozzles = Array.Empty<int>();
+
+            // 입력칸을 실제로 쓰인 값으로 맞춰 둔다 — 여기서 다시 만들어도 같은 결과가 나오도록.
+            if (layout != null)
+            {
+                RowsBox.Text       = layout.Rows.ToString(CultureInfo.InvariantCulture);
+                PerRowBox.Text     = layout.NozzlesPerRow.ToString(CultureInfo.InvariantCulture);
+                InRowPitchBox.Text = layout.InRowPitchUm.ToString("0.###", CultureInfo.InvariantCulture);
+                RowOffsetBox.Text  = layout.RowOffsetUm.ToString("0.###", CultureInfo.InvariantCulture);
+                OrderBox.SelectedIndex = layout.Order == NozzleLayout.NozzleOrder.RowByRow ? 1 : 0;
+                UmPerPxBox.Text    = layout.EffectivePitchUm.ToString("0.###", CultureInfo.InvariantCulture);
+            }
+            ScanStepBox.Text = pattern.ScanStepUm.ToString("0.###", CultureInfo.InvariantCulture);
+
+            SourceText.Text = sourceLabel;
+            ShowPattern(pattern, layout, ignored ?? Array.Empty<int>());
+        }
+
         private void OpenImage_Click(object sender, RoutedEventArgs e)
         {
             var dlg = new OpenFileDialog
@@ -116,29 +145,40 @@ namespace IJPSystem.Platform.HMI.Print
 
                 var pattern = PrintPatternBuilder.Build(_gray, umPerPx, umPerPx, layout, used,
                                                         settings, out var ignored);
-                Preview.Pattern = pattern;
-
-                long drops = 0;
-                for (int s = 0; s < pattern.Steps; s++)
-                    for (int c = 0; c < pattern.Nozzles; c++)
-                        if (pattern.Levels[s, c] > 0) drops++;
-
-                double widthMm = pattern.Nozzles > 1
-                    ? (pattern.Columns[^1].XUm - pattern.Columns[0].XUm) / 1000.0 : 0;
-
-                SummaryText.Text =
-                    $"노즐 {pattern.Nozzles}개 / 전체 {layout.TotalNozzles}   ·   " +
-                    $"스텝 {pattern.Steps} × {pattern.ScanStepUm:F1}µm = {pattern.Steps * pattern.ScanStepUm / 1000.0:F1}mm   ·   " +
-                    $"인쇄 폭 {widthMm:F1}mm   ·   " +
-                    $"실효 간격 {layout.EffectivePitchUm:F2}µm ({layout.EffectiveDpi:F0} dpi)   ·   " +
-                    $"방울 {drops:N0}개" +
-                    (ignored.Count > 0 ? $"   ·   ⚠ 범위 밖 노즐 {ignored.Count}개 무시" : "");
+                ShowPattern(pattern, layout, ignored);
             }
             catch (Exception ex)
             {
                 Preview.Pattern = null;
                 SummaryText.Text = $"패턴을 만들지 못했습니다 — {ex.Message}";
             }
+        }
+
+        /// <summary>패턴을 그리고 요약을 쓴다. 새로 만든 것이든 변환에서 받아온 것이든 같은 자리다.</summary>
+        private void ShowPattern(PrintPattern pattern, NozzleLayout? layout, IReadOnlyList<int> ignored)
+        {
+            Preview.Pattern = pattern;
+
+            long drops = 0;
+            for (int s = 0; s < pattern.Steps; s++)
+                for (int c = 0; c < pattern.Nozzles; c++)
+                    if (pattern.Levels[s, c] > 0) drops++;
+
+            double widthMm = pattern.Nozzles > 1
+                ? (pattern.Columns[^1].XUm - pattern.Columns[0].XUm) / 1000.0 : 0;
+
+            string layoutPart = layout == null ? "" :
+                $"노즐 {pattern.Nozzles}개 / 전체 {layout.TotalNozzles}   ·   ";
+            string pitchPart = layout == null ? "" :
+                $"실효 간격 {layout.EffectivePitchUm:F2}µm ({layout.EffectiveDpi:F0} dpi)   ·   ";
+
+            SummaryText.Text =
+                layoutPart +
+                $"스텝 {pattern.Steps} × {pattern.ScanStepUm:F1}µm = {pattern.Steps * pattern.ScanStepUm / 1000.0:F1}mm   ·   " +
+                $"인쇄 폭 {widthMm:F1}mm   ·   " +
+                pitchPart +
+                $"방울 {drops:N0}개" +
+                (ignored.Count > 0 ? $"   ·   ⚠ 범위 밖 노즐 {ignored.Count}개 무시" : "");
         }
 
         // 입력이 비었거나 이상하면 최소값으로 — 창이 예외로 닫히지 않게 한다.

@@ -859,9 +859,16 @@
                                 Style="{StaticResource MutedActionButtonStyle}" Background="#1D4ED8">
                             <TextBlock Text="Measure Velocity" Foreground="White" FontSize="13" FontWeight="Bold"/>
                         </Button>
-                        <Button Height="46" Command="{Binding TimeIntervalMeasureCommand}"
+                        <Button Height="46" Margin="0,0,0,8" Command="{Binding TimeIntervalMeasureCommand}"
                                 Style="{StaticResource MutedActionButtonStyle}" Background="#166534">
                             <TextBlock Text="Time Interval Measure" Foreground="White" FontSize="13" FontWeight="Bold"/>
+                        </Button>
+                        <!-- 모터 조그 — 팝업으로 띄운다. 영상을 보면서 축을 조금씩 움직여야 하는데
+                             모터 화면으로 나갔다 오면 보던 것을 놓친다. 이 화면을 나가면 같이 닫힌다. -->
+                        <Button Height="46" Click="MotorJog_Click"
+                                Style="{StaticResource MutedActionButtonStyle}" Background="#334155"
+                                ToolTip="조그 창을 띄웁니다. 드랍와처 화면을 보면서 축을 움직일 수 있습니다.">
+                            <TextBlock Text="모터 조그" Foreground="White" FontSize="13" FontWeight="Bold"/>
                         </Button>
                     </StackPanel>
                 </Border>

@@ -49,10 +49,17 @@ namespace IJPSystem.Platform.HMI.Print
         private Rectangle? _selHi;                              // Select 선택 표시(점선)
         private Line? _hairV, _hairH;                           // Crosshair 십자선
 
-        public EditPanelWindow(double widthMm, double lengthMm, double dpi)
+        /// <summary>그린 그림이 저장된 경로. 취소했으면 null 이다 — 부르는 쪽이 이걸 보고 이어받는다.</summary>
+        public string? SavedImagePath { get; private set; }
+
+        /// <summary>저장할 자리. 빈 레이어에서 열렸으면 그 파일에 덮어쓴다(대화상자 없이).</summary>
+        private readonly string? _targetPath;
+
+        public EditPanelWindow(double widthMm, double lengthMm, double dpi, string? targetPath = null)
         {
             InitializeComponent();
             _widthMm = widthMm; _lengthMm = lengthMm; _dpi = dpi <= 0 ? 600 : dpi;
+            _targetPath = targetPath;
 
             _pxW = (int)Math.Round(_widthMm * _dpi / 25.4);
             _pxH = (int)Math.Round(_lengthMm * _dpi / 25.4);
@@ -524,22 +531,33 @@ namespace IJPSystem.Platform.HMI.Print
                 return;
             }
 
-            var dlg = new SaveFileDialog
+            // 빈 레이어에서 열렸으면 그 파일에 그대로 덮어쓴다 — 래스터라이저가 기다리는
+            // 자리가 정해져 있는데 다른 데 저장하면 그림이 변환으로 이어지지 않는다.
+            string path;
+            if (!string.IsNullOrEmpty(_targetPath))
             {
-                Title = "Save BMP",
-                Filter = "BMP (*.bmp)|*.bmp",
-                FileName = $"Pattern_{DateTime.Now:yyMMdd_HHmmss}.bmp"
-            };
-            if (dlg.ShowDialog() != true) return;
+                path = _targetPath!;
+            }
+            else
+            {
+                var dlg = new SaveFileDialog
+                {
+                    Title = "Save BMP",
+                    Filter = "BMP (*.bmp)|*.bmp",
+                    FileName = $"Pattern_{DateTime.Now:yyMMdd_HHmmss}.bmp"
+                };
+                if (dlg.ShowDialog() != true) return;
+                path = dlg.FileName;
+            }
 
             try
             {
                 var rtb = RenderCanvas(_pxW, _pxH);
                 var enc = new BmpBitmapEncoder();
                 enc.Frames.Add(BitmapFrame.Create(rtb));
-                using var fs = File.Create(dlg.FileName);
-                enc.Save(fs);
-                StatusInfo.Text = "저장 완료: " + dlg.FileName;
+                using (var fs = File.Create(path)) enc.Save(fs);
+                SavedImagePath = path;
+                StatusInfo.Text = "저장 완료: " + path;
             }
             catch (Exception ex) { StatusInfo.Text = "저장 실패: " + ex.Message; }
         }
