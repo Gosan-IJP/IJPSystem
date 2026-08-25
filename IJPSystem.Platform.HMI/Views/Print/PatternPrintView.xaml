@@ -340,14 +340,14 @@
 
                             <!-- Z + T (조그 단위 콤보박스를 두 축 가운데 위에 배치) -->
                             <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
-                                <ComboBox Width="92" Height="26" Margin="0,0,0,8" HorizontalAlignment="Center"
+                                <ComboBox Width="118" Height="26" Margin="0,0,0,8" HorizontalAlignment="Center"
                                           Background="#0D1520" Foreground="Black" BorderBrush="#334155"
                                           VerticalContentAlignment="Center" FontWeight="Bold"
                                           SelectedIndex="{Binding JogUnitIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Continuous"/>
-                                    <ComboBoxItem Content="10µm"/>
-                                    <ComboBoxItem Content="100µm"/>
-                                    <ComboBoxItem Content="1000µm"/>
+                                    <ComboBoxItem Content="10µm / 0.01°"/>
+                                    <ComboBoxItem Content="100µm / 0.1°"/>
+                                    <ComboBoxItem Content="1000µm / 1°"/>
                                 </ComboBox>
 
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -434,7 +434,7 @@
                             <TextBlock Text="Axis T" Foreground="#CBD5E1" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
                             <Border Grid.Column="1" Style="{StaticResource PosBox}" Padding="10,8">
                                 <TextBlock Style="{StaticResource PosText}" FontSize="16"
-                                           Text="{Binding AxisT.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"/>
+                                           Text="{Binding AxisT.CurrentPos, StringFormat={}{0:F3} deg, FallbackValue=-- deg}"/>
                             </Border>
                         </Grid>
                     </StackPanel>

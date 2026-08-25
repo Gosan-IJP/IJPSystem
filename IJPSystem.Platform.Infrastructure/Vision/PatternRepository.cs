@@ -40,6 +40,67 @@ namespace IJPSystem.Platform.Infrastructure.Vision
         /// <summary>등록 화면과 지금 화면의 해상도가 같은지. 다르면 좌표를 믿을 수 없다.</summary>
         public bool MatchesScene(int width, int height)
             => SceneWidth == 0 || SceneHeight == 0 || (SceneWidth == width && SceneHeight == height);
+
+        /// <summary>이 비율 안의 차이는 진행하되 오차만 알린다. 넘으면 막는다.</summary>
+        public const double SceneTolerancePercent = 2.0;
+
+        /// <summary>
+        /// 등록 화면과 지금 화면의 해상도 차이를 판정한다.
+        ///
+        /// <para><b>매칭 자체는 해상도와 무관하다.</b> 정규화 상관은 템플릿을 장면 위로 훑을 뿐이라
+        /// 장면이 몇 픽셀 크든 작든 찾는 데는 지장이 없다(템플릿보다 크기만 하면 된다).
+        /// 흔들리는 것은 <b>기준 좌표</b>다 — "등록할 때 있던 자리에서 얼마나 벗어났나"의 그 자리.</para>
+        ///
+        /// <para>그래서 조금 다르다고 막을 이유가 없다. 다만 차이가 <b>축소·확대인지 잘라낸 것인지</b>는
+        /// 알 수 없으므로 임의로 좌표를 늘려 맞추지 않는다 — 대신 그 차이가 기준 좌표에 얼마만큼의
+        /// 오차로 들어오는지를 계산해 알린다. 크게 다르면 그 오차가 의미를 잃으므로 막는다.</para>
+        /// </summary>
+        public SceneCheck CheckScene(int width, int height)
+        {
+            if (SceneWidth <= 0 || SceneHeight <= 0 || width <= 0 || height <= 0)
+                return new SceneCheck(SceneFit.Same, 0, "");   // 등록 정보가 없으면 따지지 않는다
+
+            if (SceneWidth == width && SceneHeight == height)
+                return new SceneCheck(SceneFit.Same, 0, "");
+
+            double dw = Math.Abs(width  - SceneWidth)  * 100.0 / SceneWidth;
+            double dh = Math.Abs(height - SceneHeight) * 100.0 / SceneHeight;
+
+            string what = $"등록 {SceneWidth}×{SceneHeight} → 지금 {width}×{height}";
+
+            if (Math.Max(dw, dh) > SceneTolerancePercent)
+                return new SceneCheck(SceneFit.Different, 0,
+                    $"등록할 때와 해상도가 너무 다릅니다.\n{what}\n\n" +
+                    "기준 좌표를 믿을 수 없어 패턴을 다시 등록해야 합니다.");
+
+            // 오차는 두 해석 중 큰 쪽으로 잡는다 — 어느 쪽인지 모르니 나쁜 쪽을 말해야 한다.
+            //   ① 같은 화면을 배율만 달리 찍었다 → 기준 좌표가 비율만큼 밀린다
+            //   ② 가장자리를 더/덜 잘라냈다      → 최대 그 픽셀 차이만큼 밀린다
+            double ex = Math.Max(Math.Abs(ReferenceX * (width  / (double)SceneWidth  - 1)), Math.Abs(width  - SceneWidth));
+            double ey = Math.Max(Math.Abs(ReferenceY * (height / (double)SceneHeight - 1)), Math.Abs(height - SceneHeight));
+            double err = Math.Max(ex, ey);
+
+            return new SceneCheck(SceneFit.Close, err,
+                $"해상도가 조금 다릅니다({what}) — 벗어난 양에 최대 약 {err:F0}px 오차가 섞입니다.");
+        }
+    }
+
+    /// <summary>등록 해상도와 지금 해상도의 관계.</summary>
+    public enum SceneFit
+    {
+        /// <summary>같다(또는 등록 정보 없음).</summary>
+        Same,
+        /// <summary>조금 다르다 — 찾기는 하되 오차를 알린다.</summary>
+        Close,
+        /// <summary>너무 다르다 — 기준 좌표가 의미를 잃는다.</summary>
+        Different,
+    }
+
+    /// <summary>해상도 판정 결과.</summary>
+    public readonly record struct SceneCheck(SceneFit Fit, double MaxRefErrorPx, string Message)
+    {
+        /// <summary>찾기를 진행해도 되는가.</summary>
+        public bool CanFind => Fit != SceneFit.Different;
     }
 
     /// <summary>패턴 파일 한 벌(정의 + 이미지).</summary>

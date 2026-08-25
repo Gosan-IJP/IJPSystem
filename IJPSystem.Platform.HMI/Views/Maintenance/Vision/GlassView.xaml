@@ -455,115 +455,143 @@
                     </StackPanel>
                 </Border>
 
-                <!-- ── 자동 동작 (찾기 · 결과) ───────────────────────────────
-                     여기서 하는 것은 "얼마나 벗어났나"까지다. 스테이지는 움직이지 않는다 —
-                     매칭이 엉뚱한 곳을 잡았을 때 그대로 모터가 나가면 안 되고,
-                     픽셀을 mm 로 바꿀 교정값(µm/px)이 아직 없다. -->
-                <Border Background="#111827" CornerRadius="12" Padding="16" Margin="0,0,0,10"
-                        BorderBrush="#334155" BorderThickness="1"
-                        DataContext="{Binding Align}">
-                    <StackPanel>
-                        <TextBlock Text="자동 동작" Foreground="#3B82F6"
-                                   FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
+                <!-- ── 패턴 찾기 · 자동 동작 ─────────────────────────────────
+                     찾기 카드는 반 칸만 쓴다. 값이 몇 줄뿐이라 폭을 다 쓸 이유가 없고,
+                     남은 반 칸에 자동 동작을 둔다. -->
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
 
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                    <!-- 패턴 찾기 — 여기서 하는 것은 "얼마나 벗어났나"까지다. 스테이지는 움직이지 않는다:
+                         매칭이 엉뚱한 곳을 잡았을 때 그대로 모터가 나가면 안 되고,
+                         픽셀을 mm 로 바꿀 교정값(µm/px)이 아직 없다. -->
+                    <Border Grid.Column="0"
+                            Background="#111827" CornerRadius="12" Padding="16"
+                            BorderBrush="#334155" BorderThickness="1"
+                            DataContext="{Binding Align}">
+                        <StackPanel>
+                            <TextBlock Text="PATTERN FIND" Foreground="#3B82F6"
+                                       FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
 
-                            <Button Grid.Column="0" Command="{Binding FindCommand}" Content="패턴 찾기"
-                                    Height="38"
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Button Grid.Column="0" Command="{Binding FindCommand}" Content="패턴 찾기"
+                                        Height="38"
+                                        Style="{StaticResource MutedActionButtonStyle}"
+                                        Background="#1E3A5F" Foreground="White"
+                                        FontSize="12" FontWeight="Bold"/>
+                                <Button Grid.Column="2" Command="{Binding ClearCommand}" Content="지우기"
+                                        Width="64" Height="38"
+                                        Style="{StaticResource MutedActionButtonStyle}"
+                                        Background="#1E293B" Foreground="#94A3B8"
+                                        FontSize="12" FontWeight="Bold"/>
+                            </Grid>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="66"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>   <!-- 0 점수 -->
+                                    <RowDefinition Height="Auto"/>   <!-- 1 위치 -->
+                                    <RowDefinition Height="Auto"/>   <!-- 2 벗어난 양 -->
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="점수" Foreground="#64748B"
+                                           FontSize="11" Margin="0,0,8,6"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ScoreText}"
+                                           FontSize="12" FontFamily="Consolas" Margin="0,0,0,6">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#E2E8F0"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ResultFailed}" Value="True">
+                                                    <Setter Property="Foreground" Value="#F87171"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="위치" Foreground="#64748B"
+                                           FontSize="11" Margin="0,0,8,6"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PosText}"
+                                           Foreground="#E2E8F0" FontSize="12" FontFamily="Consolas"
+                                           Margin="0,0,0,6"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="벗어난 양" Foreground="#64748B"
+                                           FontSize="11" Margin="0,0,8,0"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding OffsetText}"
+                                           Foreground="#60A5FA" FontSize="12" FontFamily="Consolas"
+                                           FontWeight="Bold"
+                                           ToolTip="등록할 때 있던 자리 기준. 교정(µm/px)이 서면 이 값이 mm 로 바뀝니다."/>
+                            </Grid>
+
+                            <!-- 합격 점수 — 보여 주기만 한다. 값의 주인은 레시피(글라스 정보 → 정렬 합격 점수)다.
+                                 여기서 고치게 두면 어느 값으로 찾았는지가 레시피에 남지 않는다. -->
+                            <Grid Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="66"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="Score" Foreground="#64748B"
+                                           FontSize="11" VerticalAlignment="Center"/>
+                                <Border Grid.Column="1" Background="#0B0F1A" CornerRadius="6"
+                                        BorderBrush="#1E293B" BorderThickness="1" Width="66" Padding="8,4">
+                                    <TextBlock Text="{Binding MinScore, StringFormat={}{0:F2}}"
+                                               Foreground="#94A3B8" FontSize="12" FontFamily="Consolas"
+                                               TextAlignment="Right"
+                                               ToolTip="레시피 값입니다. 바꾸려면 레시피 화면 → 글라스 정보 → 정렬 합격 점수."/>
+                                </Border>
+                                <TextBlock Grid.Column="2" Text="레시피 값" Foreground="#475569"
+                                           FontSize="10" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </Grid>
+
+                            <!-- 해상도가 조금 달라 오차가 섞였을 때만 나타난다. 막지는 않고 숫자로 알린다. -->
+                            <TextBlock Text="{Binding SceneWarning}" Foreground="#FBBF24" FontSize="10"
+                                       TextWrapping="Wrap" Margin="0,10,0,0"
+                                       Visibility="{Binding HasSceneWarning, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                            <TextBlock Text="※ 스테이지는 움직이지 않습니다. 벗어난 양만 알려 줍니다."
+                                       Foreground="#475569" FontSize="10" TextWrapping="Wrap"
+                                       Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 자동 동작 — 찾기부터 정렬 이동까지 한 번에 도는 자리.
+                         아직 잠가 둔다: 픽셀을 mm 로 바꿀 교정값(µm/px)이 없으면 벗어난 양을
+                         이동량으로 옮길 수 없고, 그 상태로 누르면 엉뚱한 거리로 스테이지가 나간다. -->
+                    <Border Grid.Column="2"
+                            Background="#111827" CornerRadius="12" Padding="16"
+                            BorderBrush="#334155" BorderThickness="1"
+                            VerticalAlignment="Top">
+                        <StackPanel>
+                            <TextBlock Text="자동 동작" Foreground="#3B82F6"
+                                       FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
+
+                            <Button Content="자동 동작" Height="38" IsEnabled="False"
                                     Style="{StaticResource MutedActionButtonStyle}"
                                     Background="#1E3A5F" Foreground="White"
-                                    FontSize="12" FontWeight="Bold"/>
-                            <Button Grid.Column="2" Command="{Binding ClearCommand}" Content="지우기"
-                                    Width="80" Height="38"
-                                    Style="{StaticResource MutedActionButtonStyle}"
-                                    Background="#1E293B" Foreground="#94A3B8"
-                                    FontSize="12" FontWeight="Bold"/>
-                        </Grid>
+                                    FontSize="12" FontWeight="Bold"
+                                    ToolTip="패턴 찾기 → 어긋난 양 계산 → 정렬 이동을 한 번에 수행합니다."/>
 
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="72"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>   <!-- 0 점수 -->
-                                <RowDefinition Height="Auto"/>   <!-- 1 위치 -->
-                                <RowDefinition Height="Auto"/>   <!-- 2 벗어난 양 -->
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="점수" Foreground="#64748B"
-                                       FontSize="11" Margin="0,0,8,6"/>
-                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ScoreText}"
-                                       FontSize="12" FontFamily="Consolas" Margin="0,0,0,6">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Foreground" Value="#E2E8F0"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding ResultFailed}" Value="True">
-                                                <Setter Property="Foreground" Value="#F87171"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="위치" Foreground="#64748B"
-                                       FontSize="11" Margin="0,0,8,6"/>
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PosText}"
-                                       Foreground="#E2E8F0" FontSize="12" FontFamily="Consolas"
-                                       Margin="0,0,0,6"/>
-
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="벗어난 양" Foreground="#64748B"
-                                       FontSize="11" Margin="0,0,8,0"/>
-                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding OffsetText}"
-                                       Foreground="#60A5FA" FontSize="12" FontFamily="Consolas"
-                                       FontWeight="Bold"
-                                       ToolTip="등록할 때 있던 자리 기준. 교정(µm/px)이 서면 이 값이 mm 로 바뀝니다."/>
-                        </Grid>
-
-                        <!-- 찾기 조건 -->
-                        <Grid Margin="0,12,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="72"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="46"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="합격 점수" Foreground="#64748B"
-                                       FontSize="11" VerticalAlignment="Center"/>
-                            <Slider Grid.Row="0" Grid.Column="1" Minimum="0.1" Maximum="0.99"
-                                    Value="{Binding MinScore, Mode=TwoWay}"
-                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding MinScore, StringFormat={}{0:F2}}"
-                                       Foreground="#94A3B8" FontSize="11" FontFamily="Consolas"
-                                       VerticalAlignment="Center" HorizontalAlignment="Right"/>
-
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="검색 반경" Foreground="#64748B"
-                                       FontSize="11" VerticalAlignment="Center" Margin="0,8,0,0"/>
-                            <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="400"
-                                    Value="{Binding SearchRadiusPx, Mode=TwoWay}"
-                                    VerticalAlignment="Center" Margin="0,8,8,0"
-                                    ToolTip="0 이면 화면 전체. 좁히면 반복 무늬에서 엉뚱한 곳을 잡는 일이 줄어듭니다."/>
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding SearchRadiusPx}"
-                                       Foreground="#94A3B8" FontSize="11" FontFamily="Consolas"
-                                       VerticalAlignment="Center" HorizontalAlignment="Right"
-                                       Margin="0,8,0,0"/>
-                        </Grid>
-
-                        <TextBlock Text="※ 스테이지는 움직이지 않습니다. 벗어난 양만 알려 줍니다."
-                                   Foreground="#475569" FontSize="10" TextWrapping="Wrap"
-                                   Margin="0,12,0,0"/>
-                    </StackPanel>
-                </Border>
+                            <TextBlock Text="※ 아직 동작하지 않습니다 — 픽셀을 mm 로 바꿀 교정(µm/px)이 서야 이동량이 나옵니다."
+                                       Foreground="#475569" FontSize="10" TextWrapping="Wrap"
+                                       Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
 
                 <!-- ── 조그 (이미지 레이아웃: D-패드 + Continuous + Z/T + Motion State) ──
                      모터 제어 화면과 같은 축(SharedAxisList)을 조작. CanJog=false 면 버튼 자동 비활성.
@@ -610,11 +638,12 @@
                                 </Grid>
 
                                 <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <ComboBox Width="112" Height="26" Margin="3,0,0,8" HorizontalAlignment="Left"
+                                    <ComboBox Width="130" Height="26" Margin="3,0,0,8" HorizontalAlignment="Left"
                                               VerticalContentAlignment="Center" SelectedIndex="{Binding JogUnitIndex, Mode=TwoWay}">
                                         <ComboBoxItem Content="Continuous"/>
-                                        <ComboBoxItem Content="10µm"/>
-                                        <ComboBoxItem Content="100µm"/>
+                                        <ComboBoxItem Content="10µm / 0.01°"/>
+                                        <ComboBoxItem Content="100µm / 0.1°"/>
+                                        <ComboBoxItem Content="1000µm / 1°"/>
                                     </ComboBox>
                                     <StackPanel Orientation="Horizontal">
                                         <!-- Z: 아래 버튼 = +Z(하강) -->
@@ -629,11 +658,11 @@
                                         </StackPanel>
                                         <!-- T -->
                                         <StackPanel Margin="6,0,0,0">
-                                            <Button Style="{StaticResource GlassJogBtn}" Content="↑" Tag="T"
+                                            <Button Style="{StaticResource GlassJogBtn}" Content="↻" Tag="T"
                                                     PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
                                                     IsEnabled="{Binding AxisT.CanJog, FallbackValue=False}"/>
                                             <TextBlock Text="T" Foreground="#C084FC" FontWeight="Bold" FontSize="12" HorizontalAlignment="Center"/>
-                                            <Button Style="{StaticResource GlassJogBtn}" Content="↓" Tag="T"
+                                            <Button Style="{StaticResource GlassJogBtn}" Content="↺" Tag="T"
                                                     PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
                                                     IsEnabled="{Binding AxisT.CanJog, FallbackValue=False}"/>
                                         </StackPanel>
@@ -673,7 +702,7 @@
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="46"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="Axis T" Foreground="#CBD5E1" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
                                     <Border Grid.Column="1" Background="#0D1520" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="4" Padding="8,5">
-                                        <TextBlock Text="{Binding AxisT.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"
+                                        <TextBlock Text="{Binding AxisT.CurrentPos, StringFormat={}{0:F3} deg, FallbackValue=-- deg}"
                                                    Foreground="#E2E8F0" FontFamily="Consolas" FontSize="14" FontWeight="Bold" TextAlignment="Right"/>
                                     </Border>
                                 </Grid>

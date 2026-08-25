@@ -48,7 +48,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _mainVM.SharedAxisList.FirstOrDefault(a =>
                 (a.Info?.Name ?? "").StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 
-        // 조그 단위 — 0=연속(누르는 동안 이동), 0.01=10µm, 0.1=100µm (AxisViewModel.JogUnit 규약).
+        // 조그 단위 — 0=연속(누르는 동안 이동), 0.01=10µm, 0.1=100µm, 1=1000µm (AxisViewModel.JogUnit 규약).
         private double _jogUnit;
         public double JogUnit
         {
@@ -67,7 +67,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public bool IsUnit10um       { get => JogUnit == 0.01; set { if (value) JogUnit = 0.01; } }
         public bool IsUnit100um      { get => JogUnit == 0.1;  set { if (value) JogUnit = 0.1; } }
 
-        // 조그 단위 콤보(이미지 레이아웃) — 0=Continuous, 1=10µm, 2=100µm. JogUnit 으로 환산.
+        // 조그 단위 콤보(이미지 레이아웃) — 0=Continuous, 1=10µm, 2=100µm, 3=1000µm. JogUnit 으로 환산.
         private int _jogUnitIndex;
         public int JogUnitIndex
         {
@@ -75,7 +75,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set
             {
                 if (!SetProperty(ref _jogUnitIndex, value)) return;
-                JogUnit = value switch { 1 => 0.01, 2 => 0.1, _ => 0.0 };
+                JogUnit = value switch { 1 => 0.01, 2 => 0.1, 3 => 1.0, _ => 0.0 };
             }
         }
 
@@ -298,10 +298,30 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // 정렬(패턴 매칭)은 별도 VM 이 맡는다 — 카메라·조명·조그와 성격이 다르고,
             // 화면 없이 값만 검증할 수 있어야 한다.
             Align = new Vision.PatternAlignViewModel(() => CurrentFrame, _mainVM.AddLog);
+            BindMinScoreToRecipe();
         }
 
         /// <summary>글라스 정렬 — 패턴 등록·저장·찾기.</summary>
         public Vision.PatternAlignViewModel Align { get; }
+
+        /// <summary>
+        /// 합격 점수는 레시피가 주인이다 — 여기로 밀어 넣고, 레시피에서 바뀌면 따라간다.
+        ///
+        /// <para>글라스 화면에서 고칠 수 있게 두면 어느 기준으로 찾은 결과인지가 레시피에
+        /// 남지 않는다. 그래서 화면은 보여 주기만 하고, 값은 이 한 방향으로만 흐른다.</para>
+        /// </summary>
+        private void BindMinScoreToRecipe()
+        {
+            var recipe = _mainVM.RecipeVM;
+            if (recipe == null) return;   // 초기화 순서에 따라 아직 없을 수 있다
+
+            Align.MinScore = recipe.PatternMinScore;
+            recipe.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(RecipeViewModel.PatternMinScore))
+                    Align.MinScore = recipe.PatternMinScore;
+            };
+        }
 
         // ── 라이브 시작 / 정지 ────────────────────────────────────────────────
         private void StartLive()

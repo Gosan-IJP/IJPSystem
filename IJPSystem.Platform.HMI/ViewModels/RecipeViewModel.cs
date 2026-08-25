@@ -706,6 +706,100 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set { if (SetProperty(ref _glassOriginYMm, value) && !_isLoading) IsDirty = true; }
         }
 
+        private double _fiducialPitchXMm;
+        /// <summary>
+        /// 피듀셜 마크 간격 X[mm] — 두 정렬 마크의 X 방향 중심 거리.
+        ///
+        /// <para>정렬 각도는 두 마크의 픽셀 좌표만으로도 나오지만, 그 각도가
+        /// <b>실제 몇 µm 의 어긋남인지</b>는 마크 간격을 알아야 말할 수 있다.
+        /// X·Y 를 따로 두는 이유는 마크가 대각으로 놓이기 때문이다 — 한 값으로는
+        /// 어느 방향의 거리인지 알 수 없다.</para>
+        ///
+        /// <para>글라스 품종마다 다르므로 장비 설정이 아니라 레시피에 둔다. 0 = 미입력.</para>
+        /// </summary>
+        public double FiducialPitchXMm
+        {
+            get => _fiducialPitchXMm;
+            set { if (SetProperty(ref _fiducialPitchXMm, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
+        }
+
+        private double _fiducialPitchYMm;
+        /// <summary>피듀셜 마크 간격 Y[mm]. <see cref="FiducialPitchXMm"/> 참고. 0 = 미입력.</summary>
+        public double FiducialPitchYMm
+        {
+            get => _fiducialPitchYMm;
+            set { if (SetProperty(ref _fiducialPitchYMm, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
+        }
+
+        private double _patternMinScore = 0.70;
+        /// <summary>
+        /// 정렬 패턴 합격 점수(0.50~0.95). 이 아래면 못 찾은 것으로 본다.
+        ///
+        /// <para><b>레시피가 주인이다.</b> 글라스 품종·마크 인쇄 품질에 따라 달라지는 값이라
+        /// 장비 설정이 아니고, 패턴 파일에 두면 패턴을 바꿀 때마다 기준이 같이 바뀐다.
+        /// 글라스 화면은 이 값을 보여 주기만 한다.</para>
+        ///
+        /// <para>범위를 0.5 아래로 못 내리게 막은 이유: 낮추면 무엇이든 "찾았다"가 되고,
+        /// 그 좌표가 그대로 스테이지 이동량이 된다.</para>
+        /// </summary>
+        public double PatternMinScore
+        {
+            get => _patternMinScore;
+            set
+            {
+                if (SetProperty(ref _patternMinScore, Math.Clamp(value, 0.50, 0.95)) && !_isLoading)
+                    IsDirty = true;
+            }
+        }
+
+        private double _alignToleranceDeg = 0.010;
+        /// <summary>
+        /// 정렬 각도 허용 오차[°] (0.001~1.0). 이 안이면 T 를 돌리지 않는다.
+        ///
+        /// <para>측정 분해능이 바닥이다 — 1.125µm/px 카메라에 기선 160mm 면 0.0004° 다.
+        /// 그보다 작게 잡으면 잡음을 쫓느라 보정이 끝나지 않는다.</para>
+        /// </summary>
+        public double AlignToleranceDeg
+        {
+            get => _alignToleranceDeg;
+            set
+            {
+                if (SetProperty(ref _alignToleranceDeg, Math.Clamp(value, 0.001, 1.0)) && !_isLoading)
+                    IsDirty = true;
+            }
+        }
+
+        private double _alignToleranceXUm = 20.0;
+        /// <summary>
+        /// 정렬 X 허용 오차[µm] (1~1000). 이 안이면 X 를 움직이지 않는다.
+        ///
+        /// <para>X·Y 를 따로 두는 이유: 축마다 진직도와 분해능이 다르다. 한 값으로 묶으면
+        /// 좋은 축이 나쁜 축에 끌려가거나 그 반대가 된다.</para>
+        ///
+        /// <para>스테이지가 못 내는 이동을 명령하지 않게 막는 값이기도 하다.</para>
+        /// </summary>
+        public double AlignToleranceXUm
+        {
+            get => _alignToleranceXUm;
+            set
+            {
+                if (SetProperty(ref _alignToleranceXUm, Math.Clamp(value, 1.0, 1000.0)) && !_isLoading)
+                    IsDirty = true;
+            }
+        }
+
+        private double _alignToleranceYUm = 20.0;
+        /// <summary>정렬 Y 허용 오차[µm] (1~1000). <see cref="AlignToleranceXUm"/> 참고.</summary>
+        public double AlignToleranceYUm
+        {
+            get => _alignToleranceYUm;
+            set
+            {
+                if (SetProperty(ref _alignToleranceYUm, Math.Clamp(value, 1.0, 1000.0)) && !_isLoading)
+                    IsDirty = true;
+            }
+        }
+
         // 도어 사용 유무 — 기타정보 화면 콤보박스에 바인딩
         // Why: 현장 설치 환경에 따라 안전키 미연결 시 운전 시작 차단을 해제할 수 있어야 함
         public bool IsDoorCheckEnabled
@@ -892,6 +986,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     "GlassThicknessMm REAL DEFAULT 0",
                     "GlassOriginXMm REAL DEFAULT 0",     // 글라스 기준점 오프셋
                     "GlassOriginYMm REAL DEFAULT 0",
+                    "FiducialPitchXMm REAL DEFAULT 0",  // 피듀셜 마크 간격 — 정렬 각도·거리 계산용
+                    "FiducialPitchYMm REAL DEFAULT 0",
+                    "PatternMinScore REAL DEFAULT 0.7",    // 정렬 패턴 합격 점수
+                    "AlignToleranceDeg REAL DEFAULT 0.01", // 정렬 허용 오차 — 이 안이면 보정하지 않는다
+                    "AlignToleranceXUm REAL DEFAULT 20",
+                    "AlignToleranceYUm REAL DEFAULT 20",
 
                     "HeadName TEXT",                     // 헤드 이름 — 어느 헤드로 찍은 레시피인지
                     "HeadWidthMm REAL DEFAULT 0",        // 헤드 폭(스캔 방향). 길이는 HeadLength
@@ -1011,7 +1111,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
                     // 글라스·노즐 정보 — 한 번의 조회로 가져온다(컬럼마다 왕복하면 열 번이 된다).
                     var spec = db.QueryFirstOrDefault(
-                        @"SELECT GlassWidthMm, GlassHeightMm, GlassThicknessMm, GlassOriginXMm, GlassOriginYMm,
+                        @"SELECT GlassWidthMm, GlassHeightMm, GlassThicknessMm, GlassOriginXMm, GlassOriginYMm, FiducialPitchXMm, FiducialPitchYMm, PatternMinScore, AlignToleranceDeg, AlignToleranceXUm, AlignToleranceYUm,
                                  HeadName, HeadWidthMm, NozzlePitchUm, NozzleRows, NozzleRowPitchUm,
                                  HeadChipCount, HeadNozzlesPerRow, HeadWaveform, NozzleCount
                           FROM Recipes WHERE Name=@recipeName", new { recipeName });
@@ -1022,6 +1122,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         GlassThicknessMm  = Convert.ToDouble(spec.GlassThicknessMm ?? 0d);
                         GlassOriginXMm    = Convert.ToDouble(spec.GlassOriginXMm   ?? 0d);
                         GlassOriginYMm    = Convert.ToDouble(spec.GlassOriginYMm   ?? 0d);
+                        FiducialPitchXMm  = Convert.ToDouble(spec.FiducialPitchXMm ?? 0d);
+                        FiducialPitchYMm  = Convert.ToDouble(spec.FiducialPitchYMm ?? 0d);
+                        PatternMinScore   = Convert.ToDouble(spec.PatternMinScore   ?? 0.7d);
+                        AlignToleranceDeg = Convert.ToDouble(spec.AlignToleranceDeg ?? 0.01d);
+                        AlignToleranceXUm = Convert.ToDouble(spec.AlignToleranceXUm ?? 20d);
+                        AlignToleranceYUm = Convert.ToDouble(spec.AlignToleranceYUm ?? 20d);
                     }
 
                     // 헤드 사양도 레시피에 딸린다 — 이 레시피가 어떤 헤드로 찍는지.
@@ -1353,7 +1459,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         db.Execute(@"UPDATE Recipes SET
                                          PurgeTime=@purgeTime, Swath=@swath, HeadLength=@headLength, PrintDirection=@printDir,
                                          GlassWidthMm=@gW, GlassHeightMm=@gH, GlassThicknessMm=@gT,
-                                         GlassOriginXMm=@gX, GlassOriginYMm=@gY,
+                                         GlassOriginXMm=@gX, GlassOriginYMm=@gY, FiducialPitchXMm=@fidX, FiducialPitchYMm=@fidY, PatternMinScore=@minScore, AlignToleranceDeg=@tolDeg, AlignToleranceXUm=@tolX, AlignToleranceYUm=@tolY,
                                          HeadName=@headName, HeadWidthMm=@headWidth, NozzlePitchUm=@nPitch, NozzleRows=@nRows,
                                          NozzleRowPitchUm=@nRowPitch, HeadChipCount=@chips,
                                          HeadNozzlesPerRow=@perRow, HeadWaveform=@wave, NozzleCount=@nCount
@@ -1363,7 +1469,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                 purgeTime = PurgeTime, swath = SwathCount, headLength = HeadLength,
                                 printDir = PrintDirectionIndex,
                                 gW = GlassWidthMm, gH = GlassHeightMm, gT = GlassThicknessMm,
-                                gX = GlassOriginXMm, gY = GlassOriginYMm,
+                                gX = GlassOriginXMm, gY = GlassOriginYMm, fidX = FiducialPitchXMm, fidY = FiducialPitchYMm, minScore = PatternMinScore, tolDeg = AlignToleranceDeg, tolX = AlignToleranceXUm, tolY = AlignToleranceYUm,
                                 headName = HeadName, headWidth = HeadWidthMm, nPitch = NozzlePitchUm, nRows = NozzleRows,
                                 nRowPitch = NozzleRowPitchUm, chips = ChipCount,
                                 perRow = NozzlesPerRow, wave = Waveform, nCount = NozzleCount,

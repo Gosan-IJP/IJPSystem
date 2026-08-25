@@ -44,12 +44,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // ── 조그 스텝 모드 ───────────────────────────────────────────────────────
         // 예전에는 '선택 축(SelectedAxis)'이 이 상태를 들고, 조그할 때 대상 축으로 복사했다.
         // 화면에 안 보이는 축에 따라 같은 라디오의 의미가 달라지는 구조라 화면(=이 VM) 소유로 올린다.
-        // 규칙은 위치 티칭 화면과 공유한다 → Common/JogStep.cs (미세=10µm/0.1°, 거침=100µm/1°)
+        // 규칙은 위치 티칭 화면과 공유한다 → Common/JogStep.cs (10µm/0.01° · 100µm/0.1° · 1000µm/1°)
         private JogStepMode _jogStep = JogStepMode.Continuous;
 
         public bool IsJogContinuity { get => _jogStep == JogStepMode.Continuous; set { if (value) SetJogStep(JogStepMode.Continuous); } }
         public bool IsStepFine      { get => _jogStep == JogStepMode.Fine;       set { if (value) SetJogStep(JogStepMode.Fine); } }
         public bool IsStepCoarse    { get => _jogStep == JogStepMode.Coarse;     set { if (value) SetJogStep(JogStepMode.Coarse); } }
+        public bool IsStepExtra     { get => _jogStep == JogStepMode.Extra;     set { if (value) SetJogStep(JogStepMode.Extra); } }
 
         private void SetJogStep(JogStepMode mode)
         {
@@ -58,6 +59,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             OnPropertyChanged(nameof(IsJogContinuity));
             OnPropertyChanged(nameof(IsStepFine));
             OnPropertyChanged(nameof(IsStepCoarse));
+            OnPropertyChanged(nameof(IsStepExtra));
         }
 
         /// <summary>이 축에 적용할 조그 스텝(축의 논리단위). 0 = 연속(Cont.).</summary>

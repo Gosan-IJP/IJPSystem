@@ -61,12 +61,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 예전에는 SELECT AXIS 콤보의 '선택 축'이 이 상태를 들고 있었다. 화면에 보이지도 않는 축에 따라
         // 같은 라디오의 의미가 달라져서, 콤보를 없애면서 스텝 모드를 화면(=이 VM) 소유로 올렸다.
         //
-        // 스텝 규칙(미세=10µm/0.1°, 거침=100µm/1°)은 축 제어 화면과 공유한다 → Common/JogStep.cs
+        // 스텝 규칙(10µm/0.01° · 100µm/0.1° · 1000µm/1°)은 축 제어 화면과 공유한다 → Common/JogStep.cs
         private JogStepMode _jogStep = JogStepMode.Continuous;
 
         public bool IsJogContinuity { get => _jogStep == JogStepMode.Continuous; set { if (value) SetJogStep(JogStepMode.Continuous); } }
         public bool IsStepFine      { get => _jogStep == JogStepMode.Fine;       set { if (value) SetJogStep(JogStepMode.Fine); } }
         public bool IsStepCoarse    { get => _jogStep == JogStepMode.Coarse;     set { if (value) SetJogStep(JogStepMode.Coarse); } }
+        public bool IsStepExtra     { get => _jogStep == JogStepMode.Extra;     set { if (value) SetJogStep(JogStepMode.Extra); } }
 
         private void SetJogStep(JogStepMode mode)
         {
@@ -75,6 +76,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             OnPropertyChanged(nameof(IsJogContinuity));
             OnPropertyChanged(nameof(IsStepFine));
             OnPropertyChanged(nameof(IsStepCoarse));
+            OnPropertyChanged(nameof(IsStepExtra));
         }
 
         /// <summary>이 축에 적용할 조그 스텝(축의 논리단위). 0 = 연속(Conti).</summary>

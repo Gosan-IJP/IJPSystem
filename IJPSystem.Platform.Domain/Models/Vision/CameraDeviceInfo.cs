@@ -77,6 +77,15 @@ namespace IJPSystem.Platform.Domain.Models.Vision
         public string TriggerActivation { get; set; } = "RisingEdge";
         public int PixelWidth { get; set; } = 1920;
         public int PixelHeight { get; set; } = 1080;
+
+        /// <summary>
+        /// 광학계 사양상 1픽셀 크기[µm]. 0 = 미입력.
+        ///
+        /// <para>정렬 교정(µm/px)이 이 값에서 크게 벗어나면 교정을 거부한다 — 축이 실제로
+        /// 안 움직였거나 마크를 엉뚱하게 잡아도 그럴듯한 배율이 나오고, 그 배율로 만든
+        /// 이동량이 그대로 모터로 가기 때문이다. 10호기 글라스 카메라 = 1.125µm/px.</para>
+        /// </summary>
+        public double NominalMicronPerPx { get; set; }
         public double DefaultExposureMs { get; set; } = 10.0;
         public double DefaultGain { get; set; } = 1.0;
         public int LightChannel { get; set; } = 0;

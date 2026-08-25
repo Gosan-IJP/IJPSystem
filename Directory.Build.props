@@ -10,9 +10,16 @@
 
     ※ 프로젝트마다 값이 따로 박히므로, HMI 와 Infrastructure 의 표시가 다르면 <b>짝이 안 맞는
       DLL 조합</b>이라는 뜻이다 — 그 조합은 MethodNotFound 로 앱이 죽는다. 부팅 로그에서 바로 보인다.
+
+    ※ IJP_BUILD_STAMP 환경변수가 있으면 그 값을 쓴다(2026-08-25).
+      DateTime.Now 는 프로젝트마다 따로 계산되므로, 빌드가 분 경계를 넘으면 한 번의 빌드인데도
+      16:52 와 16:53 이 섞여 "빌드 불일치"로 잘못 뜬다. 배포 스크립트는 이 변수를 미리 잡아
+      한 세트임을 확실히 한다. 그냥 dotnet build 로도 흔치 않게 걸리므로 앱 쪽에도 여유를 두었다
+      (BuildInfo.MismatchSummary 의 SameBuildWindowMinutes).
   -->
   <PropertyGroup>
-    <SourceRevisionId>$([System.DateTime]::Now.ToString(yyyyMMdd-HHmm))</SourceRevisionId>
+    <SourceRevisionId Condition="'$(IJP_BUILD_STAMP)' != ''">$(IJP_BUILD_STAMP)</SourceRevisionId>
+    <SourceRevisionId Condition="'$(IJP_BUILD_STAMP)' == ''">$([System.DateTime]::Now.ToString(yyyyMMdd-HHmm))</SourceRevisionId>
   </PropertyGroup>
 
 </Project>

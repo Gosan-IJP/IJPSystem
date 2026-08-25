@@ -17,7 +17,7 @@
     <system:String x:Key="SubMenu_Sequence">シーケンス</system:String>
     <system:String x:Key="SubMenu_MotorInfo">モーター情報</system:String>
     <system:String x:Key="SubMenu_TeachingPoint">ティーチング情報</system:String>
-    <system:String x:Key="SubMenu_OtherPoint">その他情報</system:String>
+    <system:String x:Key="SubMenu_OtherPoint">主要情報</system:String>
     <system:String x:Key="SubMenu_AutoPrint">自動印刷</system:String>
     <system:String x:Key="SubMenu_Initialize">初期化</system:String>
     <system:String x:Key="SubMenu_SystemExit">システム終了</system:String>
@@ -297,6 +297,19 @@
     <system:String x:Key="Step_NJI_LightOff">照明 OFF</system:String>
     <system:String x:Key="Step_NJI_MoveReady">待機位置(READY)へ移動</system:String>
     <system:String x:Key="Step_NJI_MoveReadyDone">READY 位置 InPosition 確認</system:String>
+    <system:String x:Key="Step_GlassAlign_Ready">整列準備確認（校正・マーク間隔・パターン）</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark1Move">マーク1位置（GLASS ALIGN）へ移動</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark1MoveDone">マーク1位置 InPosition 確認</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark1Find">マーク1を探す</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark2Move">マーク2位置へ移動（フィデューシャル間隔ぶん +Y）</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark2MoveDone">マーク2位置 InPosition 確認</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark2Find">マーク2を探す</system:String>
+    <system:String x:Key="Step_GlassAlign_Rotate">回転角の算出・T補正</system:String>
+    <system:String x:Key="Step_GlassAlign_RotateDone">T補正 InPosition 確認</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark1Return">マーク1位置へ復帰</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark1ReturnDone">復帰 InPosition 確認</system:String>
+    <system:String x:Key="Step_GlassAlign_Shift">マーク1再測定・X/Y補正（許容差まで反復）</system:String>
+    <system:String x:Key="Step_GlassAlign_Verify">整列検証（許容差判定）</system:String>
     <system:String x:Key="Step_DropWatcher_Move">ドロップウォッチャー位置(DROP WATCHER)へ移動</system:String>
     <system:String x:Key="Step_DropWatcher_MoveDone">ドロップウォッチャー位置 InPosition 確認</system:String>
 
@@ -330,6 +343,8 @@
     <system:String x:Key="Seq_Maintenance_Desc">メンテナンス位置へ移動 → ドア閉待ち → 復帰</system:String>
     <system:String x:Key="Seq_NJI_Name">NJI</system:String>
     <system:String x:Key="Seq_NJI_Desc">NJI 位置へ移動 → ビジョン検査 → NG時アラーム → 復帰</system:String>
+    <system:String x:Key="Seq_GlassAlign_Name">GLASS ALIGN</system:String>
+    <system:String x:Key="Seq_GlassAlign_Desc">2つのフィデューシャルマークで回転・位置を自動補正</system:String>
     <system:String x:Key="Seq_DropWatcher_Name">DROP WATCHER</system:String>
     <system:String x:Key="Seq_DropWatcher_Desc">ドロップウォッチャー位置へ移動</system:String>
     <system:String x:Key="Seq_AutoPrint_Name">AUTO PRINT</system:String>

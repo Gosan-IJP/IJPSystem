@@ -170,7 +170,7 @@
                         </StackPanel>
                         <!-- 스텝 모드는 축이 아니라 이 화면이 들고 있다(MotorTeachingViewModel.JogStepFor).
                              한 버튼이 직선축·회전축 값을 함께 뜻한다 — 누른 축의 단위에 맞는 쪽이 적용된다. -->
-                        <!-- 공용 ModernModeButtonStyle 은 Width=65 고정이라 '10µm / 0.1°' 가 잘린다.
+                        <!-- 공용 ModernModeButtonStyle 은 Width=65 고정이라 '1000µm / 1°' 가 잘린다.
                              다른 화면도 쓰는 스타일이라 건드리지 않고, 여기서만 Auto 폭 + 여백으로 푼다. -->
                         <!-- ※ 템플릿 Border 가 Padding 을 쓰지 않으므로 Content 를 TextBlock 으로 주고
                              거기에 여백을 준다(Padding 설정만으로는 글자가 테두리에 붙는다). -->
@@ -180,12 +180,16 @@
                                 <TextBlock Text="Conti." Margin="18,0"/>
                             </RadioButton>
                             <RadioButton IsChecked="{Binding IsStepFine}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}" Margin="6,0,0,0"
-                                         Width="Auto" Height="30" ToolTip="직선축 0.01mm · 회전축(T) 0.1도씩 이동">
-                                <TextBlock Text="10µm / 0.1°" Margin="18,0"/>
+                                         Width="Auto" Height="30" ToolTip="직선축 0.01mm · 회전축(T) 0.01도씩 이동">
+                                <TextBlock Text="10µm / 0.01°" Margin="18,0"/>
                             </RadioButton>
                             <RadioButton IsChecked="{Binding IsStepCoarse}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}" Margin="6,0,0,0"
-                                         Width="Auto" Height="30" ToolTip="직선축 0.1mm · 회전축(T) 1도씩 이동">
-                                <TextBlock Text="100µm / 1°" Margin="18,0"/>
+                                         Width="Auto" Height="30" ToolTip="직선축 0.1mm · 회전축(T) 0.1도씩 이동">
+                                <TextBlock Text="100µm / 0.1°" Margin="18,0"/>
+                            </RadioButton>
+                            <RadioButton IsChecked="{Binding IsStepExtra}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}" Margin="6,0,0,0"
+                                         Width="Auto" Height="30" ToolTip="직선축 1mm · 회전축(T) 1도씩 이동">
+                                <TextBlock Text="1000µm / 1°" Margin="18,0"/>
                             </RadioButton>
                         </StackPanel>
                     </Grid>

@@ -6,8 +6,11 @@ using Xunit;
 namespace IJPSystem.Tests
 {
     /// <summary>
-    /// 티칭 저장 범위 판정. T축을 0~30° 로 묶는 근거가 이 판정이라, 경계 부호가 뒤집히면
+    /// 티칭 저장 범위 판정. T축을 좁은 범위로 묶는 근거가 이 판정이라, 경계 부호가 뒤집히면
     /// 범위 밖 좌표가 그대로 레시피에 굳는다.
+    ///
+    /// <para>아래 검사들이 쓰는 0~30 은 <b>판정 로직을 보려고 만든 값</b>이다.
+    /// 실제 설정값은 맨 아래 MotorConfig 검사 하나가 지킨다.</para>
     /// </summary>
     public class TeachLimitTests
     {
@@ -129,9 +132,14 @@ namespace IJPSystem.Tests
             Assert.DoesNotContain("P9", msg);
         }
 
-        /// <summary>실제 MotorConfig.json 이 T축에 0~30 을 들고 있는지 — 설정이 빠지면 제한이 사라진다.</summary>
+        /// <summary>
+        /// 실제 MotorConfig.json 이 T축에 ±10 을 들고 있는지 — 설정이 빠지면 제한이 사라진다.
+        ///
+        /// <para>정렬 보정은 양쪽으로 간다 — 한쪽만 허용하면 티칭 값을 0 에 둔 순간
+        /// 음의 보정을 저장할 수 없게 된다(2026-08-25).</para>
+        /// </summary>
         [Fact]
-        public void MotorConfig_의_T축은_0에서_30도()
+        public void MotorConfig_의_T축은_양쪽_10도()
         {
             // bin 깊이를 세어 ".." 를 쌓으면 폴더 구조가 바뀔 때 조용히 건너뛰는 테스트가 된다.
             // 위로 훑어 찾고, 못 찾으면 실패시킨다.
@@ -149,8 +157,8 @@ namespace IJPSystem.Tests
                 new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             var t = System.Linq.Enumerable.Single(root!.MotionAxisList, a => a.AxisNo == "T");
-            Assert.Equal(0, t.TeachLimit!.Min);
-            Assert.Equal(30, t.TeachLimit!.Max);
+            Assert.Equal(-10, t.TeachLimit!.Min);
+            Assert.Equal(10, t.TeachLimit!.Max);
         }
     }
 }

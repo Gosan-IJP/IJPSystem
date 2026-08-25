@@ -17,7 +17,7 @@
     <system:String x:Key="SubMenu_Sequence">SEQUENCE</system:String>
     <system:String x:Key="SubMenu_MotorInfo">MOTOR INFO</system:String>
     <system:String x:Key="SubMenu_TeachingPoint">TEACH INFO</system:String>
-    <system:String x:Key="SubMenu_OtherPoint">OTHER INFO</system:String>
+    <system:String x:Key="SubMenu_OtherPoint">MAIN INFO</system:String>
     <system:String x:Key="SubMenu_AutoPrint">AUTO PRINT</system:String>
     <system:String x:Key="SubMenu_Initialize">INITIALIZE</system:String>
     <system:String x:Key="SubMenu_SystemExit">SYSTEM EXIT</system:String>
@@ -297,6 +297,19 @@
     <system:String x:Key="Step_NJI_LightOff">Light OFF</system:String>
     <system:String x:Key="Step_NJI_MoveReady">Move to READY position</system:String>
     <system:String x:Key="Step_NJI_MoveReadyDone">Confirm InPosition at READY</system:String>
+    <system:String x:Key="Step_GlassAlign_Ready">Check readiness (calibration, pitch, pattern)</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark1Move">Move to mark 1 (GLASS ALIGN)</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark1MoveDone">Mark 1 in-position</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark1Find">Find mark 1</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark2Move">Move to mark 2 (+Y by fiducial pitch)</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark2MoveDone">Mark 2 in-position</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark2Find">Find mark 2</system:String>
+    <system:String x:Key="Step_GlassAlign_Rotate">Solve angle and correct T</system:String>
+    <system:String x:Key="Step_GlassAlign_RotateDone">T correction in-position</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark1Return">Return to mark 1</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark1ReturnDone">Return in-position</system:String>
+    <system:String x:Key="Step_GlassAlign_Shift">Re-measure and correct X/Y (repeat to tolerance)</system:String>
+    <system:String x:Key="Step_GlassAlign_Verify">Verify alignment (tolerance check)</system:String>
     <system:String x:Key="Step_DropWatcher_Move">Move to DROP WATCHER position</system:String>
     <system:String x:Key="Step_DropWatcher_MoveDone">Confirm InPosition at DROP WATCHER</system:String>
 
@@ -330,6 +343,8 @@
     <system:String x:Key="Seq_Maintenance_Desc">Move to maintenance → wait for door close → return</system:String>
     <system:String x:Key="Seq_NJI_Name">NJI</system:String>
     <system:String x:Key="Seq_NJI_Desc">Move to NJI → vision inspection → alarm on NG → return</system:String>
+    <system:String x:Key="Seq_GlassAlign_Name">GLASS ALIGN</system:String>
+    <system:String x:Key="Seq_GlassAlign_Desc">Auto-correct rotation and position from two fiducial marks</system:String>
     <system:String x:Key="Seq_DropWatcher_Name">DROP WATCHER</system:String>
     <system:String x:Key="Seq_DropWatcher_Desc">Move to drop watcher position</system:String>
     <system:String x:Key="Seq_AutoPrint_Name">AUTO PRINT</system:String>

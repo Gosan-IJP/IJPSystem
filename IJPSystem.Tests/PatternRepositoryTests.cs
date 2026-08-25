@@ -166,6 +166,73 @@ namespace IJPSystem.Tests
             Assert.False(d.MatchesScene(640, 512));
         }
 
+        // ── 해상도 차이 판정 ──────────────────────────────────────────────
+        //
+        // 매칭 자체는 해상도와 무관하다 — 템플릿을 장면 위로 훑을 뿐이다.
+        // 흔들리는 것은 기준 좌표뿐이라, 조금 다르다고 막을 이유가 없다(2026-08-25).
+
+        [Fact]
+        public void 같은_해상도면_아무_말도_하지_않는다()
+        {
+            var c = Def().CheckScene(1280, 1024);
+
+            Assert.Equal(SceneFit.Same, c.Fit);
+            Assert.True(c.CanFind);
+            Assert.Equal("", c.Message);
+        }
+
+        [Fact]
+        public void 조금_다르면_막지_않고_오차를_알린다()
+        {
+            // 1280×1024 → 1282×1028 (0.16% / 0.39%)
+            var c = Def().CheckScene(1282, 1028);
+
+            Assert.Equal(SceneFit.Close, c.Fit);
+            Assert.True(c.CanFind);                    // 찾기는 진행한다
+            Assert.True(c.MaxRefErrorPx > 0);
+            Assert.Contains("오차", c.Message);
+        }
+
+        [Fact]
+        public void 크게_다르면_막는다()
+        {
+            var c = Def().CheckScene(640, 512);
+
+            Assert.Equal(SceneFit.Different, c.Fit);
+            Assert.False(c.CanFind);
+            Assert.Contains("다시 등록", c.Message);
+        }
+
+        [Theory]
+        [InlineData(1280, 1024, SceneFit.Same)]
+        [InlineData(1305, 1024, SceneFit.Close)]        // 1.95% — 경계 안
+        [InlineData(1306, 1024, SceneFit.Different)]    // 2.03% — 경계 밖
+        [InlineData(1280, 1045, SceneFit.Different)]    // 세로만 2.05%
+        public void 허용_폭은_2퍼센트다(int w, int h, SceneFit expect)
+            => Assert.Equal(expect, Def().CheckScene(w, h).Fit);
+
+        [Fact]
+        public void 오차는_나쁜_쪽_해석으로_잡는다()
+        {
+            // 배율이 달라진 것인지 가장자리를 더 잘라낸 것인지 알 수 없다.
+            // 어느 쪽인지 모르니 큰 쪽을 말해야 한다.
+            //   ① 배율: 640.5 × (1282/1280 - 1) = 1.0px
+            //   ② 자름: |1282 - 1280|            = 2px
+            var c = Def().CheckScene(1282, 1024);
+
+            Assert.Equal(2.0, c.MaxRefErrorPx, 6);
+        }
+
+        [Fact]
+        public void 등록_해상도가_없으면_따지지_않는다()
+        {
+            // 옛 패턴 파일에는 해상도가 없다 — 그것 때문에 못 쓰게 되면 안 된다.
+            var d = Def();
+            d.SceneWidth = d.SceneHeight = 0;
+
+            Assert.Equal(SceneFit.Same, d.CheckScene(999, 111).Fit);
+        }
+
         [Fact]
         public void 저장한_패턴을_실제로_찾을_수_있다()
         {

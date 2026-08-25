@@ -58,10 +58,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public IEnumerable<AxisViewModel> Axes =>
             Used.Select(FindAxis).Where(a => a != null).Select(a => a!);
 
-        // 조그 단위 — 0=연속(누르는 동안 이동), 0.01=10µm, 0.1=100µm (AxisViewModel.JogUnit 규약).
+        // 조그 단위 — 0=연속(누르는 동안 이동), 0.01=10µm, 0.1=100µm, 1=1000µm (AxisViewModel.JogUnit 규약).
         private int _jogUnitIndex;
 
-        /// <summary>0=Continuous, 1=10µm, 2=100µm.</summary>
+        /// <summary>0=Continuous, 1=10µm, 2=100µm, 3=1000µm. 회전축은 같은 수치가 deg 단위다.</summary>
         public int JogUnitIndex
         {
             get => _jogUnitIndex;
@@ -71,7 +71,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
                 // 이 창이 쓰는 축만 맞춘다. 축마다 단위가 다르면 어느 버튼이 얼마나
                 // 움직이는지 알 수 없고, 안 쓰는 축까지 건드릴 이유는 없다.
-                double unit = value switch { 1 => 0.01, 2 => 0.1, _ => 0.0 };
+                double unit = value switch { 1 => 0.01, 2 => 0.1, 3 => 1.0, _ => 0.0 };
                 foreach (var ax in Axes) ax.JogUnit = unit;
             }
         }

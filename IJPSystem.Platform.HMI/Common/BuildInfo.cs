@@ -81,10 +81,41 @@ namespace IJPSystem.Platform.HMI.Common
             var revs = found.Values.Distinct().ToList();
             if (found.Count == 0 || revs.Count <= 1) return null;
 
+            // 한 번의 빌드가 분 경계를 넘으면 16:52 와 16:53 이 섞인다 — 스탬프를 프로젝트마다
+            // 따로 계산하기 때문이다(Directory.Build.props). 그건 짝이 안 맞는 조합이 아니다.
+            // 정작 잡아야 할 것은 손으로 복사하다 일부만 바꾼 경우이고, 그건 항상 시간·날짜 단위로
+            // 벌어진다. 그래서 좁은 창 안에 다 들어오면 한 세트로 본다.
+            if (WithinSameBuildWindow(revs)) return null;
+
             var worst = found.GroupBy(kv => kv.Value).OrderBy(g => g.Count()).First();
             return $"어셈블리 빌드가 섞여 있습니다 ({revs.Count}종) — " +
                    $"{string.Join(", ", worst.Select(kv => $"{kv.Key}={kv.Value}"))} 만 다릅니다. " +
                    "DLL 을 한 세트로 다시 복사하세요(Apply-Hotfix.ps1 권장).";
+        }
+
+        /// <summary>한 번의 빌드로 볼 시간 폭(분).</summary>
+        private const int SameBuildWindowMinutes = 2;
+
+        /// <summary>
+        /// 스탬프들이 모두 <see cref="SameBuildWindowMinutes"/> 분 안에 들어오는지.
+        ///
+        /// <para>하나라도 형식을 못 읽으면 false — 모르는 값을 같은 빌드로 넘겨주면
+        /// 이 검사가 있으나 마나가 된다.</para>
+        /// </summary>
+        public static bool WithinSameBuildWindow(IReadOnlyCollection<string> stamps)
+        {
+            var times = new List<DateTime>();
+            foreach (string s in stamps)
+            {
+                if (!DateTime.TryParseExact(s, "yyyyMMdd-HHmm",
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None, out var t))
+                    return false;
+                times.Add(t);
+            }
+            if (times.Count == 0) return false;
+
+            return (times.Max() - times.Min()).TotalMinutes <= SameBuildWindowMinutes;
         }
 
         /// <summary>파일에서 읽은 빌드 시각. 없으면 "?".</summary>

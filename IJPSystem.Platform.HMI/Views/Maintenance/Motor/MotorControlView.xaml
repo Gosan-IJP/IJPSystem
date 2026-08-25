@@ -358,7 +358,7 @@
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                                 <TextBlock Text="{Binding SelectedAxis.DistanceToGo, StringFormat={}{0:+0.000;-0.000;0.000}}"
                                                            Foreground="#FCD34D" FontFamily="Consolas" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
-                                                <TextBlock Text="mm" Foreground="#64748B" FontSize="10" Margin="3,0,0,0" VerticalAlignment="Bottom"/>
+                                                <TextBlock Text="{Binding SelectedAxis.PosUnit, FallbackValue=mm}" Foreground="#64748B" FontSize="10" Margin="3,0,0,0" VerticalAlignment="Bottom"/>
                                             </StackPanel>
                                         </Grid>
                                         <ProgressBar Grid.Row="1" Height="8" Minimum="0" Maximum="100"
@@ -386,13 +386,17 @@
                                              Width="Auto" Height="30" ToolTip="누르고 있는 동안 연속 이동">
                                     <TextBlock Text="Cont." Margin="14,0"/>
                                 </RadioButton>
-                                <RadioButton IsChecked="{Binding IsStepFine, Mode=TwoWay}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}" Margin="4,0"
-                                             Width="Auto" Height="30" ToolTip="직선축 0.01mm · 회전축(T) 0.1도씩 이동">
-                                    <TextBlock Text="10µm / 0.1°" Margin="14,0"/>
+                                <RadioButton IsChecked="{Binding IsStepFine, Mode=TwoWay}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}" Margin="4,0,0,0"
+                                             Width="Auto" Height="30" ToolTip="직선축 0.01mm · 회전축(T) 0.01도씩 이동">
+                                    <TextBlock Text="10µm / 0.01°" Margin="14,0"/>
                                 </RadioButton>
-                                <RadioButton IsChecked="{Binding IsStepCoarse, Mode=TwoWay}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}"
-                                             Width="Auto" Height="30" ToolTip="직선축 0.1mm · 회전축(T) 1도씩 이동">
-                                    <TextBlock Text="100µm / 1°" Margin="14,0"/>
+                                <RadioButton IsChecked="{Binding IsStepCoarse, Mode=TwoWay}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}" Margin="4,0,0,0"
+                                             Width="Auto" Height="30" ToolTip="직선축 0.1mm · 회전축(T) 0.1도씩 이동">
+                                    <TextBlock Text="100µm / 0.1°" Margin="14,0"/>
+                                </RadioButton>
+                                <RadioButton IsChecked="{Binding IsStepExtra, Mode=TwoWay}" GroupName="JogMode" Style="{StaticResource ModernModeButtonStyle}" Margin="4,0,0,0"
+                                             Width="Auto" Height="30" ToolTip="직선축 1mm · 회전축(T) 1도씩 이동">
+                                    <TextBlock Text="1000µm / 1°" Margin="14,0"/>
                                 </RadioButton>
                             </StackPanel>
                             <!-- 속도 배율 -->

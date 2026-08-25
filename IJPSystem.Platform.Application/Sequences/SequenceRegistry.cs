@@ -47,6 +47,15 @@ namespace IJPSystem.Platform.Application.Sequences
             },
             new SequenceDefinition
             {
+                Id             = "GLASS_ALIGN",
+                Icon           = "✛",
+                NameKey        = "Seq_GlassAlign_Name",
+                DescriptionKey = "Seq_GlassAlign_Desc",
+                // 정렬 서비스는 HMI 가 꽂는다(GlassAlignServices) — 안 꽂혔으면 첫 단계가 그 사실을 말한다.
+                BuildSteps     = GlassAlignSequence.Build,
+            },
+            new SequenceDefinition
+            {
                 Id             = "DROP_WATCHER",
                 Icon           = "🔬",
                 NameKey        = "Seq_DropWatcher_Name",

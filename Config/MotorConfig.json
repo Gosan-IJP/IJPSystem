@@ -54,7 +54,7 @@
       "EncoderPulsePerUnit": 10370,
       "InvertDirection": true,
       "_comment_T": "SwapLimitSensors 는 넣지 않는다 — 배선은 정상이고, 방향 반전에 따른 상/하한 표시 교체는 자동이다(넣으면 상쇄되어 다시 반대가 된다).",
-      "TeachLimit": { "Min": 0, "Max": 30 },
+      "TeachLimit": { "Min": -10, "Max": 10 },
       "Home": {
         "Absolute": true,
         "Velocity": 10,

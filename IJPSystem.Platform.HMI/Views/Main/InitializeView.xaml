@@ -240,11 +240,17 @@
                                             <TextBlock Text="ALM" Foreground="#94A3B8" FontSize="9"
                                                        FontFamily="Consolas" VerticalAlignment="Center"/>
                                         </StackPanel>
-                                        <!-- 현재 위치 -->
-                                        <TextBlock Text="{Binding CurrentPos, StringFormat='{}{0:F4} mm'}"
-                                                   Foreground="#3B82F6" FontFamily="Consolas"
+                                        <!-- 현재 위치 — 단위는 축이 들고 있는 값(회전축 T 는 deg) -->
+                                        <TextBlock Foreground="#3B82F6" FontFamily="Consolas"
                                                    FontSize="13" FontWeight="Bold"
-                                                   HorizontalAlignment="Right" Margin="0,4,0,0"/>
+                                                   HorizontalAlignment="Right" Margin="0,4,0,0">
+                                            <TextBlock.Text>
+                                                <MultiBinding StringFormat="{}{0:F4} {1}">
+                                                    <Binding Path="CurrentPos"/>
+                                                    <Binding Path="PosUnit"/>
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>

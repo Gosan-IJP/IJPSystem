@@ -5,19 +5,20 @@
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="#0B0F1A" Foreground="#E2E8F0">
     <Window.Resources>
-        <!-- 글라스뷰 조그 패드와 같은 룩 — 같은 축을 같은 규칙으로 움직이므로 생김새도 같아야 한다. -->
+        <!-- 글라스뷰 조그 패드와 같은 룩 — 같은 축을 같은 규칙으로 움직이므로 생김새도 같아야 한다.
+             다만 축이 넷이라 버튼은 한 치수 작게 잡는다(40×34). -->
         <Style x:Key="JogBtn" TargetType="Button">
-            <Setter Property="Width" Value="50"/>
-            <Setter Property="Height" Value="42"/>
-            <Setter Property="Margin" Value="3"/>
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Margin" Value="2"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontSize" Value="14"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bd" Background="#1D4ED8" BorderBrush="#3B82F6"
-                                BorderThickness="1" CornerRadius="6">
+                                BorderThickness="1" CornerRadius="5">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -38,18 +39,36 @@
             </Setter>
         </Style>
 
-        <Style x:Key="PosBox" TargetType="Border">
+        <!-- 묶음 테두리 — 조그판과 위치 표시가 다른 일이라는 것이 한눈에 보여야 한다. -->
+        <Style x:Key="GroupBox" TargetType="Border">
             <Setter Property="Background" Value="#0D1520"/>
+            <Setter Property="BorderBrush" Value="#334155"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="14,12"/>
+        </Style>
+
+        <Style x:Key="PosBox" TargetType="Border">
+            <Setter Property="Background" Value="#111827"/>
             <Setter Property="BorderBrush" Value="#1E293B"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="4"/>
-            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Padding" Value="8,4"/>
         </Style>
 
         <Style x:Key="AxisLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,0,3"/>
+        </Style>
+
+        <Style x:Key="PosValue" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#E2E8F0"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="TextAlignment" Value="Right"/>
         </Style>
     </Window.Resources>
 
@@ -57,60 +76,54 @@
             BorderBrush="#334155" BorderThickness="1">
         <StackPanel>
             <TextBlock Text="Jog Control" Foreground="#3B82F6"
-                       FontSize="13" FontWeight="Bold" Margin="0,0,0,12"/>
+                       FontSize="13" FontWeight="Bold" Margin="0,0,0,10"/>
 
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>   <!-- DW 패드 -->
-                    <ColumnDefinition Width="14"/>
-                    <ColumnDefinition Width="Auto"/>   <!-- X · Z -->
-                    <ColumnDefinition Width="18"/>
-                    <ColumnDefinition Width="Auto"/>   <!-- Motion State -->
+                    <ColumnDefinition Width="Auto"/>   <!-- 조그판 -->
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="Auto"/>   <!-- 위치 · 이동 -->
                 </Grid.ColumnDefinitions>
 
-                <!-- 드랍와처 카메라 스테이지 — 평면이라 D-패드가 맞다. -->
-                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="DW 카메라" Foreground="#38BDF8" Style="{StaticResource AxisLabel}"
-                               Margin="0,0,0,6"/>
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Button Grid.Row="0" Grid.Column="1" Style="{StaticResource JogBtn}" Content="↑" Tag="DW-Y"
-                                PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
-                                IsEnabled="{Binding AxisDwY.CanJog, FallbackValue=False}"/>
-                        <Button Grid.Row="1" Grid.Column="0" Style="{StaticResource JogBtn}" Content="←" Tag="DW-X"
-                                PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
-                                IsEnabled="{Binding AxisDwX.CanJog, FallbackValue=False}"/>
-                        <Border Grid.Row="1" Grid.Column="1" Width="50" Height="42" Margin="3"
-                                Background="#0D1520" BorderBrush="#334155" BorderThickness="1" CornerRadius="6">
-                            <TextBlock Text="DW" Foreground="#94A3B8" FontSize="12" FontWeight="Bold"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <Button Grid.Row="1" Grid.Column="2" Style="{StaticResource JogBtn}" Content="→" Tag="DW-X"
-                                PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
-                                IsEnabled="{Binding AxisDwX.CanJog, FallbackValue=False}"/>
-                        <Button Grid.Row="2" Grid.Column="1" Style="{StaticResource JogBtn}" Content="↓" Tag="DW-Y"
-                                PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
-                                IsEnabled="{Binding AxisDwY.CanJog, FallbackValue=False}"/>
-                    </Grid>
-                </StackPanel>
-
-                <!-- X 는 가로, Z 는 세로 — 화살표를 실제 움직이는 방향으로 둔다.
-                     Z 는 +방향이 아래쪽(헤드 하강)이라 아래 버튼이 JogForward 다. -->
-                <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                    <ComboBox Width="112" Height="26" Margin="3,0,0,10" HorizontalAlignment="Left"
-                              VerticalContentAlignment="Center" SelectedIndex="{Binding JogUnitIndex, Mode=TwoWay}">
-                        <ComboBoxItem Content="Continuous"/>
-                        <ComboBoxItem Content="10µm"/>
-                        <ComboBoxItem Content="100µm"/>
-                    </ComboBox>
-
+                <!-- ── 조그판 ────────────────────────────────────────── -->
+                <Border Grid.Column="0" Style="{StaticResource GroupBox}" VerticalAlignment="Top">
+                    <StackPanel>
                     <StackPanel Orientation="Horizontal">
+
+                        <!-- 드랍와처 카메라 — 평면으로 움직이니 십자 패드가 맞다. -->
                         <StackPanel>
+                            <TextBlock Text="DW 카메라" Foreground="#38BDF8"
+                                       Style="{StaticResource AxisLabel}"/>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Row="0" Grid.Column="1" Style="{StaticResource JogBtn}" Content="↑" Tag="DW-Y"
+                                        PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
+                                        IsEnabled="{Binding AxisDwY.CanJog, FallbackValue=False}"/>
+                                <Button Grid.Row="1" Grid.Column="0" Style="{StaticResource JogBtn}" Content="←" Tag="DW-X"
+                                        PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
+                                        IsEnabled="{Binding AxisDwX.CanJog, FallbackValue=False}"/>
+                                <Border Grid.Row="1" Grid.Column="1" Width="40" Height="34" Margin="2"
+                                        Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="5">
+                                    <TextBlock Text="DW" Foreground="#94A3B8" FontSize="11" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <Button Grid.Row="1" Grid.Column="2" Style="{StaticResource JogBtn}" Content="→" Tag="DW-X"
+                                        PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
+                                        IsEnabled="{Binding AxisDwX.CanJog, FallbackValue=False}"/>
+                                <Button Grid.Row="2" Grid.Column="1" Style="{StaticResource JogBtn}" Content="↓" Tag="DW-Y"
+                                        PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
+                                        IsEnabled="{Binding AxisDwY.CanJog, FallbackValue=False}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- X 는 가로, Z 는 세로 — 화살표를 실제 움직이는 방향으로 둔다.
+                             Z 는 +방향이 아래쪽(헤드 하강)이라 아래 버튼이 JogForward 다. -->
+                        <StackPanel Margin="18,0,0,0">
                             <TextBlock Text="X" Foreground="#34D399" Style="{StaticResource AxisLabel}"/>
                             <StackPanel Orientation="Horizontal">
                                 <Button Style="{StaticResource JogBtn}" Content="←" Tag="X"
@@ -122,102 +135,118 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <StackPanel Margin="14,0,0,0">
+                        <StackPanel Margin="18,0,0,0">
+                            <TextBlock Text="Z" Foreground="#F59E0B" Style="{StaticResource AxisLabel}"/>
                             <Button Style="{StaticResource JogBtn}" Content="↑" Tag="Z"
                                     PreviewMouseDown="JogBackward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
                                     IsEnabled="{Binding AxisZ.CanJog, FallbackValue=False}"/>
-                            <TextBlock Text="Z" Foreground="#F59E0B" Style="{StaticResource AxisLabel}"/>
                             <Button Style="{StaticResource JogBtn}" Content="↓" Tag="Z"
                                     PreviewMouseDown="JogForward_MouseDown" PreviewMouseUp="JogStop_MouseUp"
                                     IsEnabled="{Binding AxisZ.CanJog, FallbackValue=False}"/>
                         </StackPanel>
                     </StackPanel>
-                </StackPanel>
 
-                <StackPanel Grid.Column="4" VerticalAlignment="Center" MinWidth="185">
-                    <TextBlock Text="Motion State" Foreground="#3B82F6" FontSize="12"
-                               FontWeight="Bold" Margin="0,0,0,10"/>
+                    <!-- 조그 단위는 네 축에 함께 걸린다 — 어느 한 축 옆이 아니라 아래 한 줄에 둔다. -->
+                    <StackPanel Orientation="Horizontal" Margin="2,14,0,0">
+                        <TextBlock Text="단위" Foreground="#64748B" FontSize="11" FontWeight="Bold"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox Width="128" Height="24" VerticalContentAlignment="Center" FontSize="11"
+                                  SelectedIndex="{Binding JogUnitIndex, Mode=TwoWay}"
+                                  ToolTip="Continuous = 누르는 동안 이동. 네 축에 함께 적용됩니다.">
+                            <ComboBoxItem Content="Continuous"/>
+                            <ComboBoxItem Content="10µm / 0.01°"/>
+                            <ComboBoxItem Content="100µm / 0.1°"/>
+                            <ComboBoxItem Content="1000µm / 1°"/>
+                        </ComboBox>
+                    </StackPanel>
+                    </StackPanel>
+                </Border>
 
-                    <Grid Margin="0,0,0,6">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="X" Foreground="#CBD5E1" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <Border Grid.Column="1" Style="{StaticResource PosBox}">
-                            <TextBlock Text="{Binding AxisX.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"
-                                       Foreground="#E2E8F0" FontFamily="Consolas" FontSize="14"
-                                       FontWeight="Bold" TextAlignment="Right"/>
-                        </Border>
-                    </Grid>
-                    <Grid Margin="0,0,0,6">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="Z" Foreground="#CBD5E1" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <Border Grid.Column="1" Style="{StaticResource PosBox}">
-                            <TextBlock Text="{Binding AxisZ.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"
-                                       Foreground="#E2E8F0" FontFamily="Consolas" FontSize="14"
-                                       FontWeight="Bold" TextAlignment="Right"/>
-                        </Border>
-                    </Grid>
-                    <Grid Margin="0,0,0,6">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="DW-X" Foreground="#CBD5E1" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <Border Grid.Column="1" Style="{StaticResource PosBox}">
-                            <TextBlock Text="{Binding AxisDwX.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"
-                                       Foreground="#E2E8F0" FontFamily="Consolas" FontSize="14"
-                                       FontWeight="Bold" TextAlignment="Right"/>
-                        </Border>
-                    </Grid>
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="DW-Y" Foreground="#CBD5E1" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <Border Grid.Column="1" Style="{StaticResource PosBox}">
-                            <TextBlock Text="{Binding AxisDwY.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"
-                                       Foreground="#E2E8F0" FontFamily="Consolas" FontSize="14"
-                                       FontWeight="Bold" TextAlignment="Right"/>
-                        </Border>
-                    </Grid>
+                <!-- ── 위치 · 이동 ───────────────────────────────────── -->
+                <StackPanel Grid.Column="2">
+                    <Border Style="{StaticResource GroupBox}">
+                        <StackPanel MinWidth="180">
+                            <TextBlock Text="Motion State" Foreground="#3B82F6" FontSize="12"
+                                       FontWeight="Bold" Margin="0,0,0,8"/>
+
+                            <Grid Margin="0,0,0,5">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="X" Foreground="#CBD5E1" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <Border Grid.Column="1" Style="{StaticResource PosBox}">
+                                    <TextBlock Style="{StaticResource PosValue}"
+                                               Text="{Binding AxisX.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"/>
+                                </Border>
+                            </Grid>
+                            <Grid Margin="0,0,0,5">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Z" Foreground="#CBD5E1" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <Border Grid.Column="1" Style="{StaticResource PosBox}">
+                                    <TextBlock Style="{StaticResource PosValue}"
+                                               Text="{Binding AxisZ.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"/>
+                                </Border>
+                            </Grid>
+                            <Grid Margin="0,0,0,5">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="DW-X" Foreground="#CBD5E1" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <Border Grid.Column="1" Style="{StaticResource PosBox}">
+                                    <TextBlock Style="{StaticResource PosValue}"
+                                               Text="{Binding AxisDwX.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"/>
+                                </Border>
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="DW-Y" Foreground="#CBD5E1" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <Border Grid.Column="1" Style="{StaticResource PosBox}">
+                                    <TextBlock Style="{StaticResource PosValue}"
+                                               Text="{Binding AxisDwY.CurrentPos, StringFormat={}{0:F3} mm, FallbackValue=-- mm}"/>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 조그로 찾아가지 않고 티칭해 둔 자리로 한 번에 간다. 절대좌표 이동이라
+                         알람·레시피·원점 조건은 인쇄 시작과 같게 걸린다(안 맞으면 로그만 남고 안 움직인다). -->
+                    <Button Height="34" Margin="0,10,0,0" Command="{Binding MoveToDropCommand}"
+                            ToolTip="티칭된 DROP WATCHER 위치로 이동합니다. 절대좌표 이동이라 INITIALIZE 가 끝나 있어야 합니다.">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                                <Setter Property="Content" Value="드랍 위치로 이동"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="Bd" Background="#166534" BorderBrush="#22C55E"
+                                                    BorderThickness="1" CornerRadius="6">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background" Value="#15803D"/>
+                                                </Trigger>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter TargetName="Bd" Property="Background" Value="#1E293B"/>
+                                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#334155"/>
+                                                    <Setter Property="Foreground" Value="#64748B"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsMoving}" Value="True">
+                                        <Setter Property="Content" Value="이동 중…"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
                 </StackPanel>
             </Grid>
 
-            <!-- 조그로 찾아가지 않고 티칭해 둔 자리로 한 번에 간다. 절대좌표 이동이라
-                 알람·레시피·원점 조건은 인쇄 시작과 같게 걸린다(안 맞으면 로그만 남고 안 움직인다). -->
-            <Button Height="40" Margin="0,14,0,0" Command="{Binding MoveToDropCommand}"
-                    ToolTip="티칭된 DROP WATCHER 위치로 이동합니다. 절대좌표 이동이라 INITIALIZE 가 끝나 있어야 합니다.">
-                <Button.Style>
-                    <Style TargetType="Button">
-                        <Setter Property="Foreground" Value="White"/>
-                        <Setter Property="FontSize" Value="13"/>
-                        <Setter Property="FontWeight" Value="Bold"/>
-                        <Setter Property="Content" Value="드랍 위치로 이동"/>
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="Button">
-                                    <Border x:Name="Bd" Background="#166534" BorderBrush="#22C55E"
-                                            BorderThickness="1" CornerRadius="6">
-                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="#15803D"/>
-                                        </Trigger>
-                                        <Trigger Property="IsEnabled" Value="False">
-                                            <Setter TargetName="Bd" Property="Background" Value="#1E293B"/>
-                                            <Setter TargetName="Bd" Property="BorderBrush" Value="#334155"/>
-                                            <Setter Property="Foreground" Value="#64748B"/>
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsMoving}" Value="True">
-                                <Setter Property="Content" Value="이동 중…"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Button.Style>
-            </Button>
-
             <TextBlock Text="※ 서보 ON·알람 해제 상태에서만 동작합니다. 창을 닫으면 축이 정지합니다."
-                       Foreground="#475569" FontSize="10" Margin="0,12,0,0" TextWrapping="Wrap"/>
+                       Foreground="#475569" FontSize="10" Margin="0,10,0,0" TextWrapping="Wrap"/>
         </StackPanel>
     </Border>
 </Window>

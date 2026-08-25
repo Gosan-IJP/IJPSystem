@@ -36,6 +36,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
+
+        /// <summary>
+        /// 위치 표시 단위. 회전축(T)은 deg, 직선축은 mm — 값은 MotorConfig 의 Unit 이다.
+        ///
+        /// <para>화면에 "mm" 를 글자로 박으면 회전축이 mm 로 보인다. 축이 자기 단위를
+        /// 들고 있으니 표시도 여기서 받아 간다.</para>
+        /// </summary>
+        public string PosUnit => string.IsNullOrWhiteSpace(Info?.Unit) ? "mm" : Info.Unit;
+
         private bool _isServoOn;
         public bool IsServoOn
         {

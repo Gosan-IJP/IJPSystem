@@ -32,6 +32,8 @@ namespace IJPSystem.Platform.Infrastructure.Config
         public static readonly string[] GlassSpec =
         {
             "GlassWidthMm", "GlassHeightMm", "GlassThicknessMm", "GlassOriginXMm", "GlassOriginYMm",
+            "FiducialPitchXMm", "FiducialPitchYMm",
+            "PatternMinScore", "AlignToleranceDeg", "AlignToleranceXUm", "AlignToleranceYUm",
         };
 
         /// <summary>

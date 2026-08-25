@@ -160,11 +160,17 @@ namespace IJPSystem.Platform.HMI.Vision
         }
 
         private double _minScore = 0.70;
-        /// <summary>합격 점수. 낮추면 아무 데나 맞고, 높이면 조명이 조금만 바뀌어도 놓친다.</summary>
+        /// <summary>
+        /// 합격 점수. 낮추면 아무 데나 맞고, 높이면 조명이 조금만 바뀌어도 놓친다.
+        ///
+        /// <para><b>주인은 레시피다</b>(글라스 정보 → 정렬 합격 점수). 화면(GlassViewModel)이
+        /// 활성 레시피 값을 여기로 밀어 넣고, 글라스 화면은 보여 주기만 한다. 여기서 고치게 두면
+        /// 어느 기준으로 찾은 결과인지가 레시피에 남지 않는다.</para>
+        /// </summary>
         public double MinScore
         {
             get => _minScore;
-            set => SetProperty(ref _minScore, Math.Clamp(value, 0.1, 0.99));
+            set => SetProperty(ref _minScore, Math.Clamp(value, 0.50, 0.95));
         }
 
         private int _searchRadiusPx;
@@ -174,6 +180,24 @@ namespace IJPSystem.Platform.HMI.Vision
             get => _searchRadiusPx;
             set => SetProperty(ref _searchRadiusPx, Math.Max(0, value));
         }
+
+        private string? _sceneWarning;
+        /// <summary>
+        /// 해상도가 조금 달라 오차가 섞였다는 안내. 문제 없으면 null.
+        ///
+        /// <para>막지 않고 알리기만 하는 이유: 매칭은 해상도와 무관하게 되고, 흔들리는 것은
+        /// 기준 좌표뿐이다. 얼마나 흔들리는지를 숫자로 보여 주는 편이 낫다.</para>
+        /// </summary>
+        public string? SceneWarning
+        {
+            get => _sceneWarning;
+            private set
+            {
+                if (SetProperty(ref _sceneWarning, value)) OnPropertyChanged(nameof(HasSceneWarning));
+            }
+        }
+
+        public bool HasSceneWarning => !string.IsNullOrEmpty(SceneWarning);
 
         // ── 찾기 결과 ────────────────────────────────────────────────────
         private bool _hasResult, _resultFailed;
@@ -289,8 +313,11 @@ namespace IJPSystem.Platform.HMI.Vision
             _definition = entry.Definition;
 
             PatternName    = entry.Definition.Name;
-            MinScore       = entry.Definition.MinScore;
             SearchRadiusPx = entry.Definition.SearchRadiusPx;
+
+            // MinScore 는 일부러 읽지 않는다 — 주인이 레시피이기 때문이다(2026-08-25).
+            // 패턴 파일에서 되읽으면 패턴을 바꿀 때마다 합격 기준이 조용히 따라 바뀐다.
+            // 파일에 쓰는 것은 "이 패턴을 등록할 때 어떤 기준이었나" 기록으로만 남긴다.
             Preview        = ToBitmap(entry.Template);
 
             ClearResult();
@@ -316,14 +343,17 @@ namespace IJPSystem.Platform.HMI.Vision
             var scene = ToGray(frame);
             if (scene == null) return;
 
-            if (!_definition.MatchesScene(scene.Width, scene.Height))
+            // 해상도가 달라도 찾기는 된다 — 흔들리는 것은 기준 좌표뿐이다.
+            // 조금 다르면 진행하고 오차만 알리고, 크게 다르면 막는다.
+            var fit = _definition.CheckScene(scene.Width, scene.Height);
+            if (!fit.CanFind)
             {
-                Dialogs.Show(
-                    $"등록할 때와 해상도가 다릅니다.\n등록 {_definition.SceneWidth}×{_definition.SceneHeight} " +
-                    $"→ 지금 {scene.Width}×{scene.Height}\n\n기준 좌표를 믿을 수 없어 패턴을 다시 등록해야 합니다.",
-                    "해상도 불일치", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Dialogs.Show(fit.Message, "해상도 불일치",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+            SceneWarning = fit.Fit == SceneFit.Close ? fit.Message : null;
+            if (SceneWarning != null) _log("[PATTERN] " + SceneWarning, LogLevel.Warning);
 
             var m = PatternMatcher.Find(scene, _template, new PatternSearchOptions
             {
@@ -382,6 +412,7 @@ namespace IJPSystem.Platform.HMI.Vision
             PosText      = "-";
             OffsetText   = "-";
             ResultLabel  = "";
+            SceneWarning = null;
         }
 
         private void RefreshList()
