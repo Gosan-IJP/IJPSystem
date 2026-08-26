@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:domain="clr-namespace:IJPSystem.Platform.Domain.Enums;assembly=IJPSystem.Platform.Domain"
+             xmlns:ctl="clr-namespace:IJPSystem.Platform.HMI.Common.Controls"
              mc:Ignorable="d" d:DesignHeight="750" d:DesignWidth="1200"
              Background="#0F172A">
 
@@ -125,6 +126,10 @@
                                 </TextBlock.RenderTransform>
                             </TextBlock>
 
+                            <!-- 글라스 정렬 카메라(GVC) — 고정. 그림은 Common/Controls/AlignCamera.xaml 에 있다.
+                                 헤드와 달리 움직이지 않는다 — 글라스가 그 밑을 지나간다. -->
+                            <ctl:AlignCamera Canvas.Left="272" Canvas.Top="124"/>
+
                             <!-- ── 스테이지 이송 레일 (Y 스캔축) ───────────────── -->
                             <Rectangle Canvas.Left="40" Canvas.Top="462" Width="720" Height="7"
                                        Fill="#1B2E4A" RadiusX="3" RadiusY="3"/>
@@ -158,7 +163,7 @@
                                      유리 박스가 스테이지처럼 헤드 밑을 통과하며 그 위에 인쇄가 표시되도록 함 -->
                                 <Rectangle x:Name="GlassRect"
                                            Canvas.Left="130" Canvas.Top="258"
-                                           Width="540" Height="178"
+                                           Width="360" Height="178"
                                            Fill="#040E1A" Stroke="#38BDF8" StrokeThickness="1.5" RadiusX="3" RadiusY="3" HorizontalAlignment="Left" VerticalAlignment="Center"/>
 
                                 <!-- 유리 내부 그리드 패턴 -->
@@ -166,22 +171,22 @@
                                       Stroke="#0E2A3D" StrokeThickness="1" Opacity="0.9">
                                     <Path.Data>
                                         <GeometryGroup>
-                                            <LineGeometry StartPoint="5,45"  EndPoint="535,45"/>
-                                            <LineGeometry StartPoint="5,89"  EndPoint="535,89"/>
-                                            <LineGeometry StartPoint="5,133" EndPoint="535,133"/>
-                                            <LineGeometry StartPoint="67,5"  EndPoint="67,173"/>
+                                            <LineGeometry StartPoint="5,45"  EndPoint="355,45"/>
+                                            <LineGeometry StartPoint="5,89"  EndPoint="355,89"/>
+                                            <LineGeometry StartPoint="5,133" EndPoint="355,133"/>
+                                            <LineGeometry StartPoint="45,5"  EndPoint="45,173"/>
+                                            <LineGeometry StartPoint="89,5"  EndPoint="89,173"/>
                                             <LineGeometry StartPoint="134,5" EndPoint="134,173"/>
-                                            <LineGeometry StartPoint="201,5" EndPoint="201,173"/>
-                                            <LineGeometry StartPoint="268,5" EndPoint="268,173"/>
-                                            <LineGeometry StartPoint="335,5" EndPoint="335,173"/>
-                                            <LineGeometry StartPoint="402,5" EndPoint="402,173"/>
-                                            <LineGeometry StartPoint="469,5" EndPoint="469,173"/>
+                                            <LineGeometry StartPoint="178,5" EndPoint="178,173"/>
+                                            <LineGeometry StartPoint="223,5" EndPoint="223,173"/>
+                                            <LineGeometry StartPoint="267,5" EndPoint="267,173"/>
+                                            <LineGeometry StartPoint="312,5" EndPoint="312,173"/>
                                         </GeometryGroup>
                                     </Path.Data>
                                 </Path>
 
                                 <!-- 유리 반사 하이라이트 (유리 박스 정렬에 맞춰 이동) -->
-                                <Rectangle Canvas.Left="133" Canvas.Top="262" Width="532" Height="38"
+                                <Rectangle Canvas.Left="133" Canvas.Top="262" Width="355" Height="38"
                                            Opacity="0.07" RadiusX="2" RadiusY="2" HorizontalAlignment="Left" VerticalAlignment="Center">
                                     <Rectangle.Fill>
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -192,7 +197,7 @@
                                 </Rectangle>
 
                                 <!-- 유리 라벨 -->
-                                <TextBlock Canvas.Left="294" Canvas.Top="440"
+                                <TextBlock Canvas.Left="256" Canvas.Top="440"
                                            Text="GLASS SUBSTRATE (VC)" Foreground="#38BDF8"
                                            FontSize="9" FontFamily="Consolas" FontWeight="Bold"/>
 
@@ -201,7 +206,7 @@
                                      3스와스면 패스마다 1/3 → 2/3 → 3/3 으로 쌓인다. -->
                                 <Rectangle x:Name="PrintedDoneArea"
                                            Canvas.Left="132" Canvas.Top="260"
-                                           Width="536" Height="174"
+                                           Width="357" Height="174"
                                            Opacity="0.65" RadiusX="2" RadiusY="2"
                                            RenderTransformOrigin="0,1">
                                     <Rectangle.RenderTransform>
@@ -222,7 +227,7 @@
                                      코드에서 RenderTransformOrigin 의 X 를 0/1 로 바꾼다. -->
                                 <Rectangle x:Name="PrintedArea"
                                            Canvas.Left="132" Canvas.Top="260"
-                                           Width="536" Height="174"
+                                           Width="357" Height="174"
                                            Opacity="0.65" RadiusX="2" RadiusY="2"
                                            RenderTransformOrigin="0,1">
                                     <Rectangle.RenderTransform>

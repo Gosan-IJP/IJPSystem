@@ -314,10 +314,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 if (_originManager == null)
                 {
-                    string cfgDir = System.IO.Path.GetDirectoryName(PathUtils.GetConfigPath("x")) ?? "";
+                    // 원점의 주인은 레시피의 PRINT START 티칭값이다 — 파일에 따로 두면 갈라진다.
                     _originManager = new IJPSystem.Platform.Application.Printing.PrintOriginManager(
-                        new SharedAxisStageAdapter(_mainVM), cfgDir);
-                    _originManager.Load();   // 저장된 원점이 있으면 복원
+                        new SharedAxisStageAdapter(_mainVM), new Services.RecipePrintOriginStore(_mainVM));
+                    _originManager.Load();   // 티칭된 PRINT START 를 원점으로 읽어 온다
                     _originManager.PrintOriginChanged += (_, _) => SyncOriginFromManager();
                     SyncOriginFromManager();
                 }

@@ -236,12 +236,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand OpenImageCommand  { get; }
         public ICommand ToggleCrossLineCommand { get; }
         public ICommand CenterCrossCommand     { get; }
+        public ICommand AutoAlignCommand       { get; }
+        public ICommand StopAutoAlignCommand   { get; }
 
         /// <summary>
         /// VisionConfig 에 실제로 들어 있는 글라스뷰 카메라 ID 를 고른다 — CAM_GV 우선, 없으면 옛 CAM_02.
         /// 둘 다 없으면 표준 ID 를 그대로 쓴다(미연결로 표시되고, 로그로 원인을 알 수 있게 한다).
         /// </summary>
-        private static string ResolveCamId(IVisionDriver vision, MainViewModel mainVM)
+        /// <summary>글라스뷰 카메라 ID 해석. 화면 없이 찍는 쪽(정렬 시퀀스)도 같은 규칙을 써야 한다.</summary>
+        public static string ResolveCamId(IVisionDriver vision, MainViewModel mainVM)
         {
             var ids = vision?.GetAllStatus()?.Select(s => s.CameraId).ToList();
             if (ids == null || ids.Count == 0) return NewCamId;
@@ -299,6 +302,16 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // 화면 없이 값만 검증할 수 있어야 한다.
             Align = new Vision.PatternAlignViewModel(() => CurrentFrame, _mainVM.AddLog);
             BindMinScoreToRecipe();
+
+            // 정렬 시퀀스가 쓸 서비스를 여기서 갈아 끼운다 — 이 화면에서 고른 패턴을 알려 줄 수 있어
+            // 등록된 패턴이 여러 개여도 어느 것으로 찾을지가 정해진다.
+            Application.Sequences.GlassAlignServices.Current =
+                new Services.GlassAlignService(_mainVM, () => Align.SelectedPattern);
+
+            // 자동 정렬 — 도는 동안에는 다시 누르지 못하게 하고, 세울 버튼을 따로 둔다.
+            AutoAlignCommand     = new RelayCommand(async _ => await RunAutoAlignAsync(),
+                                                    _ => !IsAutoAligning && !IsBusy);
+            StopAutoAlignCommand = new RelayCommand(_ => _alignCts?.Cancel(), _ => IsAutoAligning);
         }
 
         /// <summary>글라스 정렬 — 패턴 등록·저장·찾기.</summary>
@@ -323,6 +336,87 @@ namespace IJPSystem.Platform.HMI.ViewModels
             };
         }
 
+
+        // ── 자동 정렬 ─────────────────────────────────────────────────────
+        //
+        // 시퀀스 화면의 GLASS ALIGN 과 같은 동작이다 — 단계 정의를 그대로 가져다 돌린다.
+        // 순서를 여기서 다시 쓰면 두 곳이 갈라지고, 갈라진 쪽이 실제로 도는 쪽일 때가 온다.
+
+        private CancellationTokenSource? _alignCts;
+
+        /// <summary>정렬이 도는 중인가.</summary>
+        public bool IsAutoAligning => _alignCts != null;
+
+        private string _autoAlignStatus = "";
+
+        /// <summary>지금 어느 단계인지. 13단계가 한참 걸려 표시가 없으면 멈춘 줄 안다.</summary>
+        public string AutoAlignStatus
+        {
+            get => _autoAlignStatus;
+            private set => SetProperty(ref _autoAlignStatus, value);
+        }
+
+        /// <summary>
+        /// 자동 정렬 한 판. 단계는 <c>GlassAlignSequence</c> 가 정하고 여기서는 차례로 돌리기만 한다.
+        ///
+        /// <para>첫 단계가 준비를 확인하고 못 갖춰졌으면 <b>아무것도 움직이기 전에</b> 세운다 —
+        /// 반쯤 움직인 뒤 멈추면 글라스를 다시 놔야 한다.</para>
+        /// </summary>
+        private async Task RunAutoAlignAsync()
+        {
+            var machine = _mainVM.GetController()?.GetMachine();
+            if (machine == null)
+            {
+                AutoAlignStatus = "장비가 초기화되지 않았습니다.";
+                return;
+            }
+
+            // 라이브가 돌면 정렬이 쓸 프레임을 라이브 틱이 가로챈다.
+            bool wasLive = IsLiveMode;
+            if (wasLive) StopLive();
+
+            _alignCts = new CancellationTokenSource();
+            OnPropertyChanged(nameof(IsAutoAligning));
+
+            var steps = Application.Sequences.GlassAlignSequence.Build(
+                machine, new Services.MotionServiceAdapter(_mainVM));
+            string where = "";
+
+            try
+            {
+                foreach (var step in steps)
+                {
+                    where = $"{step.Number}/{steps.Count} · {StepText(step.Name)}";
+                    AutoAlignStatus = where;
+                    await step.Action(_alignCts.Token);
+                }
+
+                AutoAlignStatus = "정렬 완료";
+                _mainVM.AddLog("[ALIGN] 자동 정렬 완료", LogLevel.Success);
+            }
+            catch (OperationCanceledException)
+            {
+                AutoAlignStatus = $"중지 — {where}";
+                _mainVM.AddLog($"[ALIGN] 자동 정렬 중지({where})", LogLevel.Warning);
+            }
+            catch (Exception ex)
+            {
+                // 어느 단계에서 멈췄는지가 함께 남아야 한다 — 메시지만 남으면 재현이 안 된다.
+                AutoAlignStatus = $"{where} — {ex.Message}";
+                _mainVM.AddLog($"[ALIGN] 자동 정렬 실패: {AutoAlignStatus}", LogLevel.Error);
+            }
+            finally
+            {
+                _alignCts?.Dispose();
+                _alignCts = null;
+                OnPropertyChanged(nameof(IsAutoAligning));
+                if (wasLive) StartLive();
+            }
+        }
+
+        /// <summary>단계 이름은 번역 키다. 못 찾으면 키를 그대로 보여 준다 — 빈 칸보다 낫다.</summary>
+        private static string StepText(string key)
+            => System.Windows.Application.Current?.TryFindResource(key) as string ?? key;
         // ── 라이브 시작 / 정지 ────────────────────────────────────────────────
         private void StartLive()
         {

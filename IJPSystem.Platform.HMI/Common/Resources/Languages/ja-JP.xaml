@@ -131,12 +131,16 @@
     <system:String x:Key="Status_SystemTime">システム時刻</system:String>
 
     <!-- その他 -->
-    <system:String x:Key="Lbl_PrintSettings">プリント設定</system:String>
+    <system:String x:Key="Lbl_PrintSettings">基本設定</system:String>
     <system:String x:Key="Lbl_Swath">印刷回数 (Swath)</system:String>
     <system:String x:Key="Lbl_HeadLength">ヘッド長</system:String>
     <system:String x:Key="Lbl_PrintDirection">印刷方向</system:String>
     <system:String x:Key="Opt_Unidirectional">単方向</system:String>
     <system:String x:Key="Opt_Bidirectional">双方向</system:String>
+    <system:String x:Key="Lbl_PurgeTime">purge time</system:String>
+    <system:String x:Key="Lbl_AutoAlign">自動アライメント</system:String>
+    <system:String x:Key="Opt_Used">使用</system:String>
+    <system:String x:Key="Opt_NotUsed">未使用</system:String>
     <system:String x:Key="Btn_Logout">ログアウト</system:String>
     <system:String x:Key="Btn_ClearLog">クリア</system:String>
     <system:String x:Key="Recipe_SaveApplyHint">* SAVE: 記録保存 | APPLY: パラメータを即時反映</system:String>
@@ -310,6 +314,9 @@
     <system:String x:Key="Step_GlassAlign_Mark1ReturnDone">復帰 InPosition 確認</system:String>
     <system:String x:Key="Step_GlassAlign_Shift">マーク1再測定・X/Y補正（許容差まで反復）</system:String>
     <system:String x:Key="Step_GlassAlign_Verify">整列検証（許容差判定）</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark2Recheck">マーク2 再確認移動</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark2RecheckDone">マーク2 再確認位置到達</system:String>
+    <system:String x:Key="Step_GlassAlign_VerifyAngle">回転検証（マーク2 再測定）</system:String>
     <system:String x:Key="Step_DropWatcher_Move">ドロップウォッチャー位置(DROP WATCHER)へ移動</system:String>
     <system:String x:Key="Step_DropWatcher_MoveDone">ドロップウォッチャー位置 InPosition 確認</system:String>
 

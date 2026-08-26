@@ -102,6 +102,10 @@
         <Border Grid.Row="2" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="10" Padding="16">
             <StackPanel>
                 <TextBlock Style="{StaticResource Hdr}" Text="Print Origin"/>
+                <!-- 값의 주인은 레시피 티칭의 PRINT START 다 — 여기서 Set 하면 그 자리가 바뀐다.
+                     어디에 적히는지 안 보이면 "원점만 바꾼 줄" 알고 누르게 된다. -->
+                <TextBlock x:Name="OrgWhere" Foreground="#64748B" FontSize="11" Margin="0,0,0,8"
+                           Text="레시피 티칭의 PRINT START (X·Y) 에 저장됩니다 — Z 는 티칭값 그대로."/>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>

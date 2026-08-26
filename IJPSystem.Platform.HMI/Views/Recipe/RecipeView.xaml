@@ -437,9 +437,16 @@
                         </Style>
                     </Border.Style>
 
-                    <!-- 왼쪽 열: 프린트 설정 · 웨이브폼 정보(표시 전용).
-                         오른쪽은 노즐/글라스 정보. 두 열 다 각자 스크롤한다 — 화면이 낮으면
-                         카드가 잘리는데, 잘린 자리에 값이 있으면 없는 값처럼 보인다. -->
+                    <!-- 왼쪽 열: 기본 설정 · 웨이브폼 정보(표시 전용). 오른쪽은 헤드/글라스 정보.
+
+                         스크롤은 두 열을 통틀어 한 벌만 둔다. 열마다 따로 스크롤하면 스크롤바를
+                         내렸을 때 오른쪽 카드만 올라가고 [기본 설정]은 제자리에 남는다 — 같은
+                         화면인데 한쪽만 움직이니 어느 스크롤바가 무엇을 미는지 알 수 없다. -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ScrollViewer.Resources>
+                            <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
+                        </ScrollViewer.Resources>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>  <!-- 프린트 설정 · 웨이브폼 -->
@@ -448,17 +455,8 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-
-                        <!-- 왼쪽 열은 세로가 모자란다 — 카드가 화면 높이를 넘으면 아래가
-                             그냥 잘려 나간다(웨이브폼 정보가 그랬다). 통째로 스크롤한다. -->
-                        <ScrollViewer Grid.Column="0"
-                                      VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Disabled">
-                            <ScrollViewer.Resources>
-                                <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
-                            </ScrollViewer.Resources>
-                            <StackPanel>
-                                <!-- ── 프린트 설정 카드 ── -->
+                        <StackPanel Grid.Column="0">
+                                <!-- ── 기본 설정 카드 (인쇄 조건 · purge time · 자동 정렬) ── -->
                                 <Border Background="#1E293B" CornerRadius="10"
                                         BorderBrush="#334155" BorderThickness="1" Width="300"
                                         Margin="20,20,20,10" Padding="16"
@@ -493,6 +491,36 @@
                                                       SelectedIndex="{Binding PrintDirectionIndex, Mode=TwoWay}">
                                                 <ComboBoxItem Content="{DynamicResource Opt_Unidirectional}"/>
                                                 <ComboBoxItem Content="{DynamicResource Opt_Bidirectional}"/>
+                                            </ComboBox>
+                                        </StackPanel>
+
+                                        <!-- purge time — 카드 하나에 값 하나뿐이던 [기본 동작]을 여기로 합쳤다(2026-08-26).
+                                             인쇄를 걸기 전에 같이 보는 값이라 한 카드에 있는 편이 낫다. -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                            <TextBlock Text="{DynamicResource Lbl_PurgeTime}" Foreground="#94A3B8" FontSize="13"
+                                                       Width="118" VerticalAlignment="Center"/>
+                                            <Border BorderBrush="#475569" BorderThickness="1" CornerRadius="6"
+                                                    Background="#0F172A" Width="60" Height="32">
+                                                <TextBox Text="{Binding PurgeTime, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                         Foreground="White" Background="Transparent"
+                                                         BorderThickness="0" FontSize="15" FontFamily="Consolas"
+                                                         TextAlignment="Center" VerticalContentAlignment="Center"
+                                                         Style="{StaticResource NumericEditingStyle}"/>
+                                            </Border>
+                                            <TextBlock Text="sec" Foreground="#64748B" FontSize="12"
+                                                       VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                        </StackPanel>
+
+                                        <!-- 자동 정렬 (0=사용, 1=미사용) — 피듀셜 마크가 없는 글라스도 있어
+                                             장비가 아니라 품종이 정하는 값이다. 그래서 레시피에 딸린다. -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                            <TextBlock Text="{DynamicResource Lbl_AutoAlign}" Foreground="#94A3B8" FontSize="13"
+                                                       Width="118" VerticalAlignment="Center"/>
+                                            <ComboBox Width="110" Height="32"
+                                                      Style="{StaticResource ModernComboBoxStyle}"
+                                                      SelectedIndex="{Binding AutoAlignIndex, Mode=TwoWay}">
+                                                <ComboBoxItem Content="{DynamicResource Opt_Used}"/>
+                                                <ComboBoxItem Content="{DynamicResource Opt_NotUsed}"/>
                                             </ComboBox>
                                         </StackPanel>
                                     </StackPanel>
@@ -635,26 +663,19 @@
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
-                        </ScrollViewer>
 
                         <!-- ── 노즐 · 글라스 · 기본 동작 (오른쪽 열) ──────────────────
                              헤드 사양과 글라스 치수를 레시피에 함께 둔다. 헤드를 바꾸면 피치·열
                              구성이 통째로 달라지고 인쇄 조건도 같이 바뀌므로, 한 곳에 묶여 있어야
                              헤드 교체가 레시피 전환으로 끝난다.
                              값 0 = 미입력이며, 아직 어떤 동작에도 쓰이지 않는다(입력·보관만). -->
-                        <ScrollViewer Grid.Column="1"
-                                      VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Disabled" Margin="0,20,20,20">
-                            <ScrollViewer.Resources>
-                                <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
-                            </ScrollViewer.Resources>
                             <!-- 두 박스를 가로로 나란히 둔다. WrapPanel 인 이유: 창이 좁아 두 개가
                                  안 들어가면 예전처럼 아래로 내려가 준다 — Grid 두 칸으로 고정하면
                                  좁은 화면에서 글라스 정보가 잘린다(가로 스크롤은 꺼 두어야 접힌다). -->
                             <!-- 오른쪽 열은 카드 두 장(WrapPanel)이 나란히 서고, 그 아래 한 장이 더 붙는다.
                                  기본 동작은 글라스 정보 아래여야 해서 WrapPanel 밖에 둔다 —
                                  안에 넣으면 화면이 넓을 때 옆으로 붙는다. -->
-                            <WrapPanel Orientation="Horizontal">
+                            <WrapPanel Grid.Column="1" Orientation="Horizontal" Margin="0,20,20,20">
 
                                 <!-- 노즐 정보 -->
                                 <Border Background="#1E293B" CornerRadius="10"
@@ -838,163 +859,127 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- 글라스 정보 + 기본 동작 — 한 덩어리로 묶은 이유:
-                                     기본 동작을 WrapPanel 바깥에 두면 헤드 정보 아래로 떨어진다.
-                                     한 칸으로 묶어야 글라스 바로 아래에 서고, 좁은 화면에서는 둘이 같이 내려간다. -->
-                                <StackPanel VerticalAlignment="Top">
-                                    <!-- 글라스 정보 — 노즐 정보 오른쪽 옆 -->
-                                    <Border Background="#1E293B" CornerRadius="10"
-                                            BorderBrush="#334155" BorderThickness="1"
-                                            Padding="16" Margin="0,0,0,12" VerticalAlignment="Top" MinWidth="420">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                                <TextBlock Text="▭" FontSize="14" Foreground="#A78BFA"
-                                                           Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                <TextBlock Text="글라스 정보" Foreground="White"
-                                                           FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
-                                                <TextBlock Text="인쇄 대상 치수" Foreground="#475569" FontSize="11"
-                                                           VerticalAlignment="Center" Margin="10,1,0,0"/>
-                                            </StackPanel>
-    
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                </Grid.RowDefinitions>
-    
-                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="가로 × 세로"
-                                                           Style="{StaticResource SpecFieldLabel}"/>
-                                                <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
-                                                    <Border Style="{StaticResource SpecFieldBox}">
-                                                        <TextBox Text="{Binding GlassWidthMm, Mode=TwoWay, StringFormat={}{0:F2}, UpdateSourceTrigger=LostFocus}"
-                                                                 Style="{StaticResource SpecTextBox}"/>
-                                                    </Border>
-                                                    <TextBlock Text="×" Foreground="#64748B" FontSize="13"
-                                                               VerticalAlignment="Center" Margin="8,0"/>
-                                                    <Border Style="{StaticResource SpecFieldBox}">
-                                                        <TextBox Text="{Binding GlassHeightMm, Mode=TwoWay, StringFormat={}{0:F2}, UpdateSourceTrigger=LostFocus}"
-                                                                 Style="{StaticResource SpecTextBox}"/>
-                                                    </Border>
-                                                    <TextBlock Text="mm" Style="{StaticResource SpecUnit}"/>
-                                                </StackPanel>
-    
-                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="피듀셜 마크 간격(X방향)" Width="150"
-                                                           Style="{StaticResource SpecFieldLabel}"/>
-                                                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
-                                                    <Border Style="{StaticResource SpecFieldBox}">
-                                                        <TextBox Text="{Binding FiducialPitchXMm, Mode=TwoWay, StringFormat={}{0:F3}, UpdateSourceTrigger=LostFocus}"
-                                                                 Style="{StaticResource SpecTextBox}"/>
-                                                    </Border>
-                                                    <TextBlock Text="mm" Style="{StaticResource SpecUnit}"/>
-                                                    <TextBlock Text="정렬 마크 두 개의 중심 거리"
-                                                               Foreground="#475569" FontSize="11" VerticalAlignment="Center"/>
-                                                </StackPanel>
-    
-                                                <TextBlock Grid.Row="2" Grid.Column="0" Text="피듀셜 마크 간격(Y방향)" Width="150"
-                                                           Style="{StaticResource SpecFieldLabel}"/>
-                                                <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
-                                                    <Border Style="{StaticResource SpecFieldBox}">
-                                                        <TextBox Text="{Binding FiducialPitchYMm, Mode=TwoWay, StringFormat={}{0:F3}, UpdateSourceTrigger=LostFocus}"
-                                                                 Style="{StaticResource SpecTextBox}"/>
-                                                    </Border>
-                                                    <TextBlock Text="mm" Style="{StaticResource SpecUnit}"/>
-                                                </StackPanel>
-
-                                                <TextBlock Grid.Row="3" Grid.Column="0" Text="정렬 합격 점수" Width="150"
-                                                           Style="{StaticResource SpecFieldLabel}"/>
-                                                <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal">
-                                                    <Border Style="{StaticResource SpecFieldBox}">
-                                                        <TextBox Text="{Binding PatternMinScore, Mode=TwoWay, StringFormat={}{0:F2}, UpdateSourceTrigger=LostFocus}"
-                                                                 Style="{StaticResource SpecTextBox}"
-                                                                 ToolTip="0.50 ~ 0.95. 낮추면 무엇이든 '찾았다'가 되고 그 좌표로 스테이지가 움직입니다."/>
-                                                    </Border>
-                                                    <TextBlock Text="0.50~0.95" Foreground="#475569" FontSize="11"
-                                                               VerticalAlignment="Center" Margin="8,0,0,0"/>
-                                                </StackPanel>
-
-                                                <TextBlock Grid.Row="4" Grid.Column="0" Text="허용 오차 T" Width="150"
-                                                           Style="{StaticResource SpecFieldLabel}"/>
-                                                <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
-                                                    <Border Style="{StaticResource SpecFieldBox}">
-                                                        <TextBox Text="{Binding AlignToleranceDeg, Mode=TwoWay, StringFormat={}{0:F3}, UpdateSourceTrigger=LostFocus}"
-                                                                 Style="{StaticResource SpecTextBox}"
-                                                                 ToolTip="이 안이면 T 를 돌리지 않습니다. 측정 분해능이 바닥입니다 — 기선 160mm 에서 0.0004°."/>
-                                                    </Border>
-                                                    <TextBlock Text="deg" Style="{StaticResource SpecUnit}"/>
-                                                    <TextBlock Text="이 안이면 보정하지 않음" Foreground="#475569" FontSize="11"
-                                                               VerticalAlignment="Center"/>
-                                                </StackPanel>
-
-                                                <TextBlock Grid.Row="5" Grid.Column="0" Text="허용 오차 X" Width="150"
-                                                           Style="{StaticResource SpecFieldLabel}"/>
-                                                <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal">
-                                                    <Border Style="{StaticResource SpecFieldBox}">
-                                                        <TextBox Text="{Binding AlignToleranceXUm, Mode=TwoWay, StringFormat={}{0:F1}, UpdateSourceTrigger=LostFocus}"
-                                                                 Style="{StaticResource SpecTextBox}"
-                                                                 ToolTip="이 안이면 X 를 움직이지 않습니다. 스테이지가 못 내는 이동을 명령하지 않게 막습니다."/>
-                                                    </Border>
-                                                    <TextBlock Text="µm" Style="{StaticResource SpecUnit}"/>
-                                                </StackPanel>
-
-                                                <TextBlock Grid.Row="6" Grid.Column="0" Text="허용 오차 Y" Width="150"
-                                                           Style="{StaticResource SpecFieldLabel}"/>
-                                                <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal">
-                                                    <Border Style="{StaticResource SpecFieldBox}">
-                                                        <TextBox Text="{Binding AlignToleranceYUm, Mode=TwoWay, StringFormat={}{0:F1}, UpdateSourceTrigger=LostFocus}"
-                                                                 Style="{StaticResource SpecTextBox}"
-                                                                 ToolTip="이 안이면 Y 를 움직이지 않습니다. 축마다 진직도가 달라 X 와 따로 둡니다."/>
-                                                    </Border>
-                                                    <TextBlock Text="µm" Style="{StaticResource SpecUnit}"/>
-                                                </StackPanel>
-                                            </Grid>
+                                <!-- 글라스 정보 — 노즐 정보 오른쪽 옆 -->
+                                <Border Background="#1E293B" CornerRadius="10"
+                                        BorderBrush="#334155" BorderThickness="1"
+                                        Padding="16" Margin="0,0,0,12" VerticalAlignment="Top" MinWidth="420">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                            <TextBlock Text="▭" FontSize="14" Foreground="#A78BFA"
+                                                       Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="글라스 정보" Foreground="White"
+                                                       FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <TextBlock Text="인쇄 대상 치수" Foreground="#475569" FontSize="11"
+                                                       VerticalAlignment="Center" Margin="10,1,0,0"/>
                                         </StackPanel>
-                                    </Border>
-                                    <!-- ── 기본 동작 (글라스 정보 아래) ──────────────────────
-                                         값은 하나뿐이라 슬라이더·큰 숫자 표시를 뺐다 — 입력칸 하나면 된다. -->
-                                    <Border Background="#1E293B" CornerRadius="10"
-                                            BorderBrush="#334155" BorderThickness="1"
-                                            Padding="16" Margin="0,0,0,12"
-                                            MinWidth="420">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                                <TextBlock Text="⏱" FontSize="14" Foreground="#FBBF24"
-                                                           Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                <TextBlock Text="기본 동작" Foreground="White"
-                                                           FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="가로 × 세로"
+                                                       Style="{StaticResource SpecFieldLabel}"/>
+                                            <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
+                                                <Border Style="{StaticResource SpecFieldBox}">
+                                                    <TextBox Text="{Binding GlassWidthMm, Mode=TwoWay, StringFormat={}{0:F2}, UpdateSourceTrigger=LostFocus}"
+                                                             Style="{StaticResource SpecTextBox}"/>
+                                                </Border>
+                                                <TextBlock Text="×" Foreground="#64748B" FontSize="13"
+                                                           VerticalAlignment="Center" Margin="8,0"/>
+                                                <Border Style="{StaticResource SpecFieldBox}">
+                                                    <TextBox Text="{Binding GlassHeightMm, Mode=TwoWay, StringFormat={}{0:F2}, UpdateSourceTrigger=LostFocus}"
+                                                             Style="{StaticResource SpecTextBox}"/>
+                                                </Border>
+                                                <TextBlock Text="mm" Style="{StaticResource SpecUnit}"/>
                                             </StackPanel>
 
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="purge time" Foreground="#94A3B8" FontSize="12"
-                                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                            <Border BorderBrush="#475569" BorderThickness="1" CornerRadius="6"
-                                                    Background="#0F172A" Width="60">
-                                                <TextBox Text="{Binding PurgeTime, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                                         Foreground="White" Background="Transparent"
-                                                         BorderThickness="0" FontSize="15" FontFamily="Consolas"
-                                                         TextAlignment="Center" VerticalContentAlignment="Center"
-                                                         Padding="0,5"
-                                                         Style="{StaticResource NumericEditingStyle}"/>
-                                            </Border>
-                                            <TextBlock Text=" sec" Foreground="#64748B" FontSize="12"
-                                                       VerticalAlignment="Center" Margin="5,0,0,0"/>
-                                        </StackPanel>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="피듀셜 마크 간격(X방향)" Width="150"
+                                                       Style="{StaticResource SpecFieldLabel}"/>
+                                            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
+                                                <Border Style="{StaticResource SpecFieldBox}">
+                                                    <TextBox Text="{Binding FiducialPitchXMm, Mode=TwoWay, StringFormat={}{0:F3}, UpdateSourceTrigger=LostFocus}"
+                                                             Style="{StaticResource SpecTextBox}"/>
+                                                </Border>
+                                                <TextBlock Text="mm" Style="{StaticResource SpecUnit}"/>
+                                                <TextBlock Text="정렬 마크 두 개의 중심 거리"
+                                                           Foreground="#475569" FontSize="11" VerticalAlignment="Center"/>
+                                            </StackPanel>
+
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="피듀셜 마크 간격(Y방향)" Width="150"
+                                                       Style="{StaticResource SpecFieldLabel}"/>
+                                            <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                                                <Border Style="{StaticResource SpecFieldBox}">
+                                                    <TextBox Text="{Binding FiducialPitchYMm, Mode=TwoWay, StringFormat={}{0:F3}, UpdateSourceTrigger=LostFocus}"
+                                                             Style="{StaticResource SpecTextBox}"/>
+                                                </Border>
+                                                <TextBlock Text="mm" Style="{StaticResource SpecUnit}"/>
+                                            </StackPanel>
+
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="정렬 합격 점수" Width="150"
+                                                       Style="{StaticResource SpecFieldLabel}"/>
+                                            <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal">
+                                                <Border Style="{StaticResource SpecFieldBox}">
+                                                    <TextBox Text="{Binding PatternMinScore, Mode=TwoWay, StringFormat={}{0:F2}, UpdateSourceTrigger=LostFocus}"
+                                                             Style="{StaticResource SpecTextBox}"
+                                                             ToolTip="0.50 ~ 0.95. 낮추면 무엇이든 '찾았다'가 되고 그 좌표로 스테이지가 움직입니다."/>
+                                                </Border>
+                                                <TextBlock Text="0.50~0.95" Foreground="#475569" FontSize="11"
+                                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                            </StackPanel>
+
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="허용 오차 T" Width="150"
+                                                       Style="{StaticResource SpecFieldLabel}"/>
+                                            <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
+                                                <Border Style="{StaticResource SpecFieldBox}">
+                                                    <TextBox Text="{Binding AlignToleranceDeg, Mode=TwoWay, StringFormat={}{0:F3}, UpdateSourceTrigger=LostFocus}"
+                                                             Style="{StaticResource SpecTextBox}"
+                                                             ToolTip="이 안이면 T 를 돌리지 않습니다. 측정 분해능이 바닥입니다 — 기선 160mm 에서 0.0004°."/>
+                                                </Border>
+                                                <TextBlock Text="deg" Style="{StaticResource SpecUnit}"/>
+                                                <TextBlock Text="이 안이면 보정하지 않음" Foreground="#475569" FontSize="11"
+                                                           VerticalAlignment="Center"/>
+                                            </StackPanel>
+
+                                            <TextBlock Grid.Row="5" Grid.Column="0" Text="허용 오차 X" Width="150"
+                                                       Style="{StaticResource SpecFieldLabel}"/>
+                                            <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal">
+                                                <Border Style="{StaticResource SpecFieldBox}">
+                                                    <TextBox Text="{Binding AlignToleranceXUm, Mode=TwoWay, StringFormat={}{0:F1}, UpdateSourceTrigger=LostFocus}"
+                                                             Style="{StaticResource SpecTextBox}"
+                                                             ToolTip="이 안이면 X 를 움직이지 않습니다. 스테이지가 못 내는 이동을 명령하지 않게 막습니다."/>
+                                                </Border>
+                                                <TextBlock Text="µm" Style="{StaticResource SpecUnit}"/>
+                                            </StackPanel>
+
+                                            <TextBlock Grid.Row="6" Grid.Column="0" Text="허용 오차 Y" Width="150"
+                                                       Style="{StaticResource SpecFieldLabel}"/>
+                                            <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal">
+                                                <Border Style="{StaticResource SpecFieldBox}">
+                                                    <TextBox Text="{Binding AlignToleranceYUm, Mode=TwoWay, StringFormat={}{0:F1}, UpdateSourceTrigger=LostFocus}"
+                                                             Style="{StaticResource SpecTextBox}"
+                                                             ToolTip="이 안이면 Y 를 움직이지 않습니다. 축마다 진직도가 달라 X 와 따로 둡니다."/>
+                                                </Border>
+                                                <TextBlock Text="µm" Style="{StaticResource SpecUnit}"/>
+                                            </StackPanel>
+                                        </Grid>
                                     </StackPanel>
                                 </Border>
-                                </StackPanel>
 
                             </WrapPanel>
-                        </ScrollViewer>
 
                     </Grid>
+                    </ScrollViewer>
                 </Border>
 
                 <!-- ── 티칭 포인트 ──────────────────────────────────────── -->

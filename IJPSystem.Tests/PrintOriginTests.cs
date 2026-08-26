@@ -129,4 +129,126 @@ namespace IJPSystem.Tests
             finally { System.Threading.Thread.CurrentThread.CurrentCulture = prev; }
         }
     }
+
+    /// <summary>
+    /// 인쇄 원점의 주인이 레시피 PRINT START 라는 것.
+    ///
+    /// <para>값이 두 군데 있으면 언젠가 갈라진다 — 원점 창에는 옛 값이 뜨는데 인쇄는 새 자리에서
+    /// 시작한다. 그 갈라짐은 인쇄물이 어긋나야 드러나므로 여기서 막는다.</para>
+    /// </summary>
+    public class PrintOriginStoreTests
+    {
+        private sealed class FakeStage : IStagePosition
+        {
+            public AxisPoint P;
+            public FakeStage(double x, double y, double z) => P = new AxisPoint(x, y, z);
+            public AxisPoint GetCurrentPosition() => P;
+        }
+
+        /// <summary>PRINT START 티칭값 흉내 — X·Y·Z 를 들고 있다.</summary>
+        private sealed class FakePointStore : IPrintOriginStore
+        {
+            public AxisPoint Point = new(10, 20, 30);
+            public bool Exists = true;
+            public string? Fail;
+            public int Writes;
+
+            public bool TryRead(out AxisPoint origin) { origin = Point; return Exists; }
+
+            public bool Write(AxisPoint origin, out string message)
+            {
+                message = Fail ?? "";
+                if (Fail != null) return false;
+
+                // 실제 저장부와 같은 규칙: X·Y 만 쓰고 Z 는 티칭값을 지킨다.
+                Point = new AxisPoint(origin.X, origin.Y, Point.Z);
+                Writes++;
+                return true;
+            }
+        }
+
+        [Fact]
+        public void 원점을_티칭값에서_읽는다()
+        {
+            var store = new FakePointStore { Point = new AxisPoint(148.5, 281.0, 28.0) };
+            var mgr = new PrintOriginManager(new FakeStage(0, 0, 0), store);
+
+            Assert.True(mgr.Load());
+            Assert.Equal(148.5, mgr.PrintOrigin.X, 3);
+            Assert.Equal(281.0, mgr.PrintOrigin.Y, 3);
+        }
+
+        [Fact]
+        public void 티칭값이_없으면_현재값을_지킨다()
+        {
+            var mgr = new PrintOriginManager(new FakeStage(0, 0, 0),
+                                             new FakePointStore { Exists = false },
+                                             defaultOrigin: new AxisPoint(1, 2, 3));
+
+            Assert.False(mgr.Load());
+            Assert.Equal(new AxisPoint(1, 2, 3), mgr.PrintOrigin);
+        }
+
+        [Fact]
+        public void Set_하면_티칭값이_바뀐다()
+        {
+            var store = new FakePointStore();
+            var mgr = new PrintOriginManager(new FakeStage(60.395, 260.503, 29.0), store);
+            mgr.Load();
+
+            mgr.SetPrintOrigin();
+
+            Assert.Equal(1, store.Writes);
+            Assert.Equal(60.395, store.Point.X, 3);
+            Assert.Equal(260.503, store.Point.Y, 3);
+        }
+
+        [Fact]
+        public void Z는_건드리지_않는다()
+        {
+            // Z 는 헤드 높이라 원점이 아니다 — 여기서 덮어쓰면 티칭한 높이가 현재값으로 밀린다.
+            var store = new FakePointStore { Point = new AxisPoint(0, 0, 28.0) };
+            var mgr = new PrintOriginManager(new FakeStage(10, 20, 99.0), store);
+            mgr.Load();
+
+            mgr.SetPrintOrigin();
+
+            Assert.Equal(28.0, store.Point.Z, 3);
+        }
+
+        [Fact]
+        public void 저장이_실패하면_이유가_남는다()
+        {
+            // 화면만 바뀌고 저장이 안 되면 다음 인쇄에서야 드러난다.
+            var mgr = new PrintOriginManager(new FakeStage(1, 2, 3),
+                                             new FakePointStore { Fail = "레시피가 선택되지 않았습니다." });
+
+            mgr.SetPrintOrigin();
+
+            Assert.Contains("레시피", mgr.LastError);
+        }
+
+        [Fact]
+        public void 저장이_되면_이유가_비어_있다()
+        {
+            var mgr = new PrintOriginManager(new FakeStage(1, 2, 3), new FakePointStore());
+
+            mgr.SetPrintOrigin();
+
+            Assert.Equal("", mgr.LastError);
+        }
+
+        [Fact]
+        public void 파일_저장은_쓰지_않는다()
+        {
+            // 같은 값을 두 군데 두면 갈라진다 — 티칭값 하나만 주인이어야 한다.
+            var store = new FakePointStore();
+            var mgr = new PrintOriginManager(new FakeStage(5, 6, 7), store);
+
+            mgr.SetPrintOrigin();
+            mgr.ResetToDefault();
+
+            Assert.Equal(2, store.Writes);   // 두 번 다 티칭값으로 갔다
+        }
+    }
 }

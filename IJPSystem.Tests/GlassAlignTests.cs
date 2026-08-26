@@ -475,4 +475,399 @@ namespace IJPSystem.Tests
             Assert.Equal(-0.8, shift.DxMm, 9);
         }
     }
+
+    /// <summary>
+    /// 사양값 교정 — 렌즈 사양 µm/px 만으로 정렬을 돌릴 수 있는가.
+    ///
+    /// <para>사양은 <b>크기</b>를 말하고 설치가 <b>방향</b>을 정한다. 그 둘이 모이면 교정 마법사
+    /// 없이도 픽셀을 mm 로 바꿀 수 있다 — 여기서 확인하는 것은 방향까지 맞느냐다.
+    /// 방향이 틀리면 보정이 오차를 두 배로 키우므로, 그것을 스스로 알아채는지도 함께 본다.</para>
+    /// </summary>
+    public class NominalCalibrationTests
+    {
+        // 10호기 글라스 카메라 사양.
+        private const double Spec = 1.125;
+
+        [Theory]
+        [InlineData("+X", StageAxisDir.PlusX)]
+        [InlineData("-X", StageAxisDir.MinusX)]
+        [InlineData("+Y", StageAxisDir.PlusY)]
+        [InlineData("-Y", StageAxisDir.MinusY)]
+        [InlineData("x",  StageAxisDir.PlusX)]      // 부호 없으면 +
+        [InlineData(" -y ", StageAxisDir.MinusY)]   // 설정 파일에 공백이 섞여도
+        public void 방향_문자열을_읽는다(string text, StageAxisDir expected)
+        {
+            Assert.True(StageAxis.TryParse(text, out var dir));
+            Assert.Equal(expected, dir);
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData(null)]
+        [InlineData("Z")]
+        [InlineData("위쪽")]
+        public void 못_읽는_방향은_짐작하지_않는다(string? text)
+        {
+            // 여기서 기본값을 정해 버리면 아무도 확인하지 않은 방향으로 모터가 나간다.
+            Assert.False(StageAxis.TryParse(text, out _));
+        }
+
+        [Fact]
+        public void 사양_분해능만으로_교정이_선다()
+        {
+            var k = PixelToStage.FromNominal(Spec, StageAxisDir.PlusX, StageAxisDir.MinusY)!;
+
+            Assert.True(k.IsCalibrated);
+            Assert.True(k.IsNominal);                       // 실측이 아니라는 표시가 남아야 한다
+            Assert.Equal(Spec, k.MicronPerPxX, 9);
+            Assert.Equal(Spec, k.MicronPerPxY, 9);
+            Assert.True(k.MatchesNominal(Spec));
+        }
+
+        [Fact]
+        public void 방향이_그대로_행렬에_들어간다()
+        {
+            // u 는 기계 +X, v 는 기계 -Y 로 달렸다고 적은 경우.
+            var k = PixelToStage.FromNominal(Spec, StageAxisDir.PlusX, StageAxisDir.MinusY)!;
+
+            var byU = k.ToMm(1, 0);
+            Assert.Equal( Spec / 1000.0, byU.X, 12);
+            Assert.Equal( 0.0,           byU.Y, 12);
+
+            var byV = k.ToMm(0, 1);
+            Assert.Equal( 0.0,           byV.X, 12);
+            Assert.Equal(-Spec / 1000.0, byV.Y, 12);
+        }
+
+        [Fact]
+        public void 두_축을_같게_적으면_교정이_서지_않는다()
+        {
+            // u 와 v 가 같은 방향이면 화면 두 축을 구분할 수 없다 — 여기서 막지 않으면
+            // 특이행렬로 계산해 엉뚱한 이동이 나온다.
+            Assert.Null(PixelToStage.FromNominal(Spec, StageAxisDir.PlusX, StageAxisDir.PlusX));
+            Assert.Null(PixelToStage.FromNominal(Spec, StageAxisDir.PlusX, StageAxisDir.MinusX));
+        }
+
+        [Fact]
+        public void 사양이_비어_있으면_교정이_서지_않는다()
+        {
+            Assert.Null(PixelToStage.FromNominal(0, StageAxisDir.PlusX, StageAxisDir.MinusY));
+        }
+
+        [Fact]
+        public void 사양값_교정으로도_이동량이_바로_나온다()
+        {
+            // 마크가 기준보다 화면에서 오른쪽·아래로 100px 씩 가 있다.
+            var k = PixelToStage.FromNominal(Spec, StageAxisDir.PlusX, StageAxisDir.MinusY)!;
+            var res = GlassAlign.SolveShift(new MarkReading(true, 0.9, 740, 580), 640, 480, k);
+
+            Assert.True(res.Ok);
+            Assert.Equal(-0.1125, res.DxMm, 9);   // 100px × 1.125µm
+            Assert.Equal( 0.1125, res.DyMm, 9);   // v 가 -Y 라 부호가 뒤집힌다
+        }
+
+        // ── 방향이 반대일 때 ─────────────────────────────────────────────
+
+        [Fact]
+        public void 오차가_줄면_계속한다()
+        {
+            var p = GlassAlign.CheckProgress(100, 4);
+
+            Assert.Equal(ProgressVerdict.Improved, p.Verdict);
+            Assert.True(p.Ok);
+        }
+
+        [Fact]
+        public void 오차가_늘면_멈춘다()
+        {
+            // 방향이 반대면 나타나는 증상이 이것이다. 되풀이할수록 벌어지므로 여기서 멈춰야 한다.
+            var p = GlassAlign.CheckProgress(100, 200);
+
+            Assert.Equal(ProgressVerdict.Diverged, p.Verdict);
+            Assert.False(p.Ok);
+            Assert.Contains("PixelUAxis", p.Message);   // 어디를 고쳐야 하는지까지 말한다
+        }
+
+        [Fact]
+        public void 덜_줄면_멈추지는_않고_짚어만_준다()
+        {
+            // 배율이 조금 어긋난 경우 — 되풀이하면 들어온다. 여기서 세우면 쓸 수 있는 글라스를 버린다.
+            var p = GlassAlign.CheckProgress(100, 70);
+
+            Assert.Equal(ProgressVerdict.Stalled, p.Verdict);
+            Assert.True(p.Ok);
+        }
+
+        [Fact]
+        public void 이미_맞아_있으면_그대로_통과한다()
+        {
+            // 허용 오차 안이라 아무것도 움직이지 않은 판 — 잡음만큼의 차이를 실패로 읽으면 안 된다.
+            var p = GlassAlign.CheckProgress(1.0, 1.4);
+
+            Assert.Equal(ProgressVerdict.Improved, p.Verdict);
+        }
+
+        // ── T 축의 + 방향 ────────────────────────────────────────────────
+
+        [Theory]
+        [InlineData("CW",     RotationSense.Clockwise)]
+        [InlineData("cw",     RotationSense.Clockwise)]
+        [InlineData("시계",   RotationSense.Clockwise)]
+        [InlineData("CCW",    RotationSense.CounterClockwise)]
+        [InlineData("반시계", RotationSense.CounterClockwise)]
+        public void 회전_방향_문자열을_읽는다(string text, RotationSense expected)
+        {
+            Assert.True(StageAxis.TryParseRotation(text, out var sense));
+            Assert.Equal(expected, sense);
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData(null)]
+        [InlineData("오른쪽")]
+        public void 못_읽는_회전_방향은_짐작하지_않는다(string? text)
+        {
+            Assert.False(StageAxis.TryParseRotation(text, out _));
+        }
+
+        [Fact]
+        public void T가_시계방향_플러스면_명령_부호가_뒤집힌다()
+        {
+            // 잰 각은 화면 좌표(오른쪽 +X, 위쪽 +Y)에서 재므로 반시계가 + 다.
+            // 10호기는 T 의 + 가 시계방향이라, +0.3° 기울어진 글라스는 T 를 +0.3° 줘야 펴진다.
+            Assert.Equal(0.3, GlassAlign.RotationCommand(0.3, RotationSense.Clockwise), 12);
+            Assert.Equal(-0.3, GlassAlign.RotationCommand(-0.3, RotationSense.Clockwise), 12);
+        }
+
+        [Fact]
+        public void T가_반시계_플러스면_명령이_잰_각의_반대다()
+        {
+            Assert.Equal(-0.3, GlassAlign.RotationCommand(0.3, RotationSense.CounterClockwise), 12);
+            Assert.Equal(0.3, GlassAlign.RotationCommand(-0.3, RotationSense.CounterClockwise), 12);
+        }
+
+        [Fact]
+        public void 두_방향의_명령은_언제나_반대다()
+        {
+            // 한쪽만 고치는 일을 막는다 — 부호를 다루는 자리가 여기 하나뿐이어야 한다.
+            foreach (double a in new[] { -1.5, -0.01, 0.0, 0.02, 1.9 })
+                Assert.Equal(GlassAlign.RotationCommand(a, RotationSense.Clockwise),
+                             -GlassAlign.RotationCommand(a, RotationSense.CounterClockwise), 12);
+        }
+    }
+
+    /// <summary>
+    /// 가상 모드 — 카메라 없이 정렬 한 판이 실제로 <b>수렴하는가</b>.
+    ///
+    /// <para>가상 글라스는 실제와 같은 규칙으로 마크 자리를 낸다. 그래서 이 시험은 계산이
+    /// 스스로와 아귀가 맞는지가 아니라, <b>보정을 하면 오차가 줄어드는지</b>를 본다 —
+    /// 부호를 하나라도 뒤집으면 여기서 벌어진다.</para>
+    /// </summary>
+    public class VirtualGlassAlignTests
+    {
+        private const double Spec = 1.125;
+        private const double PitchX = 0.0;
+        private const double PitchY = 160.0;
+
+        /// <summary>실제 광학에서 나온 거절선 — 시야가 1.44 × 1.15mm 뿐이라 한계가 아주 좁다.</summary>
+        private static AlignLimits Lim() => AlignLimits.ForCamera(Spec, 1280, 1024, PitchY);
+
+        private static PixelToStage Cal() =>
+            PixelToStage.FromNominal(Spec, StageAxisDir.PlusX, StageAxisDir.MinusY)!;
+
+        /// <summary>정렬 한 판을 그대로 돌린다 — 시퀀스가 부르는 순서와 같다.</summary>
+        private static (double AngleAfterDeg, double ShiftXMm, double ShiftYMm, int Passes) RunAlign(
+            VirtualGlass glass, RotationSense tSense, AlignLimits lim)
+        {
+            var cal = Cal();
+            double refX = 640, refY = 512;
+            double sx = 0, sy = 0, t = 0;
+
+            MarkReading M(int slot) => glass.Mark(slot, sx, sy, t, tSense, PitchX, PitchY, cal, refX, refY);
+
+            // ① 마크1 → ② 마크2(+피듀셜 간격) → ③ 각도
+            var m1 = M(1);
+            var move = GlassAlign.StageMoveToMark2(PitchX, PitchY);
+            sx += move.Dx; sy += move.Dy;
+            var m2 = M(2);
+
+            var angle = GlassAlign.SolveAngleFromPitch(m1, m2, PitchX, PitchY, cal, lim);
+            Assert.True(angle.Ok, angle.Message);
+
+            // ④ T 보정 → ⑤ 마크1 복귀
+            t += GlassAlign.RotationCommand(angle.AngleDeg, tSense);
+            sx -= move.Dx; sy -= move.Dy;
+
+            // ⑥ X·Y 보정을 허용 오차까지 되풀이
+            int passes = 0;
+            ShiftResult shift = default;
+            for (int i = 1; i <= lim.MaxPasses; i++)
+            {
+                passes = i;
+                shift = GlassAlign.SolveShift(M(1), refX, refY, cal, lim);
+                Assert.True(shift.Ok, shift.Message);
+                sx += shift.DxMm; sy += shift.DyMm;
+
+                shift = GlassAlign.SolveShift(M(1), refX, refY, cal, lim);
+                if (shift.WithinTolerance) break;
+            }
+
+            // ⑦ 마크2 로 다시 가서 각도 재확인
+            var last1 = M(1);
+            sx += move.Dx; sy += move.Dy;
+            var after = GlassAlign.SolveAngleFromPitch(last1, M(2), PitchX, PitchY, cal, lim);
+            Assert.True(after.Ok, after.Message);
+
+            return (after.AngleDeg, shift.DxMm, shift.DyMm, passes);
+        }
+
+        [Fact]
+        public void 가상_글라스가_허용_오차_안으로_들어온다()
+        {
+            var lim = Lim();
+            var r = RunAlign(new VirtualGlass(), RotationSense.Clockwise, lim);
+
+            Assert.True(Math.Abs(r.AngleAfterDeg) <= lim.AngleToleranceDeg,
+                        $"회전이 남았다: {r.AngleAfterDeg:F4}°");
+            Assert.True(Math.Abs(r.ShiftXMm) <= lim.ShiftToleranceXMm, $"X 가 남았다: {r.ShiftXMm:F4}mm");
+            Assert.True(Math.Abs(r.ShiftYMm) <= lim.ShiftToleranceYMm, $"Y 가 남았다: {r.ShiftYMm:F4}mm");
+        }
+
+        [Fact]
+        public void 한두_번이면_들어온다()
+        {
+            // 상한(3회)을 다 쓰면 뭔가 어긋난 것이다 — 계산이 맞으면 첫 판에 들어온다.
+            var r = RunAlign(new VirtualGlass(), RotationSense.Clockwise, Lim());
+
+            Assert.True(r.Passes <= 2, $"{r.Passes}번 걸렸다");
+        }
+
+        [Fact]
+        public void 회전중심이_어디든_결과가_같다()
+        {
+            // 회전 뒤 마크1 을 다시 재기 때문에 회전중심을 몰라도 된다 — 그 주장을 여기서 건다.
+            var lim = Lim();
+
+            foreach (var c in new[] { (0.0, 0.0), (12.0, -8.0), (-40.0, 25.0) })
+            {
+                var g = new VirtualGlass { ChuckCenterXMm = c.Item1, ChuckCenterYMm = c.Item2 };
+                var r = RunAlign(g, RotationSense.Clockwise, lim);
+
+                Assert.True(Math.Abs(r.AngleAfterDeg) <= lim.AngleToleranceDeg);
+                Assert.True(Math.Abs(r.ShiftXMm) <= lim.ShiftToleranceXMm);
+                Assert.True(Math.Abs(r.ShiftYMm) <= lim.ShiftToleranceYMm);
+            }
+        }
+
+        [Fact]
+        public void T_방향을_반대로_잡으면_더_기운다()
+        {
+            // 설정이 틀렸을 때 조용히 통과하면 안 된다 — 기울기가 두 배가 되어 드러나야 한다.
+            var glass = new VirtualGlass { RotationDeg = 0.05 };
+            var lim = Lim();
+
+            // 실제 축은 시계(+)인데 설정을 반시계로 잘못 적은 경우를 흉내낸다.
+            var cal = Cal();
+            double refX = 640, refY = 512, sx = 0, sy = 0, t = 0;
+            MarkReading M(int slot) =>
+                glass.Mark(slot, sx, sy, t, RotationSense.Clockwise, PitchX, PitchY, cal, refX, refY);
+
+            var m1 = M(1);
+            var move = GlassAlign.StageMoveToMark2(PitchX, PitchY);
+            sx += move.Dx; sy += move.Dy;
+            var before = GlassAlign.SolveAngleFromPitch(m1, M(2), PitchX, PitchY, cal, lim);
+
+            t += GlassAlign.RotationCommand(before.AngleDeg, RotationSense.CounterClockwise);   // 반대로 적음
+            sx -= move.Dx; sy -= move.Dy;
+
+            var m1b = M(1);
+            sx += move.Dx; sy += move.Dy;
+            var after = GlassAlign.SolveAngleFromPitch(m1b, M(2), PitchX, PitchY, cal, lim);
+
+            Assert.True(Math.Abs(after.AngleDeg) > Math.Abs(before.AngleDeg),
+                        $"{before.AngleDeg:F3}° → {after.AngleDeg:F3}° — 더 기울지 않았다");
+        }
+
+
+
+        [Fact]
+        public void 마크가_기준_자리_그대로면_아무것도_움직이지_않는다()
+        {
+            // 가상 운전은 마크 읽기를 건너뛰고 "기준 자리 그대로"라고 답한다.
+            // 그때 스테이지가 조금이라도 움직이면 가상에서 엉뚱한 이동을 만드는 셈이다.
+            var cal = Cal();
+            var at  = new MarkReading(true, 1.0, 640, 512);
+
+            var angle = GlassAlign.SolveAngleFromPitch(at, at, PitchX, PitchY, cal, Lim());
+            Assert.True(angle.Ok, angle.Message);
+            Assert.Equal(0.0, angle.AngleDeg, 9);
+            Assert.False(angle.NeedsRotation);
+
+            var shift = GlassAlign.SolveShift(at, 640, 512, cal, Lim());
+            Assert.True(shift.Ok, shift.Message);
+            Assert.Equal(0.0, shift.DxMm, 9);
+            Assert.Equal(0.0, shift.DyMm, 9);
+            Assert.False(shift.NeedsMove);
+        }
+        [Fact]
+        public void 거절선은_카메라_시야에서_나온다()
+        {
+            // 1.125µm/px · 1280×1024 → 시야 1.44 × 1.15mm. 손으로 적었던 2° 는 기선 160mm 에서
+            // 마크2 를 5.6mm(≈5000px) 밀어낸다 — 화면에 있을 수가 없는 값이었다.
+            var lim = AlignLimits.ForCamera(Spec, 1280, 1024, 160);
+
+            Assert.InRange(lim.MaxShiftMm, 0.15, 0.30);
+            Assert.InRange(lim.MaxAngleDeg, 0.03, 0.12);
+
+            // 한계까지 기울어도 마크2 는 화면 안이어야 한다 — 그러라고 시야에서 뽑았다.
+            double markShiftMm = 160 * Math.Sin(lim.MaxAngleDeg * Math.PI / 180);
+            Assert.True(markShiftMm <= 1024 * Spec / 2000.0, $"{markShiftMm:F3}mm 는 화면 밖이다");
+        }
+
+        [Fact]
+        public void 시야가_넓으면_한계도_넓어진다()
+        {
+            var tight = AlignLimits.ForCamera(Spec, 1280, 1024, 160);
+            var wide  = AlignLimits.ForCamera(Spec * 4, 1280, 1024, 160);
+
+            Assert.True(wide.MaxShiftMm  > tight.MaxShiftMm);
+            Assert.True(wide.MaxAngleDeg > tight.MaxAngleDeg);
+        }
+
+        [Fact]
+        public void 기선이_길수록_허용_각이_좁아진다()
+        {
+            // 같은 시야라도 마크가 멀리 있으면 조금만 돌아도 화면 밖으로 나간다.
+            var near = AlignLimits.ForCamera(Spec, 1280, 1024, 40);
+            var far  = AlignLimits.ForCamera(Spec, 1280, 1024, 160);
+
+            Assert.True(far.MaxAngleDeg < near.MaxAngleDeg);
+        }
+
+        [Fact]
+        public void 사양이_없으면_기본_한계를_그대로_둔다()
+        {
+            var lim = AlignLimits.ForCamera(0, 0, 0, 160);
+            var def = new AlignLimits();
+
+            Assert.Equal(def.MaxShiftMm, lim.MaxShiftMm, 9);
+            Assert.Equal(def.MaxAngleDeg, lim.MaxAngleDeg, 9);
+        }
+        [Fact]
+        public void 화면_밖으로_나가면_못_찾은_것으로_본다()
+        {
+            // 가상에서만 되는 정렬이 되면 안 된다 — 실제로 못 볼 자리는 여기서도 못 본다.
+            var glass = new VirtualGlass { OffsetXMm = 50 };
+
+            Assert.False(glass.Mark(1, 0, 0, 0, RotationSense.Clockwise,
+                                    PitchX, PitchY, Cal(), 640, 512).Found);
+        }
+
+        [Fact]
+        public void 교정이_없으면_아무것도_내지_않는다()
+        {
+            Assert.False(new VirtualGlass().Mark(1, 0, 0, 0, RotationSense.Clockwise,
+                                                 PitchX, PitchY, new PixelToStage(), 640, 512).Found);
+        }
+    }
 }

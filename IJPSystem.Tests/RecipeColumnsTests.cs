@@ -34,6 +34,9 @@ namespace IJPSystem.Tests
             Assert.Contains("GlassOriginYMm", RecipeColumns.Copyable);
             Assert.Contains("Swath",          RecipeColumns.Copyable);
             Assert.Contains("PrintDirection", RecipeColumns.Copyable);
+            Assert.Contains("PurgeTime",      RecipeColumns.Copyable);
+            // 자동 정렬 사용 여부도 품종이 정한다 — 복사본이 이것만 빠지면 마크 없는 글라스에서 멈춘다.
+            Assert.Contains("AutoAlign",      RecipeColumns.Copyable);
         }
 
         [Fact]

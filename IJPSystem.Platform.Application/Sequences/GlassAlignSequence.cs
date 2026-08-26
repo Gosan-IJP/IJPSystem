@@ -22,8 +22,13 @@ namespace IJPSystem.Platform.Application.Sequences
     /// 돌린 다음 다시 재면 그 이동까지 함께 잡힌다 — 사진 한 장 값으로 교정 하나를 없앤 셈이다.
     /// </para>
     /// <para>
-    /// 마지막 검증에서 허용 오차 안으로 못 들어오면 <b>보정을 되풀이한다</b>(레시피의 반복 상한).
+    /// X·Y 검증에서 허용 오차 안으로 못 들어오면 <b>보정을 되풀이한다</b>(레시피의 반복 상한).
     /// 그래도 못 들어오면 실패로 세운다 — 못 맞춘 글라스를 맞춘 것으로 알고 인쇄하면 안 된다.
+    /// </para>
+    /// <para>
+    /// 마지막에 <b>마크2 로 한 번 더 가서 각도를 다시 잰다</b>. X·Y 는 기울어진 채로도 맞출 수
+    /// 있어서, 마크1 만 보고 끝내면 T 를 반대로 돌려 기울기가 두 배가 된 글라스도 "완료"로
+    /// 나간다. 이동 한 번·사진 한 장을 더 쓰고 그 경우를 없앤다.
     /// </para>
     /// </summary>
     public static class GlassAlignSequence
@@ -34,54 +39,95 @@ namespace IJPSystem.Platform.Application.Sequences
         public static IReadOnlyList<SequenceStepDef> Build(
             IMachine machine, IMotionService motion, IGlassAlignService? align)
         {
-            return new[]
-            {
-                // 시작 전에 갖춰졌는지 먼저 본다. 반쯤 움직인 뒤 멈추면 글라스를 다시 놔야 한다.
-                new SequenceStepDef(1, "Step_GlassAlign_Ready",
-                    ct => Task.Run(() =>
-                    {
-                        var a = Require(align);
-                        string? why = a.NotReadyReason;
-                        if (why != null) throw new InvalidOperationException(why);
-                    }, ct)),
+            var steps = new List<SequenceStepDef>();
+            int n = 0;
+            foreach (var (name, action) in Definitions(machine, align))
+                steps.Add(new SequenceStepDef(++n, name, action));
+            return steps;
+        }
 
-                new SequenceStepDef(2, "Step_GlassAlign_Mark1Move",
-                    ct => Require(align).MoveToMark1Async(ct)),
+        /// <summary>
+        /// 인쇄 시퀀스 안에 끼워 넣을 정렬 단계 — 번호는 부르는 쪽이 이어서 매긴다.
+        ///
+        /// <para><b>레시피가 [미사용]이면 아무 단계도 내지 않는다.</b> 단계를 내 놓고 안에서
+        /// 건너뛰면, 화면에는 정렬하는 것처럼 보이는데 실제로는 아무 일도 없는 목록이 남는다 —
+        /// 목록은 실제로 도는 것만 보여야 한다.</para>
+        ///
+        /// <para>정렬 서비스가 안 꽂혀 있어도 비운다. 그 상태에서는 레시피 설정을 읽을 길도
+        /// 없어서, 켜져 있는지조차 말할 수 없기 때문이다(HMI 는 시작할 때 반드시 꽂는다).</para>
+        /// </summary>
+        public static IReadOnlyList<SequenceStepDef> Embedded(
+            IMachine machine, IGlassAlignService? align, int startNumber)
+        {
+            if (align == null || !align.IsEnabled) return System.Array.Empty<SequenceStepDef>();
 
-                new SequenceStepDef(3, "Step_GlassAlign_Mark1MoveDone",
-                    ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct)),
+            var steps = new List<SequenceStepDef>();
+            int n = startNumber - 1;
+            foreach (var (name, action) in Definitions(machine, align))
+                steps.Add(new SequenceStepDef(++n, name, action));
+            return steps;
+        }
 
-                new SequenceStepDef(4, "Step_GlassAlign_Mark1Find",
-                    ct => Require(align).MeasureAsync(1, ct)),
+        /// <summary>단계의 알맹이 — 번호만 빼고 여기 한 벌만 둔다.</summary>
+        private static IEnumerable<(string Name, Func<CancellationToken, Task> Action)> Definitions(
+            IMachine machine, IGlassAlignService? align)
+        {
+            // 시작 전에 갖춰졌는지 먼저 본다. 반쯤 움직인 뒤 멈추면 글라스를 다시 놔야 한다.
+            yield return ("Step_GlassAlign_Ready",
+                ct => Task.Run(() =>
+                {
+                    var a = Require(align);
+                    string? why = a.NotReadyReason;
+                    if (why != null) throw new InvalidOperationException(why);
+                }, ct));
 
-                new SequenceStepDef(5, "Step_GlassAlign_Mark2Move",
-                    ct => Require(align).MoveToMark2Async(ct)),
+            yield return ("Step_GlassAlign_Mark1Move",
+                ct => Require(align).MoveToMark1Async(ct));
 
-                new SequenceStepDef(6, "Step_GlassAlign_Mark2MoveDone",
-                    ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 30_000, ct)),
+            yield return ("Step_GlassAlign_Mark1MoveDone",
+                ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct));
 
-                new SequenceStepDef(7, "Step_GlassAlign_Mark2Find",
-                    ct => Require(align).MeasureAsync(2, ct)),
+            yield return ("Step_GlassAlign_Mark1Find",
+                ct => Require(align).MeasureAsync(1, ct));
 
-                new SequenceStepDef(8, "Step_GlassAlign_Rotate",
-                    ct => Require(align).CorrectRotationAsync(ct)),
+            yield return ("Step_GlassAlign_Mark2Move",
+                ct => Require(align).MoveToMark2Async(ct));
 
-                new SequenceStepDef(9, "Step_GlassAlign_RotateDone",
-                    ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct)),
+            yield return ("Step_GlassAlign_Mark2MoveDone",
+                ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 30_000, ct));
 
-                // 회전으로 딸려 나간 이동까지 여기서 함께 잡는다.
-                new SequenceStepDef(10, "Step_GlassAlign_Mark1Return",
-                    ct => Require(align).MoveToMark1Async(ct)),
+            yield return ("Step_GlassAlign_Mark2Find",
+                ct => Require(align).MeasureAsync(2, ct));
 
-                new SequenceStepDef(11, "Step_GlassAlign_Mark1ReturnDone",
-                    ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 30_000, ct)),
+            yield return ("Step_GlassAlign_Rotate",
+                ct => Require(align).CorrectRotationAsync(ct));
 
-                new SequenceStepDef(12, "Step_GlassAlign_Shift",
-                    ct => CorrectUntilInToleranceAsync(machine, align, ct)),
+            yield return ("Step_GlassAlign_RotateDone",
+                ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct));
 
-                new SequenceStepDef(13, "Step_GlassAlign_Verify",
-                    ct => VerifyAsync(align, ct)),
-            };
+            // 회전으로 딸려 나간 이동까지 여기서 함께 잡는다.
+            yield return ("Step_GlassAlign_Mark1Return",
+                ct => Require(align).MoveToMark1Async(ct));
+
+            yield return ("Step_GlassAlign_Mark1ReturnDone",
+                ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 30_000, ct));
+
+            yield return ("Step_GlassAlign_Shift",
+                ct => CorrectUntilInToleranceAsync(machine, align, ct));
+
+            yield return ("Step_GlassAlign_Verify",
+                ct => VerifyAsync(align, ct));
+
+            // 마크1 만 보고 끝내지 않는다 — X·Y 는 기울어진 채로도 맞출 수 있어서,
+            // T 를 반대로 돌려 기울기가 두 배가 된 글라스가 "완료"로 나갈 수 있다.
+            yield return ("Step_GlassAlign_Mark2Recheck",
+                ct => Require(align).MoveToMark2Async(ct));
+
+            yield return ("Step_GlassAlign_Mark2RecheckDone",
+                ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 30_000, ct));
+
+            yield return ("Step_GlassAlign_VerifyAngle",
+                ct => VerifyAngleAsync(align, ct));
         }
 
         /// <summary>
@@ -112,6 +158,12 @@ namespace IJPSystem.Platform.Application.Sequences
         private static async Task VerifyAsync(IGlassAlignService? align, CancellationToken ct)
         {
             var (ok, message) = await Require(align).VerifyAsync(ct);
+            if (!ok) throw new InvalidOperationException(message);
+        }
+
+        private static async Task VerifyAngleAsync(IGlassAlignService? align, CancellationToken ct)
+        {
+            var (ok, message) = await Require(align).VerifyAngleAsync(ct);
             if (!ok) throw new InvalidOperationException(message);
         }
 

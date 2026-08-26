@@ -569,9 +569,9 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- 자동 동작 — 찾기부터 정렬 이동까지 한 번에 도는 자리.
-                         아직 잠가 둔다: 픽셀을 mm 로 바꿀 교정값(µm/px)이 없으면 벗어난 양을
-                         이동량으로 옮길 수 없고, 그 상태로 누르면 엉뚱한 거리로 스테이지가 나간다. -->
+                    <!-- 자동 동작 — 시퀀스 화면의 GLASS ALIGN 과 같은 동작이다.
+                         단계 정의(GlassAlignSequence)를 그대로 가져다 돌린다: 여기서 순서를
+                         다시 쓰면 두 곳이 갈라지고, 갈라진 쪽이 실제로 도는 쪽일 때가 온다. -->
                     <Border Grid.Column="2"
                             Background="#111827" CornerRadius="12" Padding="16"
                             BorderBrush="#334155" BorderThickness="1"
@@ -580,15 +580,38 @@
                             <TextBlock Text="자동 동작" Foreground="#3B82F6"
                                        FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
 
-                            <Button Content="자동 동작" Height="38" IsEnabled="False"
-                                    Style="{StaticResource MutedActionButtonStyle}"
-                                    Background="#1E3A5F" Foreground="White"
-                                    FontSize="12" FontWeight="Bold"
-                                    ToolTip="패턴 찾기 → 어긋난 양 계산 → 정렬 이동을 한 번에 수행합니다."/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="※ 아직 동작하지 않습니다 — 픽셀을 mm 로 바꿀 교정(µm/px)이 서야 이동량이 나옵니다."
+                                <Button Grid.Column="0" Command="{Binding AutoAlignCommand}"
+                                        Content="자동 정렬" Height="38"
+                                        Style="{StaticResource MutedActionButtonStyle}"
+                                        Background="#1E3A5F" Foreground="White"
+                                        FontSize="12" FontWeight="Bold"
+                                        ToolTip="마크1 찾기 → 마크2 찾기 → T 보정 → X·Y 보정 → 검증을 한 번에 수행합니다."/>
+
+                                <!-- 스테이지가 도는 동안 세울 자리가 있어야 한다. -->
+                                <Button Grid.Column="2" Command="{Binding StopAutoAlignCommand}"
+                                        Content="중지" Width="64" Height="38"
+                                        Style="{StaticResource MutedActionButtonStyle}"
+                                        Background="#1E293B" Foreground="#94A3B8"
+                                        FontSize="12" FontWeight="Bold"/>
+                            </Grid>
+
+                            <!-- 13단계가 한참 걸린다 — 어디까지 갔는지 보이지 않으면 멈춘 줄 안다. -->
+                            <TextBlock Text="{Binding AutoAlignStatus}" Foreground="#60A5FA"
+                                       FontSize="11" TextWrapping="Wrap" Margin="0,12,0,0"/>
+
+                            <TextBlock Text="※ 마크 두 개로 T 를 맞춘 뒤 X·Y 를 맞춥니다. 레시피의 허용 오차 안에 들면 끝납니다."
                                        Foreground="#475569" FontSize="10" TextWrapping="Wrap"
-                                       Margin="0,12,0,0"/>
+                                       Margin="0,10,0,0"/>
+                            <TextBlock Text="※ 실측 교정이 없으면 사양 분해능(VisionConfig)으로 돕니다 — 배율에 렌즈 공차만큼 오차가 남습니다."
+                                       Foreground="#475569" FontSize="10" TextWrapping="Wrap"
+                                       Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                 </Grid>

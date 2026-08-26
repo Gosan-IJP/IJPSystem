@@ -168,6 +168,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _mainVM = mainViewModel;
             _motion = new MotionServiceAdapter(mainViewModel);
 
+            // 정렬 시퀀스가 쓸 서비스를 꽂는다. ??= 인 이유: 글라스 화면이 이미 꽂아 두었다면
+            // 그쪽이 낫다 — 거기서 고른 패턴을 알고 있어 패턴이 여러 개여도 헤매지 않는다.
+            GlassAlignServices.Current ??= new GlassAlignService(mainViewModel);
+
             _startCmd = new RelayCommand(
                 async _ => await RunSequenceAsync(),
                 _ => SelectedSequence != null &&

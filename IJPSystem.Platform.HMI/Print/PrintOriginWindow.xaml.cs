@@ -15,6 +15,10 @@ namespace IJPSystem.Platform.HMI.Print
         private readonly PrintOriginManager _mgr;
         private readonly DispatcherTimer _timer;
 
+        /// <summary>어디에 적히는지 — 창을 열 때와 저장 성공 뒤에 이 문구로 되돌린다.</summary>
+        private const string Destination =
+            "레시피 티칭의 PRINT START (X·Y) 에 저장됩니다 — Z 는 티칭값 그대로.";
+
         public PrintOriginWindow(PrintOriginManager manager)
         {
             InitializeComponent();
@@ -51,6 +55,11 @@ namespace IJPSystem.Platform.HMI.Print
         {
             _mgr.SetPrintOrigin();   // 현재 위치 → 원점 확정 + 저장(관리자가 처리)
             ShowOrigin();
+
+            // 저장이 실패했는데 화면만 바뀌면 다음 인쇄에서야 드러난다.
+            OrgWhere.Text = string.IsNullOrEmpty(_mgr.LastError)
+                ? Destination
+                : "저장 실패 — " + _mgr.LastError;
         }
 
         private void Reset_Click(object sender, RoutedEventArgs e)

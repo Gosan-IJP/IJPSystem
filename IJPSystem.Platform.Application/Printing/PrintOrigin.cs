@@ -32,6 +32,25 @@ namespace IJPSystem.Platform.Application.Printing
     }
 
     /// <summary>
+    /// 인쇄 원점을 어디에 두는가.
+    ///
+    /// <para><b>주인은 레시피의 PRINT START 티칭값이다.</b> 원점을 따로 파일에 두면 같은 값이
+    /// 두 군데 생기고, 티칭 화면에서 PRINT START 를 옮긴 날 둘이 갈라진다 — 화면에는 옛 원점이
+    /// 뜨는데 인쇄는 새 자리에서 시작한다.</para>
+    ///
+    /// <para>쓰는 축은 <b>X·Y 뿐</b>이다. 인쇄 시작 위치에서 T 는 움직이지 않고, Z 는 헤드
+    /// 높이라 원점이 아니다.</para>
+    /// </summary>
+    public interface IPrintOriginStore
+    {
+        /// <summary>지금 원점. 아직 없으면 false — 그때는 현재값을 그대로 둔다.</summary>
+        bool TryRead(out AxisPoint origin);
+
+        /// <summary>원점을 적는다. 실패하면 false 와 이유.</summary>
+        bool Write(AxisPoint origin, out string message);
+    }
+
+    /// <summary>
     /// 인쇄 원점 관리자.
     /// (LabVIEW "21_Screen_Set Print Origin.vi" 의 상태 + 파일 영속화)
     ///
@@ -45,12 +64,16 @@ namespace IJPSystem.Platform.Application.Printing
     {
         private readonly IStagePosition _stage;
         private readonly string? _dataDir;
+        private readonly IPrintOriginStore? _store;
 
         /// <summary>현재 인쇄 원점.</summary>
         public AxisPoint PrintOrigin { get; private set; }
 
         /// <summary>기본 원점(Reset 대상). 보통 0 이나, 장비별 기준을 주입할 수 있다.</summary>
         public AxisPoint DefaultOrigin { get; }
+
+        /// <summary>마지막 저장이 왜 실패했는지. 성공했으면 빈 문자열.</summary>
+        public string LastError { get; private set; } = "";
 
         public event EventHandler? PrintOriginChanged;
 
@@ -65,13 +88,32 @@ namespace IJPSystem.Platform.Application.Printing
             PrintOrigin   = defaultOrigin;
         }
 
+        /// <summary>
+        /// 원점을 레시피의 PRINT START 티칭값에 두는 구성.
+        ///
+        /// <para>파일 저장은 하지 않는다 — 같은 값을 두 군데 두면 언젠가 갈라진다.</para>
+        /// </summary>
+        public PrintOriginManager(IStagePosition stage, IPrintOriginStore store, AxisPoint defaultOrigin = default)
+        {
+            _stage        = stage ?? throw new ArgumentNullException(nameof(stage));
+            _store        = store ?? throw new ArgumentNullException(nameof(store));
+            DefaultOrigin = defaultOrigin;
+            PrintOrigin   = defaultOrigin;
+        }
+
         /// <summary>현재 스테이지 위치를 스냅으로 조회(모달의 Current Position 표시용).</summary>
         public AxisPoint GetCurrentPosition() => _stage.GetCurrentPosition();
 
-        /// <summary>현재 스테이지 위치를 인쇄 원점으로 확정. (Set Print Origin)</summary>
+        /// <summary>
+        /// 현재 스테이지 위치를 인쇄 원점으로 확정. (Set Print Origin)
+        ///
+        /// <para><b>X·Y 만 잡는다.</b> 인쇄 시작 위치에서 T 는 움직이지 않고, Z 는 헤드 높이라
+        /// 원점이 아니다 — 여기서 Z 까지 덮어쓰면 티칭해 둔 헤드 높이가 현재 위치로 밀린다.</para>
+        /// </summary>
         public AxisPoint SetPrintOrigin()
         {
-            PrintOrigin = _stage.GetCurrentPosition();
+            var now = _stage.GetCurrentPosition();
+            PrintOrigin = new AxisPoint(now.X, now.Y, PrintOrigin.Z);
             Save();
             PrintOriginChanged?.Invoke(this, EventArgs.Empty);
             return PrintOrigin;
@@ -85,9 +127,17 @@ namespace IJPSystem.Platform.Application.Printing
             PrintOriginChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        /// <summary>저장된 인쇄 원점 로드. 파일이 없으면 false(현재값 유지).</summary>
+        /// <summary>저장된 인쇄 원점 로드. 없으면 false(현재값 유지).</summary>
         public bool Load()
         {
+            if (_store != null)
+            {
+                if (!_store.TryRead(out var fromStore)) return false;
+                PrintOrigin = fromStore;
+                PrintOriginChanged?.Invoke(this, EventArgs.Empty);
+                return true;
+            }
+
             if (TryLoad(out var p)) { PrintOrigin = p; PrintOriginChanged?.Invoke(this, EventArgs.Empty); return true; }
             return false;
         }
@@ -98,6 +148,14 @@ namespace IJPSystem.Platform.Application.Printing
 
         private void Save()
         {
+            LastError = "";
+
+            if (_store != null)
+            {
+                if (!_store.Write(PrintOrigin, out string why)) LastError = why;
+                return;
+            }
+
             if (string.IsNullOrEmpty(_dataDir)) return;
             try
             {
@@ -106,7 +164,7 @@ namespace IJPSystem.Platform.Application.Printing
                     string.Format(CultureInfo.InvariantCulture, "{0}\t{1}\t{2}",
                                   PrintOrigin.X, PrintOrigin.Y, PrintOrigin.Z));
             }
-            catch { /* 저장 실패는 조용히 — 메모리 값은 유효하므로 작업은 계속된다 */ }
+            catch (Exception ex) { LastError = ex.Message; }   // 메모리 값은 유효하므로 작업은 계속된다
         }
 
         private bool TryLoad(out AxisPoint p)

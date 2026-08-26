@@ -1,0 +1,40 @@
+<UserControl x:Class="IJPSystem.Platform.HMI.Common.Controls.AlignCamera"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="root"
+             Width="34" Height="84">
+    <!-- 글라스 정렬 카메라 (GVC).
+         프레임에 붙어 있어 움직이지 않는다 — 글라스가 스테이지를 타고 렌즈 밑을 지나간다.
+         정렬 동작이 그 구조 위에서 돌기 때문에, 그림이 그 사실을 말해 주지 않으면
+         정렬 중 글라스가 오가는 까닭이 화면에서 읽히지 않는다.
+
+         (0,0) ┌──────────┐  몸체 34x84
+               │  C       │  라벨 (세로 한 글자씩)
+               │  A       │
+               │  M       │
+               │   ▬      │  렌즈 — 아래(글라스)를 본다
+        (0,84) └──────────┘                                     -->
+    <Canvas>
+        <!-- 몸체 -->
+        <Rectangle Canvas.Left="0" Canvas.Top="0" Width="34" Height="84"
+                   Fill="#0B1929" Stroke="#38BDF8" StrokeThickness="1.5"
+                   RadiusX="4" RadiusY="4"/>
+
+        <!-- 렌즈 — 아래(글라스)를 본다 -->
+        <Ellipse Canvas.Left="10" Canvas.Top="72" Width="14" Height="6"
+                 Fill="#38BDF8" Opacity="0.55"/>
+
+        <!-- 라벨. 몸체가 세로로 길어 가로로 쓸 자리가 없다 —
+             문자열을 한 글자씩 세로로 쌓는다(문자열은 char 열거이므로 그대로 항목이 된다). -->
+        <ItemsControl Canvas.Left="13" Canvas.Top="12" Width="8"
+                      ItemsSource="{Binding ElementName=root, Path=Label}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" Foreground="#38BDF8"
+                               FontSize="8" FontFamily="Consolas" FontWeight="Bold"
+                               TextAlignment="Center" Width="8" Height="12"/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Canvas>
+</UserControl>

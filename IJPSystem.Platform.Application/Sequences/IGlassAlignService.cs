@@ -26,6 +26,14 @@ namespace IJPSystem.Platform.Application.Sequences
         /// <summary>보정을 몇 번까지 되풀이할지(레시피). 이 횟수 안에 허용 오차로 못 들어오면 실패다.</summary>
         int MaxPasses { get; }
 
+        /// <summary>
+        /// 레시피가 자동 정렬을 쓰기로 돼 있는가(기본 설정 → 자동 정렬).
+        ///
+        /// <para>피듀셜 마크가 없는 품종도 있어 장비가 아니라 <b>품종</b>이 정한다.
+        /// 인쇄 시퀀스는 이 값이 false 면 정렬 단계를 아예 만들지 않는다.</para>
+        /// </summary>
+        bool IsEnabled { get; }
+
         /// <summary>마크1 자리(티칭 포인트)로 이동.</summary>
         Task<string> MoveToMark1Async(CancellationToken ct);
 
@@ -46,6 +54,14 @@ namespace IJPSystem.Platform.Application.Sequences
 
         /// <summary>지금 상태가 허용 오차 안인지. 들어왔으면 true.</summary>
         Task<(bool Ok, string Message)> VerifyAsync(CancellationToken ct);
+
+        /// <summary>
+        /// 회전이 실제로 펴졌는지 — 마크2 를 다시 재서 각도를 다시 낸다.
+        ///
+        /// <para>X·Y 는 기울어져 있어도 맞출 수 있다. 그래서 마크1 만 보고 끝내면 T 방향을
+        /// 반대로 잡아 기울기가 두 배가 된 글라스도 "정렬 완료"로 나간다.</para>
+        /// </summary>
+        Task<(bool Ok, string Message)> VerifyAngleAsync(CancellationToken ct);
     }
 
     /// <summary>

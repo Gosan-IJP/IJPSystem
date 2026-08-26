@@ -3,6 +3,65 @@ using System;
 namespace IJPSystem.Platform.Infrastructure.Vision
 {
     /// <summary>
+    /// 화면 한 축이 기계에서 가리키는 방향. 카메라를 어느 쪽으로 돌려 달았는지를 적는 값이다.
+    ///
+    /// <para>사양 µm/px 은 <b>크기</b>만 말한다. 화면 오른쪽이 기계 +X 인지 -Y 인지는
+    /// 설치가 정하는 값이라 설정으로 받는다 — 코드가 짐작하면 보정이 반대로 나간다.</para>
+    /// </summary>
+    public enum StageAxisDir { PlusX, MinusX, PlusY, MinusY }
+
+    /// <summary>설정 문자열("+X" 같은)과 <see cref="StageAxisDir"/> 사이.</summary>
+    public static class StageAxis
+    {
+        /// <summary>"+X" "-X" "+Y" "-Y" (부호 없으면 +). 못 읽으면 false — 짐작하지 않는다.</summary>
+        public static bool TryParse(string? text, out StageAxisDir dir)
+        {
+            dir = StageAxisDir.PlusX;
+            if (string.IsNullOrWhiteSpace(text)) return false;
+
+            string s = text.Trim().Replace(" ", "").ToUpperInvariant();
+            bool minus = s.StartsWith("-");
+            if (minus || s.StartsWith("+")) s = s.Substring(1);
+
+            if (s == "X") { dir = minus ? StageAxisDir.MinusX : StageAxisDir.PlusX; return true; }
+            if (s == "Y") { dir = minus ? StageAxisDir.MinusY : StageAxisDir.PlusY; return true; }
+            return false;
+        }
+
+        /// <summary>"CW"/"CCW"(또는 시계/반시계). 못 읽으면 false — 여기서 기본값을 정하면
+        /// 아무도 확인하지 않은 방향으로 T 가 돈다.</summary>
+        public static bool TryParseRotation(string? text, out RotationSense sense)
+        {
+            sense = RotationSense.CounterClockwise;
+            if (string.IsNullOrWhiteSpace(text)) return false;
+
+            string s = text.Trim().Replace(" ", "").ToUpperInvariant();
+            if (s is "CW" or "시계" or "시계방향")     { sense = RotationSense.Clockwise;        return true; }
+            if (s is "CCW" or "반시계" or "반시계방향") { sense = RotationSense.CounterClockwise; return true; }
+            return false;
+        }
+
+        /// <summary>단위 벡터(기계 X, Y).</summary>
+        public static (double X, double Y) Vector(StageAxisDir dir) => dir switch
+        {
+            StageAxisDir.PlusX  => ( 1,  0),
+            StageAxisDir.MinusX => (-1,  0),
+            StageAxisDir.PlusY  => ( 0,  1),
+            _                   => ( 0, -1),
+        };
+    }
+
+    /// <summary>
+    /// T 축의 + 가 어느 쪽으로 도는가 — <b>카메라 화면에서 본</b> 방향.
+    ///
+    /// <para>정렬 계산이 내는 각도는 기계 XY(화면 오른쪽 +X, 화면 위쪽 +Y)에서 잰 값이라
+    /// <b>반시계가 +</b> 다. 그런데 T 축의 + 가 어느 쪽인지는 모터 배선과 감속기가 정한다 —
+    /// 10호기는 <b>시계방향이 +</b> 다(2026-08-26 확인). 이 둘이 어긋나면 보정이 반대로 돌아
+    /// 기울기가 두 배가 되므로, 짐작하지 않고 설정에서 받는다.</para>
+    /// </summary>
+    public enum RotationSense { CounterClockwise, Clockwise }
+
+    /// <summary>
     /// 픽셀 → 기계좌표 변환(2×2). 배율·카메라 기울기·부호를 한 덩어리로 담는다.
     ///
     /// <para><b>왜 µm/px 두 개가 아니라 행렬인가</b>: 배율만 두면 "화면 아래가 기계 +Y 인가"
@@ -29,6 +88,22 @@ namespace IJPSystem.Platform.Infrastructure.Vision
         /// <summary>화면에서 (du,dv) 픽셀 움직인 것이 기계에서 몇 mm 인가.</summary>
         public (double X, double Y) ToMm(double du, double dv)
             => (Kxu * du + Kxv * dv, Kyu * du + Kyv * dv);
+
+        /// <summary>
+        /// 기계에서 (dx,dy) mm 움직인 것이 화면에서 몇 픽셀인가 — <see cref="ToMm"/> 의 역이다.
+        ///
+        /// <para>정렬 계산은 픽셀 → mm 한 방향만 쓴다. 역방향은 <b>가상 모드에서 마크가 화면
+        /// 어디에 보일지</b>를 계산할 때 필요하다. 같은 행렬을 뒤집어 쓰므로 두 방향이 어긋날
+        /// 자리가 없다.</para>
+        /// </summary>
+        public (double U, double V) ToPx(double dxMm, double dyMm)
+        {
+            double det = Determinant;
+            if (Math.Abs(det) < 1e-12) return (0, 0);
+
+            return (( Kyv * dxMm - Kxv * dyMm) / det,
+                    (-Kyu * dxMm + Kxu * dyMm) / det);
+        }
 
         /// <summary>사람이 읽는 값 — 화면 가로 1px 이 기계에서 몇 µm 인가.</summary>
         public double MicronPerPxX => Math.Sqrt(Kxu * Kxu + Kyu * Kyu) * 1000.0;
@@ -84,6 +159,48 @@ namespace IJPSystem.Platform.Infrastructure.Vision
                 Kyv =  moveYMm * duX / det,
             };
         }
+
+        /// <summary>
+        /// 사양값 교정 — 렌즈 사양 µm/px 와 <b>카메라가 어느 방향으로 달렸는지</b>로 만든다.
+        ///
+        /// <para><b>왜 µm/px 하나로는 안 되는가</b>: 이 행렬은 네 숫자, 곧 <i>크기 + 방향</i>이다.
+        /// 사양 1.125µm/px 은 크기만 말한다 — 화면 오른쪽이 기계 +X 인지 -Y 인지는 카메라를
+        /// 어느 쪽으로 돌려 달았는지에 달렸고, 그건 사양서가 아니라 장비에 적혀 있다.
+        /// 방향을 반대로 잡으면 보정이 오차를 줄이는 대신 두 배로 키운다.</para>
+        ///
+        /// <para>그래서 방향만 설정으로 받는다(VisionConfig 의 PixelUAxis/PixelVAxis).
+        /// 현장에서 X 를 조금 조그하고 마크가 화면에서 어디로 가는지 한 번 보면 정해지는 값이다.
+        /// 이렇게 만든 교정은 <see cref="IsNominal"/> 이 true — <b>실측이 아니라 사양값</b>이라
+        /// 렌즈 공차·작동거리 차이만큼 배율이 어긋나 있을 수 있다(그래서 한 번에 못 잡고
+        /// 되풀이할 수 있다). 카메라가 비뚤게 달린 몫도 여기에는 없다.</para>
+        ///
+        /// <para>두 축이 같은 축이면 행렬이 특이해진다 — null 을 낸다.</para>
+        /// </summary>
+        public static PixelToStage? FromNominal(double micronPerPx, StageAxisDir uAxis, StageAxisDir vAxis)
+        {
+            if (micronPerPx <= 0) return null;
+
+            var (ux, uy) = StageAxis.Vector(uAxis);
+            var (vx, vy) = StageAxis.Vector(vAxis);
+            if (Math.Abs(ux * vy - vx * uy) < 1e-9) return null;   // 같은 축을 두 번 골랐다
+
+            double mm = micronPerPx / 1000.0;
+            return new PixelToStage
+            {
+                Kxu = mm * ux, Kyu = mm * uy,
+                Kxv = mm * vx, Kyv = mm * vy,
+                IsNominal = true,
+            };
+        }
+
+        /// <summary>
+        /// 실측이 아니라 사양값으로 만든 교정인가.
+        ///
+        /// <para>계산 방법은 같지만 <b>믿는 정도가 다르다</b> — 배율이 렌즈 공차만큼 어긋나 있을 수
+        /// 있어 한 번에 다 못 잡을 수 있고, 카메라 기울기는 아예 0 으로 본다. 어느 쪽을 썼는지
+        /// 로그에 남기려고 들고 다닌다.</para>
+        /// </summary>
+        public bool IsNominal { get; set; }
     }
 
     /// <summary>정렬을 거절하는 선. 넘으면 계산은 하되 결과를 쓰지 않는다.</summary>
@@ -133,6 +250,40 @@ namespace IJPSystem.Platform.Infrastructure.Vision
 
         /// <summary>재측정·재보정을 몇 번까지 되풀이할지. 이 횟수 안에 못 들어오면 글라스를 거절한다.</summary>
         public int MaxPasses { get; set; } = 3;
+
+        /// <summary>
+        /// 카메라 시야에서 거절선을 뽑는다 — <b>화면 밖은 잴 수 없다</b>.
+        ///
+        /// <para>10호기 글라스 카메라는 1.125µm/px · 1280×1024 라 시야가 <b>1.44 × 1.15mm</b> 뿐이다.
+        /// 기선 160mm 에서 2° 는 마크2 를 5.6mm(≈5000px) 밀어낸다 — 화면에 있을 수가 없다.
+        /// 손으로 적은 한계값이 광학과 어긋나면 "너무 많이 돌아 있습니다" 대신 "마크를 못
+        /// 찾았습니다"가 뜨고, 원인이 글라스인지 조명인지 매칭인지 알 수 없게 된다.</para>
+        ///
+        /// <para>그래서 한계를 <b>시야에서 계산</b>한다. 가장자리는 템플릿이 잘려 매칭이 무너지므로
+        /// 화면 반폭의 75%까지만 쓰고, 그 여유를 <b>어긋남과 기울기가 절반씩</b> 나눠 갖는다 —
+        /// 둘이 같은 예산을 쓰기 때문이다(밀린 채로 돌아 있으면 둘이 겹친다).</para>
+        /// </summary>
+        /// <param name="micronPerPx">화소 크기[µm]. 0 이하면 기본값을 그대로 둔다.</param>
+        /// <param name="baselineMm">두 마크 사이 거리[mm] — 기선이 길수록 허용 각이 좁아진다.</param>
+        public static AlignLimits ForCamera(double micronPerPx, int widthPx, int heightPx, double baselineMm)
+        {
+            var lim = new AlignLimits();
+            if (micronPerPx <= 0 || widthPx <= 0 || heightPx <= 0) return lim;
+
+            double halfMm = Math.Min(widthPx, heightPx) * micronPerPx / 2000.0;
+            double reach  = halfMm * 0.75 / 2.0;          // 75% 까지, 어긋남과 기울기가 절반씩
+
+            lim.MaxShiftMm = reach;
+            if (baselineMm > 1.0)
+                lim.MaxAngleDeg = Math.Asin(Math.Min(1.0, reach / baselineMm)) * 180.0 / Math.PI;
+
+            return lim;
+        }
+
+        /// <summary>사람이 읽는 한 줄 — 화면에 왜 이 값인지 설명할 때 쓴다.</summary>
+        public string Summary =>
+            $"어긋남 한계 {MaxShiftMm * 1000:F0}µm · 기울기 한계 {MaxAngleDeg:F3}° " +
+            $"(허용 오차 X {ShiftToleranceXMm * 1000:F0} / Y {ShiftToleranceYMm * 1000:F0}µm · {AngleToleranceDeg:F3}°)";
     }
 
     /// <summary>정렬을 멈추는 이유. <see cref="Ok"/> 가 아니면 스테이지를 움직이지 않는다.</summary>
@@ -190,6 +341,25 @@ namespace IJPSystem.Platform.Infrastructure.Vision
         public bool NeedsMove => Ok && !WithinTolerance;
     }
 
+    /// <summary>보정이 실제로 먹혔는지.</summary>
+    public enum ProgressVerdict
+    {
+        /// <summary>오차가 줄었다.</summary>
+        Improved,
+        /// <summary>줄긴 했으나 덜 줄었다 — 배율이 어긋나 있을 수 있다. 되풀이하면 들어온다.</summary>
+        Stalled,
+        /// <summary>오차가 늘었다 — 방향이 반대다. 되풀이하면 더 벌어지므로 멈춰야 한다.</summary>
+        Diverged,
+    }
+
+    /// <summary>보정 전후 오차 비교 결과.</summary>
+    public readonly record struct ProgressCheck(
+        ProgressVerdict Verdict, double BeforePx, double AfterPx, string Message)
+    {
+        /// <summary>계속해도 되는가. 벌어졌으면 멈춘다.</summary>
+        public bool Ok => Verdict != ProgressVerdict.Diverged;
+    }
+
     /// <summary>
     /// 글라스 정렬 계산 — 두 피듀셜 마크로 각도를, 한 마크로 어긋난 거리를 낸다.
     ///
@@ -222,6 +392,19 @@ namespace IJPSystem.Platform.Infrastructure.Vision
         /// <summary>설계상 마크1 → 마크2 벡터. 마크2 가 -Y 쪽이므로 이동과 반대다.</summary>
         public static (double X, double Y) DesignedSeparation(double pitchXMm, double pitchYMm)
             => (-pitchXMm, -pitchYMm);
+
+        /// <summary>
+        /// 잰 각도를 <b>T 축에 줄 값</b>으로 바꾼다.
+        ///
+        /// <para>잰 각 θ 는 기계 XY 에서 <b>반시계가 +</b> 다. 고치려면 물리적으로 -θ 만큼
+        /// 돌려야 하는데, T 축의 + 가 시계방향이면 그 -θ 는 <b>+θ 명령</b>이 된다.
+        /// 이 뒤집힘을 한 곳에 가둬 둔다 — 두 군데에서 부호를 다루면 언젠가 하나만 고친다.</para>
+        ///
+        /// <para>여기를 틀리면 보정이 기울기를 두 배로 만든다. 그런데 정렬 시퀀스는 회전 뒤
+        /// 각도를 다시 재므로(마크2 재확인) 그 자리에서 드러난다.</para>
+        /// </summary>
+        public static double RotationCommand(double angleDeg, RotationSense tPositive)
+            => tPositive == RotationSense.Clockwise ? angleDeg : -angleDeg;
 
         /// <summary>
         /// 레시피 간격만 주면 이동 부호까지 알아서 맞춰 각도를 구한다. <b>시퀀스는 이쪽을 쓴다.</b>
@@ -329,6 +512,35 @@ namespace IJPSystem.Platform.Infrastructure.Vision
                 (within
                     ? $" · 허용 오차 X {lim.ShiftToleranceXMm * 1000:F0} / Y {lim.ShiftToleranceYMm * 1000:F0}µm 안 — 이동 없음"
                     : " · 이동 필요"));
+        }
+
+        /// <summary>
+        /// 보정이 오차를 줄였는지 본다 — <b>방향이 반대인지 스스로 알아내는 자리다.</b>
+        ///
+        /// <para>사양값(µm/px)만으로 만든 교정은 크기는 맞아도 방향이 틀릴 수 있다. 그런데 방향이
+        /// 틀리면 증상이 분명하다: 보정한 뒤 오차가 <b>늘어난다</b>. 이미 찍고 있는 사진 한 장으로
+        /// 그걸 잡을 수 있으니, 설정을 사람이 확인해 주기를 기다리지 않고 여기서 잡는다.</para>
+        ///
+        /// <para>되풀이할수록 벌어지기 때문에 한 번 벌어진 순간 멈추는 것이 중요하다 —
+        /// 첫 보정 한 번(허용된 최대 이동 안쪽)으로 값을 치르고 끝난다.</para>
+        /// </summary>
+        /// <param name="beforePx">보정 전, 기준 자리에서 벗어난 픽셀 거리.</param>
+        /// <param name="afterPx">보정 뒤 같은 값.</param>
+        /// <param name="noisePx">이 정도 차이는 측정 잡음으로 본다.</param>
+        public static ProgressCheck CheckProgress(double beforePx, double afterPx, double noisePx = 2.0)
+        {
+            if (afterPx > beforePx + noisePx)
+                return new ProgressCheck(ProgressVerdict.Diverged, beforePx, afterPx,
+                    $"보정 뒤 오차가 늘었습니다({beforePx:F1} → {afterPx:F1}px) — " +
+                    "화면 축 방향(VisionConfig 의 PixelUAxis/PixelVAxis)이 반대일 수 있습니다.");
+
+            if (beforePx > noisePx && afterPx > beforePx * 0.5)
+                return new ProgressCheck(ProgressVerdict.Stalled, beforePx, afterPx,
+                    $"오차가 덜 줄었습니다({beforePx:F1} → {afterPx:F1}px) — " +
+                    "사양값 교정이면 배율이 어긋나 있을 수 있습니다(실측 교정 권장).");
+
+            return new ProgressCheck(ProgressVerdict.Improved, beforePx, afterPx,
+                $"오차 {beforePx:F1} → {afterPx:F1}px");
         }
 
         // ── 내부 ─────────────────────────────────────────────────────────

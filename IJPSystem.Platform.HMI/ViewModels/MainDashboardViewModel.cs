@@ -57,6 +57,16 @@ namespace IJPSystem.Platform.HMI.ViewModels
         //   scan ∈ [PrintStart, PrintEnd] → 진행률 0..1 (스테이지가 고정 헤드 밑을 통과)
         public double ReadyScanMm      { get; private set; } = double.NaN;
         public double PrintStartScanMm { get; private set; } = double.NaN;
+
+        /// <summary>
+        /// 글라스 정렬 자리(마크1)의 스캔축 좌표[mm]. 티칭이 없으면 NaN.
+        ///
+        /// <para>정렬 구간은 인쇄 구간보다 훨씬 멀리 있다 — 이 장비는 인쇄가 Y 120~270mm 인데
+        /// 정렬 자리가 274mm, 마크2 는 434mm 다. 대시보드가 인쇄 축척(2.9px/mm)으로 그리면
+        /// 마크2 가 화면 밖 650px 지점이라 <b>정렬 이동이 통째로 안 보인다</b>. 그래서 정렬
+        /// 구간만 따로 그리고, 그 기준점이 이 값이다.</para>
+        /// </summary>
+        public double GlassAlignScanMm { get; private set; } = double.NaN;
         public double PrintEndScanMm   { get; private set; } = double.NaN;
         public bool   HasPrintRange => !double.IsNaN(PrintStartScanMm)
                                     && !double.IsNaN(PrintEndScanMm)
@@ -138,7 +148,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ReadyScanMm      = _getPointAxisMm?.Invoke(PointNames.Ready,      ScanAxis) ?? double.NaN;
             PrintStartScanMm = _getPointAxisMm?.Invoke(PointNames.PrintStart, ScanAxis) ?? double.NaN;
             PrintEndScanMm   = _getPointAxisMm?.Invoke(PointNames.PrintEnd,   ScanAxis) ?? double.NaN;
+            GlassAlignScanMm = _getPointAxisMm?.Invoke(PointNames.GlassAlign, ScanAxis) ?? double.NaN;
             OnPropertyChanged(nameof(ReadyScanMm));
+            OnPropertyChanged(nameof(GlassAlignScanMm));
             OnPropertyChanged(nameof(PrintStartScanMm));
             OnPropertyChanged(nameof(PrintEndScanMm));
             OnPropertyChanged(nameof(HasPrintRange));
@@ -574,6 +586,34 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 LogLevel.Info);
         }
 
+
+        /// <summary>
+        /// 번역 키로 스텝 번호를 찾는다. 없으면 0.
+        ///
+        /// <para><b>화면이 번호를 코드에 박지 않게 하려고 둔다.</b> 대시보드 애니메이션은
+        /// "8번이 인쇄" 같은 상수로 돌아갔는데, 시퀀스 앞에 단계가 하나라도 끼면 전부 어긋난다 —
+        /// 실제로 글라스 정렬 16단계를 넣자 애니메이션이 통째로 밀렸다(2026-08-26).</para>
+        /// </summary>
+        public int StepNumberOf(string nameKey)
+        {
+            foreach (var s in Steps)
+                if (string.Equals(s.NameKey, nameKey, StringComparison.Ordinal)) return s.Number;
+            return 0;
+        }
+
+        private bool _isAligning;
+
+        /// <summary>
+        /// 지금 글라스 정렬 구간인가.
+        ///
+        /// <para>정렬은 인쇄 경로 밖에서 ±피듀셜 간격만큼 오간다. 그 움직임을 인쇄 진행률로
+        /// 옮기면 대시보드에서 글라스가 튄다 — 정렬 중에는 화면을 그대로 둔다.</para>
+        /// </summary>
+        public bool IsAligning
+        {
+            get => _isAligning;
+            private set => SetProperty(ref _isAligning, value);
+        }
         /// <summary>언어 변경 시 호출 — 진행 중이어도 표시명만 갱신</summary>
         public void RefreshStepNames()
         {
@@ -595,6 +635,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             IsRunning  = true;
             IsError    = false;
             ProcessProgress = 0;
+            IsAligning = false;
             CurrentStepNumber = 0;
             CurrentStepName = "STARTING";
             CachePrintRange();
@@ -614,9 +655,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 cycle++;
                 startTime = DateTime.Now;
 
-                // 각 사이클 시작 시 애니메이션/스텝 상태를 리셋
-                AutoPrintStarted?.Invoke();
+                // 스텝을 <b>먼저</b> 만든다 — 화면이 시작 신호를 받고 스텝 구성을 보고
+                // 애니메이션 기준 번호를 잡기 때문이다. 순서가 반대면 <b>지난 사이클의 구성</b>을
+                // 보게 되고, 정렬 사용 여부를 바꾼 직후 기준 번호가 전부 어긋나 글라스가
+                // 통째로 안 움직였다(2026-08-26).
                 BuildSteps();
+                AutoPrintStarted?.Invoke();
                 int total = Steps.Count;
 
                 LogCycleParameters(cycle, total);
@@ -642,6 +686,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
                         CurrentStepName = $"[{step.Number}/{total}] {step.Name}";
                         CurrentStepNumber = step.Number;   // 재진입 View 애니메이션 복원용
+                        IsAligning = step.NameKey.StartsWith("Step_GlassAlign_", StringComparison.Ordinal);
                         ProcessProgress = (double)i / total * 100;
                         AutoPrintStepChanged?.Invoke(step.Number);
 
@@ -674,6 +719,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
                 // ── 한 사이클 완료 ──
                 ProcessProgress = 100;
+                IsAligning = false;
                 TotalCount++;
                 if (TotalCount >= 1000) TotalCount = 0;
                 TactTime = Math.Round((DateTime.Now - startTime).TotalSeconds, 1);
@@ -756,6 +802,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             IsError         = false;
             ProcessProgress = 0;
+            IsAligning      = false;
             TactTime        = 0;
             TotalCount      = 0;
             CurrentStepName = "IDLE";

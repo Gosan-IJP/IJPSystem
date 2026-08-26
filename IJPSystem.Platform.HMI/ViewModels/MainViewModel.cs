@@ -355,6 +355,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             SubscribeSpitLog();
 
+            // 정렬 서비스를 여기서 먼저 꽂는다 — 인쇄 시퀀스가 단계를 만들 때 레시피의
+            // [자동 정렬] 값을 물어보기 때문이다. 화면(글라스뷰)이 뜨면 그때 고른 패턴을
+            // 아는 것으로 갈아 끼운다.
+            Application.Sequences.GlassAlignServices.Current ??= new Services.GlassAlignService(this);
+
             var motionAdapter = new Services.MotionServiceAdapter(this);
             _mainDashboardVM = new MainDashboardViewModel(
                     this.AddLog,
@@ -952,9 +957,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 case "RECIPE":
                     CollapseAllSubMenus();
                     SelectedMenu    = "RECIPE";
-                    SelectedSubMenu = "MOTOR_INFO";
+                    // 레시피로 들어오면 [주요 정보]가 첫 화면이다 — 품종을 바꿀 때 실제로 보는
+                    // 값(글라스·헤드·인쇄 조건)이 여기 있다. 모터 정보는 장비 설정에 가까워
+                    // 매번 거쳐 갈 화면이 아니다.
+                    SelectedSubMenu = "OTHER_INFO";
                     CurrentView = RecipeVM;
-                    RecipeVM.CurrentDataType = RecipeDataType.Motor;
+                    RecipeVM.CurrentDataType = RecipeDataType.Other;
                     AddLog(TLog("Log_MoveRecipe"), LogLevel.Info);
                     break;
 

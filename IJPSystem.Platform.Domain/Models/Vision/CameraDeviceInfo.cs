@@ -86,6 +86,38 @@ namespace IJPSystem.Platform.Domain.Models.Vision
         /// 이동량이 그대로 모터로 가기 때문이다. 10호기 글라스 카메라 = 1.125µm/px.</para>
         /// </summary>
         public double NominalMicronPerPx { get; set; }
+
+        /// <summary>
+        /// 화면 가로 1픽셀(u)이 기계에서 가리키는 방향 — "+X" "-X" "+Y" "-Y". 비면 미입력.
+        ///
+        /// <para><b><see cref="NominalMicronPerPx"/> 는 크기만 말한다.</b> 화면 오른쪽이 기계 +X 인지
+        /// -Y 인지는 카메라를 어느 쪽으로 돌려 달았는지가 정하고, 그건 사양서가 아니라 이 장비에만
+        /// 있는 값이다. 반대로 잡으면 정렬 보정이 오차를 줄이는 대신 두 배로 키운다.</para>
+        ///
+        /// <para><b>확인법</b>: 글라스 화면에서 X 를 + 로 조금 조그하고 마크가 화면에서 어느 쪽으로
+        /// 가는지 본다. 마크가 왼쪽으로 갔다면 화면 오른쪽(u+)은 기계 -X 다. 한 번 보면 끝나는
+        /// 값이라, 이 두 줄만 맞으면 사양 µm/px 로 자동 정렬을 돌릴 수 있다(실측 교정은 그 뒤에
+        /// 배율을 정밀하게 맞추는 일이다).</para>
+        ///
+        /// <para>틀리게 적어도 장비가 상하지는 않는다 — 보정 뒤 오차가 늘면 정렬이 그 자리에서
+        /// 멈추고 이 값을 짚어 준다.</para>
+        /// </summary>
+        public string PixelUAxis { get; set; } = string.Empty;
+
+        /// <summary>화면 세로 1픽셀(v)이 기계에서 가리키는 방향. <see cref="PixelUAxis"/> 와 같은 규칙.</summary>
+        public string PixelVAxis { get; set; } = string.Empty;
+
+        /// <summary>
+        /// T 축의 + 가 도는 방향 — 이 카메라 화면에서 봤을 때 "CW"(시계) / "CCW"(반시계). 비면 미입력.
+        ///
+        /// <para>정렬이 내는 각도는 화면 좌표(오른쪽 +X, 위쪽 +Y)에서 잰 값이라 반시계가 + 다.
+        /// T 축의 + 가 어느 쪽인지는 모터 배선이 정하므로 그 둘이 반대일 수 있고, 그러면
+        /// 보정이 기울기를 <b>두 배로</b> 만든다.</para>
+        ///
+        /// <para><b>확인법</b>: T 를 + 로 조금 조그하고 글라스가 화면에서 어느 쪽으로 도는지 본다.
+        /// 10호기는 시계방향이다(2026-08-26 도면 확인).</para>
+        /// </summary>
+        public string TAxisPositiveDir { get; set; } = string.Empty;
         public double DefaultExposureMs { get; set; } = 10.0;
         public double DefaultGain { get; set; } = 1.0;
         public int LightChannel { get; set; } = 0;

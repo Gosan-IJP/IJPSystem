@@ -27,7 +27,15 @@ namespace IJPSystem.Platform.HMI.Views
         private int _currentStepNo;
         private double _passFill;                  // 현재 스와스 밴드의 채움률(0..1) — 패스 내 단조 증가
         private int    _currentPassIndex;          // 진행 중인 패스(0-based). 바뀌면 _passFill 리셋
-        private const int PrintScanStepNo = 8;     // AutoPrintSequence step 8 = 인쇄 진행 (14단계 — VacuumConfirm 제외)
+        // ── 애니메이션 기준 스텝 — <b>번호를 코드에 박지 않는다</b> ─────────────
+        //
+        // 예전에는 8(인쇄)·6(헤드다운)·10(헤드업)·4(시작이동)을 상수로 뒀다. 그러면 시퀀스 앞에
+        // 단계가 하나만 끼어도 전부 어긋난다 — 글라스 정렬 16단계를 넣자 애니메이션이 통째로
+        // 밀렸다(2026-08-26). 그래서 사이클을 시작할 때 <b>스텝 이름으로 번호를 찾아</b> 채운다.
+        private int _printScanStepNo = 8;
+        private int _headDownStepNo  = 6;
+        private int _headUpStepNo    = 10;
+        private int _moveStartStepNo = 4;
         // 각 step 진입 시각 (animStart 기준 초) — 스크립트 모드 phase 애니메이션 기점
         private readonly Dictionary<int, double> _stepTimes = new();
         // 파티클 분사 throttle — V-sync ~60fps 환경에서 매 프레임 분사 시 GC 압력 큼
@@ -48,7 +56,7 @@ namespace IJPSystem.Platform.HMI.Views
         private const double HeadParkedX    = -250;
         private const double HeadScanStartX =    0;
         private const double HeadScanEndX   =  540;
-        private const double PrintAreaMaxW  =  534;
+        private const double PrintAreaMaxW  =  356;   // 글라스 폭(360)과 맞춘다 — 헤드가 글라스 한쪽 끝에서 반대쪽 끝까지 지나간다
         // PrintedArea/PrintedDoneArea Rectangle 의 Height 와 반드시 같아야 한다(스와스 밴드 높이 계산 기준).
         private const double PrintedAreaH   =  174;
 
@@ -70,12 +78,23 @@ namespace IJPSystem.Platform.HMI.Views
         private const double GlassScanStart = 268;                          // 인쇄 시작 시 스테이지 위치(= 400 − 132)
         private const double GlassScanEnd   = GlassScanStart - PrintAreaMaxW; // 인쇄 종료 시 스테이지 위치
 
+        // ── 정렬 구간 표시 ────────────────────────────────────────────────
+        //
+        // 정렬 자리와 마크2 자리는 인쇄 구간보다 <b>훨씬 멀리</b> 있다. 이 장비는 인쇄가
+        // Y 120~270mm 인데 정렬이 274mm, 마크2 가 434mm 다 — 인쇄 축척(2.9px/mm)으로 그리면
+        // 마크2 가 화면 밖 650px 지점이라 정렬 이동이 통째로 안 보인다(실제로 그랬다).
+        //
+        // 그래서 정렬 구간만 <b>압축해서</b> 그린다. 같은 160mm 가 인쇄 때보다 작게 보이지만,
+        // 화면의 요점은 "그 사이를 오간다"는 사실이지 거리의 절대값이 아니다.
+        // 어차피 이 그림은 축척도가 아니다 — Ready→시작 구간과 인쇄 구간도 이미 축척이 다르다.
+        private const double AlignHomeX   =   40;    // 마크1 자리 — 글라스가 카메라를 덮는 자리
+        private const double AlignPxPerMm = 0.94;    // 160mm ↔ 150px
+        private const double AlignMinX    = -130;    // 더 왼쪽이면 글라스가 화면을 벗어난다
+
         // ── 헤드 Z(수직 승강) — 이미지처럼 헤드가 글라스로 하강/상승 ──
         // HeadDown(step 6)에서 하강, HeadUp(step 10)에서 상승. 상승은 스테이지(Y) 복귀와 동시에 진행.
         private const double HeadZUp        = 0;    // 상승(파킹) 위치
         private const double HeadZDown      = 34;   // 하강(인쇄) 위치 — 글라스 근접
-        private const int    HeadDownStepNo = 6;    // Z 하강 시작 스텝(HeadDown)
-        private const int    HeadUpStepNo   = 10;   // Z 상승 시작 스텝(HeadUp) = Y 복귀 동시 시작
 
         // ── 헤드 크로스스캔(X, 갠트리 스텝오버) ──────────────────────────
         // 화면은 헤드를 글라스 위쪽에 두고 아래로 분사하는 구성이라, X 를 밴드에 픽셀 단위로
@@ -151,6 +170,7 @@ namespace IJPSystem.Platform.HMI.Views
             if (_vm == null || !_vm.IsRunning) return;
             if (_vm.CurrentStepNumber <= 0) return;   // 스텝 진입 전(STARTING) — 곧 이벤트로 시작됨
 
+            ResolveStepNumbers();
             _isAnimating      = true;
             _isScanning       = false;
             _currentStepNo    = _vm.CurrentStepNumber;
@@ -281,12 +301,13 @@ namespace IJPSystem.Platform.HMI.Views
             int swath          = Math.Max(1, _vm?.SwathCount ?? 1);
             bool bidi          = _vm?.IsBidirectional ?? true;
             int stepsPerPass   = bidi ? 4 : 6;
-            int headUpStep     = stepsPerPass * swath + 6;   // 양방향 S=1→10,2→14,3→18 / 단방향 S=1→12,2→18,3→24
+            // 헤드업 스텝은 이름으로 찾은 값을 쓴다 — 식으로 계산하면 앞에 단계가 끼는 순간 어긋난다.
+            int headUpStep     = _headUpStepNo;
             // 헤드 UP 과 READY 복귀가 한 스텝에서 동시에 시작한다(AutoPrintSequence 참조).
             // 꼬리 구성: [HeadUpAndMoveReady] → Done → VacuumOff.
             int moveReadyStep  = headUpStep;
-            bool inPassRegion  = _currentStepNo >= PrintScanStepNo && _currentStepNo < headUpStep;
-            int within         = inPassRegion ? (_currentStepNo - PrintScanStepNo) % stepsPerPass : -1;
+            bool inPassRegion  = _currentStepNo >= _printScanStepNo && _currentStepNo < headUpStep;
+            int within         = inPassRegion ? (_currentStepNo - _printScanStepNo) % stepsPerPass : -1;
             bool isPrintStep   = inPassRegion && within == 0;   // 잉크 토출(스캔) 진행
             // 단방향 복귀(within==2)는 isPrintStep=false 라 스캔선/잉크가 자동으로 꺼진다(별도 처리 불필요).
             // 글라스는 복귀 구간에도 실모터 위치(t)를 따라가므로 End→Start 로 자연히 되돌아간다.
@@ -324,13 +345,13 @@ namespace IJPSystem.Platform.HMI.Views
                 double p = Math.Clamp((_vm.GetLiveLiftMm() - _vm.HeadUpLiftMm) / span, 0.0, 1.0);
                 headZ = Lerp(HeadZUp, HeadZDown, p);
             }
-            else if (_currentStepNo < HeadDownStepNo)
+            else if (_currentStepNo < _headDownStepNo)
             {
                 headZ = HeadZUp;                                     // 하강 전 — 상승 파킹
             }
             else if (_currentStepNo < headUpStep)
             {
-                double td = _stepTimes.TryGetValue(HeadDownStepNo, out var tDown)
+                double td = _stepTimes.TryGetValue(_headDownStepNo, out var tDown)
                     ? EaseInOutCubic(PhaseT(elapsed, tDown, T_HeadPosDur)) : 1.0;
                 headZ = Lerp(HeadZUp, HeadZDown, td);                // 하강 → 인쇄 위치(전 패스) 유지
             }
@@ -344,7 +365,7 @@ namespace IJPSystem.Platform.HMI.Views
             // ── 헤드 크로스스캔(X 스텝오버) ──
             // 실측 X 가 있으면 (현재−시작)/전체이동량, 없으면 패스 인덱스로 폴백.
             // 밴드가 아래→위로 쌓이므로 헤드도 위(−Y)로 이동시켜 방향을 일치시킨다.
-            int passIdx = inPassRegion ? (_currentStepNo - PrintScanStepNo) / stepsPerPass : 0;
+            int passIdx = inPassRegion ? (_currentStepNo - _printScanStepNo) / stepsPerPass : 0;
             double crossP;
             if (_vm != null && _vm.HasStepMapping)
                 crossP = Math.Clamp((_vm.GetLiveStepMm() - _vm.StepOriginMm) / _vm.StepSpanMm, 0.0, 1.0);
@@ -365,7 +386,6 @@ namespace IJPSystem.Platform.HMI.Views
             //  1~3: 우측 Ready 파킹 대기 / 4~7: Ready→PrintStart 반입(Y 동기) /
             //  8~12: 스캔(PrintStart→PrintEnd, Y 동기) / 13~: PrintEnd→Ready 복귀(오른쪽 방향, Y 동기)
             //  실측 매핑(HasReadyMapping) 있으면 Y모터 위치로 동기, 없으면 스텝 진입시각 스크립트.
-            const int MoveStartStepNo = 4;    // MoveStart(인쇄 시작 위치로 이동)
             bool hasReadyMap = _vm != null && _vm.HasReadyMapping;
             // 마지막 패스 종료 위치.
             //  - 단방향: 매 패스 Return 으로 항상 Start 복귀 → 마지막도 Start (bidi 아니면 무조건 false)
@@ -387,19 +407,49 @@ namespace IJPSystem.Platform.HMI.Views
                         ? EaseInOutCubic(PhaseT(elapsed, tr, T_GlassLoadDur)) : 1.0);
                 glassX = Lerp(scanEndX, GlassParkedR, p);
             }
-            else if (_currentStepNo >= PrintScanStepNo)
+            else if (_currentStepNo >= _printScanStepNo)
             {
                 glassX = Lerp(GlassScanStart, GlassScanEnd, t);          // 스캔(t: 실측 Y 또는 스크립트)
             }
-            else if (_currentStepNo >= MoveStartStepNo)
+            else if (_currentStepNo >= _moveStartStepNo)
             {
-                // 반입: 우측 Ready → 인쇄 시작 위치 (step 4에서 시작, Y 동기)
-                double denom = _vm != null ? _vm.PrintStartScanMm - _vm.ReadyScanMm : 0.0;
-                double p = (hasReadyMap && Math.Abs(denom) > 1e-6)
-                    ? Math.Clamp((liveScanMm - _vm!.ReadyScanMm) / denom, 0.0, 1.0)
-                    : (_stepTimes.TryGetValue(MoveStartStepNo, out var tm)
-                        ? EaseOutCubic(PhaseT(elapsed, tm, T_GlassLoadDur)) : 1.0);
-                glassX = Lerp(GlassParkedR, GlassScanStart, p);
+                // 반입: 지금 있는 자리 → 인쇄 시작 위치 (Y 동기)
+                //
+                // 예전에는 Ready→PrintStart 를 0..1 로 <b>잘라서</b> 썼다. 그러면 이 단계에 들어올 때
+                // 스테이지가 그 구간 밖에 있으면 진행률이 0 이나 1 로 잘려 글라스가 한쪽 끝으로 튄다 —
+                // 정렬을 넣으면서 실제로 그렇게 됐다(정렬은 마크2 재확인 자리에서 끝난다).
+                //
+                // 정렬 구간과 <b>같은 눈금</b>으로 실측 Y 를 그리면 경계에서 이어진다.
+                glassX = hasReadyMap
+                    ? ScanMmToScreenX(liveScanMm)
+                    : Lerp(GlassParkedR, GlassScanStart,
+                           _stepTimes.TryGetValue(_moveStartStepNo, out var tm)
+                               ? EaseOutCubic(PhaseT(elapsed, tm, T_GlassLoadDur)) : 1.0);
+            }
+            else if (_vm?.IsAligning == true)
+            {
+                double home = _vm.GlassAlignScanMm;
+                double x;
+
+                if (double.IsNaN(home) || !hasReadyMap)
+                {
+                    x = GlassParkedR;                                    // 티칭이 없으면 파킹 그대로
+                }
+                else if (liveScanMm < home)
+                {
+                    // 파킹 → 정렬 자리 반입. 양 끝이 파킹·정렬자리와 정확히 맞아 이어진다.
+                    double denom = home - _vm!.ReadyScanMm;
+                    double p = Math.Abs(denom) < 1e-6 ? 1.0
+                             : Math.Clamp((liveScanMm - _vm.ReadyScanMm) / denom, 0.0, 1.0);
+                    x = Lerp(GlassParkedR, AlignHomeX, p);
+                }
+                else
+                {
+                    // 마크1 ↔ 마크2 왕복 — 압축 축척으로 그린다.
+                    x = AlignHomeX - (liveScanMm - home) * AlignPxPerMm;
+                }
+
+                glassX = Math.Clamp(x, AlignMinX, GlassParkedR);
             }
             else
             {
@@ -563,11 +613,60 @@ namespace IJPSystem.Platform.HMI.Views
             SyncNozzleY(HeadZUp);
         }
 
+
+        /// <summary>
+        /// 스캔축(Y) mm → 글라스 화면 X.
+        ///
+        /// <para>Ready ↔ PrintStart 두 티칭점이 이미 화면 두 자리에 대응돼 있다. 그 눈금을 그대로
+        /// 늘려 쓰면 정렬처럼 <b>인쇄 구간 밖</b>을 오가는 이동도 같은 축척으로 그려진다 —
+        /// 구간마다 축척이 다르면 같은 100mm 가 어디서는 크게, 어디서는 작게 보인다.</para>
+        ///
+        /// <para>화면 밖으로 나가면 글라스가 사라져 버리므로 이동 범위 안으로 접는다.</para>
+        /// </summary>
+        private double ScanMmToScreenX(double scanMm)
+        {
+            if (_vm == null) return GlassParkedR;
+
+            double denom = _vm.PrintStartScanMm - _vm.ReadyScanMm;
+            if (double.IsNaN(denom) || Math.Abs(denom) < 1e-6) return GlassParkedR;
+
+            double px = GlassParkedR + (scanMm - _vm.ReadyScanMm) * (GlassScanStart - GlassParkedR) / denom;
+            return Math.Clamp(px, Math.Min(GlassScanEnd, GlassParkedR), Math.Max(GlassScanEnd, GlassParkedR));
+        }
         // ── ViewModel.AutoPrintStarted ──────────────────────────────
+
+        /// <summary>
+        /// 애니메이션 기준 스텝 번호를 <b>스텝 이름으로</b> 다시 찾는다.
+        ///
+        /// <para>사이클마다 부른다 — 프린팅수·방향·글라스 정렬 사용 여부에 따라 스텝 구성이
+        /// 달라지기 때문이다. 못 찾으면 옛 기본값을 그대로 둔다(애니메이션이 멈추는 것보다 낫다).</para>
+        /// </summary>
+        private void ResolveStepNumbers()
+        {
+            if (_vm == null) return;
+
+            int before = _moveStartStepNo + _headDownStepNo + _printScanStepNo + _headUpStepNo;
+
+            int Find(string key, int fallback)
+            {
+                int n = _vm.StepNumberOf(key);
+                return n > 0 ? n : fallback;
+            }
+
+            _moveStartStepNo = Find("Step_AutoPrint_MoveStart", _moveStartStepNo);
+            _headDownStepNo  = Find("Step_AutoPrint_HeadDown", _headDownStepNo);
+            _printScanStepNo = Find("Step_AutoPrint_Print", _printScanStepNo);
+            _headUpStepNo    = Find("Step_AutoPrint_HeadUpAndMoveReady", _headUpStepNo);
+
+            if (DiagEnabled && (before != _moveStartStepNo + _headDownStepNo + _printScanStepNo + _headUpStepNo))
+                Debug.WriteLine($"[DASH] STEPS  moveStart={_moveStartStepNo} headDown={_headDownStepNo} " +
+                                $"print={_printScanStepNo} headUp={_headUpStepNo}");
+        }
         private void OnAutoPrintStarted()
         {
             Dispatcher.Invoke(() =>
             {
+                ResolveStepNumbers();   // 스텝 구성이 사이클마다 달라진다(프린팅수·정렬 사용 여부)
                 _isAnimating    = true;
                 _isScanning     = false;
                 _currentStepNo  = 0;
@@ -595,6 +694,10 @@ namespace IJPSystem.Platform.HMI.Views
             if (!_isAnimating) return;
             Dispatcher.Invoke(() =>
             {
+                // 스텝이 바뀔 때마다 기준 번호를 다시 잡는다 — 시작 신호와 스텝 생성의
+                // 순서에 기대면, 그 순서가 바뀌는 날 화면이 조용히 어긋난다.
+                ResolveStepNumbers();
+
                 double elapsedAtStep = (DateTime.Now - _animStart).TotalSeconds;
                 bool isReentry = _stepTimes.ContainsKey(stepNumber);
                 _currentStepNo = stepNumber;

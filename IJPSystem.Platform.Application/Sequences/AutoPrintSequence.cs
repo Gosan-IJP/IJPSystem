@@ -48,6 +48,18 @@ namespace IJPSystem.Platform.Application.Sequences
             steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_VacuumStabilize",
                 ct => Task.Delay(1_000, ct)));
 
+            // ── 글라스 자동 정렬 ──────────────────────────────────────
+            // 진공으로 글라스를 붙든 뒤, 인쇄 시작 위치로 가기 전에 넣는다 —
+            // 정렬은 글라스가 척에 고정된 상태에서만 뜻이 있고, 정렬로 옮긴 자리를
+            // 인쇄 이동이 덮어쓰면 안 되기 때문이다.
+            //
+            // 레시피에서 [미사용]이면 단계 자체가 생기지 않는다(GlassAlignSequence.Embedded).
+            foreach (var s in GlassAlignSequence.Embedded(machine, GlassAlignServices.Current, n + 1))
+            {
+                steps.Add(s);
+                n = s.Number;
+            }
+
             steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_MoveStart",
                 ct => motion.MoveToPointAsync(PointNames.PrintStart, ct)));
 

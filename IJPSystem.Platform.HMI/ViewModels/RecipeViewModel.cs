@@ -77,6 +77,30 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public string ActivePrintDirectionText =>
             Common.Loc.T(_activePrintDirection == 1 ? "Opt_Bidirectional" : "Opt_Unidirectional");
 
+        // 활성 레시피의 자동 정렬 사용 여부(0=사용, 1=미사용). 상태바 표기 + 인쇄 시퀀스 생성에 사용.
+        //
+        // 편집 중인 값(AutoAlignIndex)이 아니라 <b>APPLY 된 값</b>을 쓴다 — 인쇄가 도는 기준은
+        // 화면에서 만지고 있는 레시피가 아니라 장비에 적용된 레시피다.
+        private int _activeAutoAlign;            // 기본 0(사용) — 컬럼이 없던 레시피의 현행 동작
+        public int ActiveAutoAlign
+        {
+            get => _activeAutoAlign;
+            private set
+            {
+                if (SetProperty(ref _activeAutoAlign, value))
+                {
+                    OnPropertyChanged(nameof(ActiveAutoAlignEnabled));
+                    OnPropertyChanged(nameof(ActiveAutoAlignText));
+                }
+            }
+        }
+
+        /// <summary>적용된 레시피가 자동 정렬을 쓰는가. 인쇄 시퀀스가 이 값을 본다.</summary>
+        public bool ActiveAutoAlignEnabled => _activeAutoAlign == 0;
+
+        /// <summary>상태바 표기 — 언어 전환에도 따라간다.</summary>
+        public string ActiveAutoAlignText => Common.Loc.T(_activeAutoAlign == 0 ? "Opt_Used" : "Opt_NotUsed");
+
         public IReadOnlyDictionary<string, double>? GetActivePoint(string pointName) =>
             _activePointsSnapshot.TryGetValue(pointName, out var dict) ? dict : null;
 
@@ -91,7 +115,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ActiveSwath = 1;
             ActiveHeadLength = 0;
             ActivePrintDirection = 1;
+            ActiveAutoAlign = 0;
             OnPropertyChanged(nameof(ActivePrintDirectionText));
+            OnPropertyChanged(nameof(ActiveAutoAlignText));
             if (string.IsNullOrEmpty(_activeRecipeName)) return;
 
             try
@@ -106,7 +132,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     "SELECT HeadLength FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 0;
                 ActivePrintDirection = db.QueryFirstOrDefault<int?>(
                     "SELECT PrintDirection FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 1;
+                ActiveAutoAlign = db.QueryFirstOrDefault<int?>(
+                    "SELECT AutoAlign FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 0;
                 OnPropertyChanged(nameof(ActivePrintDirectionText));
+                OnPropertyChanged(nameof(ActiveAutoAlignText));
 
                 // 1) 포인트
                 const string sqlPoints = @"
@@ -300,6 +329,33 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     IsDirty = true;
             }
         }
+
+        /// <summary>
+        /// 자동 정렬을 쓸지 — 기본 설정 콤보박스(0=사용, 1=미사용)에 SelectedIndex 로 바인딩.
+        ///
+        /// <para><b>레시피에 딸리는 이유</b>: 피듀셜 마크가 없는 글라스도 있다. 장비 설정으로
+        /// 두면 그런 품종을 걸 때마다 사람이 껐다 켜야 하고, 켜 놓은 채 걸면 마크를 못 찾아
+        /// 인쇄가 멈춘다. 품종이 정하는 값이니 품종과 함께 저장한다.</para>
+        ///
+        /// <para>기본은 <b>사용</b> — 이 컬럼이 없던 기존 레시피의 현행 동작을 그대로 둔다.</para>
+        /// </summary>
+        private int _autoAlignIndex;            // 0=사용(Used), 1=미사용(Not used)
+        public int AutoAlignIndex
+        {
+            get => _autoAlignIndex;
+            set
+            {
+                int clamped = Math.Max(0, Math.Min(1, value));
+                if (SetProperty(ref _autoAlignIndex, clamped) && !_isLoading)
+                {
+                    IsDirty = true;
+                    OnPropertyChanged(nameof(AutoAlignEnabled));
+                }
+            }
+        }
+
+        /// <summary>자동 정렬을 쓰는가. 이 뜻을 콤보박스 인덱스로 읽는 곳이 없게 한 자리에 둔다.</summary>
+        public bool AutoAlignEnabled => AutoAlignIndex == 0;
 
         // ── 노즐 정보 (헤드 사양) ─────────────────────────────────────────────
         // <b>레시피에 딸린다</b>(2026-08-13 변경). 장비 하나로 여러 헤드를 갈아 쓰므로,
@@ -969,6 +1025,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 try { db.Execute("ALTER TABLE Recipes ADD COLUMN PrintDirection INTEGER DEFAULT 1"); }
                 catch { /* 이미 존재하면 무시 */ }
 
+                // AutoAlign(자동 정렬: 0=사용, 1=미사용) 컬럼 마이그레이션.
+                // 기본 0(사용) — 이 컬럼이 없던 기존 레시피의 현행 동작을 그대로 유지.
+                try { db.Execute("ALTER TABLE Recipes ADD COLUMN AutoAlign INTEGER DEFAULT 0"); }
+                catch { /* 이미 존재하면 무시 */ }
+
                 // 글라스 정보 컬럼 마이그레이션(2026-08-07). 기본 0 = 미입력.
                 //
                 // 노즐 헤드 사양도 여기 둔다(2026-08-13 변경). 예전에는 장비 설정(MachineSettings)에만
@@ -1108,6 +1169,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     PrintDirectionIndex = db.QueryFirstOrDefault<int?>(
                         "SELECT PrintDirection FROM Recipes WHERE Name=@recipeName",
                         new { recipeName }) ?? 1;
+                    AutoAlignIndex = db.QueryFirstOrDefault<int?>(
+                        "SELECT AutoAlign FROM Recipes WHERE Name=@recipeName",
+                        new { recipeName }) ?? 0;
 
                     // 글라스·노즐 정보 — 한 번의 조회로 가져온다(컬럼마다 왕복하면 열 번이 된다).
                     var spec = db.QueryFirstOrDefault(
@@ -1213,6 +1277,83 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         /// <summary>위치 티칭 화면에서 포인트를 저장한 직후 호출 — 레시피 화면의 티칭 그리드를 DB 최신값으로 동기화</summary>
         public void ReloadTeachingPoints() => LoadTeachingPoints(SelectedRecipeName);
+
+        /// <summary>
+        /// 티칭 포인트 한 개의 <b>일부 축만</b> 고쳐 저장한다 — 인쇄 원점 설정처럼 화면 밖에서 부른다.
+        ///
+        /// <para>티칭 화면의 저장은 전체를 지우고 다시 쓴다(DELETE + INSERT). 그 경로를 여기서
+        /// 쓰면 화면에 안 떠 있는 값까지 지금 메모리 값으로 덮어쓴다. 그래서 <b>준 축만</b>
+        /// UPDATE 한다 — 나머지 축과 사용 여부는 손대지 않는다.</para>
+        ///
+        /// <para>저장 뒤 티칭 목록과 활성 스냅샷을 다시 읽는다. 안 그러면 화면과 시퀀스가
+        /// 옛 값을 들고 있게 되고, 그 어긋남은 인쇄가 엉뚱한 자리에서 시작해야 드러난다.</para>
+        /// </summary>
+        /// <param name="pointName">티칭 포인트 이름(<c>PointNames</c> 상수).</param>
+        /// <param name="axes">축 이름 → 값[mm]. 여기 없는 축은 그대로 둔다.</param>
+        public bool SetPointAxes(string pointName, IReadOnlyDictionary<string, double> axes, out string message)
+        {
+            message = "";
+            if (string.IsNullOrWhiteSpace(pointName) || axes == null || axes.Count == 0)
+            {
+                message = "저장할 값이 없습니다.";
+                return false;
+            }
+
+            string recipe = SelectedRecipeName;
+            if (string.IsNullOrEmpty(recipe))
+            {
+                message = "레시피가 선택되지 않았습니다.";
+                return false;
+            }
+
+            try
+            {
+                using var db = new SqliteConnection(_dbPath);
+                db.Open();
+
+                int recipeId = db.QueryFirstOrDefault<int>(
+                    "SELECT Id FROM Recipes WHERE Name=@recipe", new { recipe });
+                if (recipeId == 0) { message = $"레시피 [{recipe}] 를 찾을 수 없습니다."; return false; }
+
+                using var trans = db.BeginTransaction();
+                foreach (var (axis, value) in axes)
+                {
+                    // 행이 없을 수도 있다(축을 나중에 늘린 레시피) — 그러면 만들어 준다.
+                    int changed = db.Execute(
+                        @"UPDATE RecipeDetails_Position SET PosValue=@value
+                          WHERE RecipeId=@recipeId AND PointName=@pointName AND AxisName=@axis",
+                        new { value, recipeId, pointName, axis }, trans);
+
+                    if (changed == 0)
+                        db.Execute(
+                            @"INSERT INTO RecipeDetails_Position (RecipeId, PointName, AxisName, PosValue, IsUsed)
+                              VALUES (@recipeId, @pointName, @axis, @value, 1)",
+                            new { recipeId, pointName, axis, value }, trans);
+                }
+                trans.Commit();
+
+                ReloadTeachingPoints();
+                if (string.Equals(recipe, ActiveRecipeName, StringComparison.Ordinal))
+                    RefreshActivePointsSnapshot();
+
+                message = $"[{recipe}] {pointName} — " +
+                          string.Join(", ", axes.Select(a => $"{a.Key} {a.Value:F3}"));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+                return false;
+            }
+        }
+
+        /// <summary>티칭 포인트 한 개의 축 값들(현재 선택된 레시피 기준). 없으면 null.</summary>
+        public IReadOnlyDictionary<string, double>? GetPointAxes(string pointName)
+        {
+            var pt = TeachingPoints?.FirstOrDefault(
+                p => string.Equals(p.PointName, pointName, StringComparison.OrdinalIgnoreCase));
+            return pt?.Positions;
+        }
 
         private void LoadTeachingPoints(string recipeName)
         {
@@ -1455,9 +1596,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                          }, trans);
                         }
 
-                        // PurgeTime / Swath / HeadLength / PrintDirection + 노즐·글라스 정보 저장
+                        // PurgeTime / Swath / HeadLength / PrintDirection / AutoAlign + 노즐·글라스 정보 저장
                         db.Execute(@"UPDATE Recipes SET
-                                         PurgeTime=@purgeTime, Swath=@swath, HeadLength=@headLength, PrintDirection=@printDir,
+                                         PurgeTime=@purgeTime, Swath=@swath, HeadLength=@headLength, PrintDirection=@printDir, AutoAlign=@autoAlign,
                                          GlassWidthMm=@gW, GlassHeightMm=@gH, GlassThicknessMm=@gT,
                                          GlassOriginXMm=@gX, GlassOriginYMm=@gY, FiducialPitchXMm=@fidX, FiducialPitchYMm=@fidY, PatternMinScore=@minScore, AlignToleranceDeg=@tolDeg, AlignToleranceXUm=@tolX, AlignToleranceYUm=@tolY,
                                          HeadName=@headName, HeadWidthMm=@headWidth, NozzlePitchUm=@nPitch, NozzleRows=@nRows,
@@ -1467,7 +1608,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                             new
                             {
                                 purgeTime = PurgeTime, swath = SwathCount, headLength = HeadLength,
-                                printDir = PrintDirectionIndex,
+                                printDir = PrintDirectionIndex, autoAlign = AutoAlignIndex,
                                 gW = GlassWidthMm, gH = GlassHeightMm, gT = GlassThicknessMm,
                                 gX = GlassOriginXMm, gY = GlassOriginYMm, fidX = FiducialPitchXMm, fidY = FiducialPitchYMm, minScore = PatternMinScore, tolDeg = AlignToleranceDeg, tolX = AlignToleranceXUm, tolY = AlignToleranceYUm,
                                 headName = HeadName, headWidth = HeadWidthMm, nPitch = NozzlePitchUm, nRows = NozzleRows,
