@@ -372,7 +372,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     hasActiveAlarm: () => HasActiveAlarm,
                     getSwathCount: () => RecipeVM.ActiveSwath,
                     getHeadLength: () => RecipeVM.ActiveHeadLength,
-                    getPrintDirection: () => RecipeVM.ActivePrintDirection
+                    getPrintDirection: () => RecipeVM.ActivePrintDirection,
+                    // 정렬 왕복을 그리려면 마크2 가 어느 쪽에 얼마나 떨어져 있는지를 알아야 한다.
+                    getFiducialPitchYMm: () => RecipeVM.FiducialPitchYMm
                 );
 
             RecipeVM.PropertyChanged += (s, e) =>

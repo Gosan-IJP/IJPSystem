@@ -102,10 +102,10 @@
         <Border Grid.Row="2" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="10" Padding="16">
             <StackPanel>
                 <TextBlock Style="{StaticResource Hdr}" Text="Print Origin"/>
-                <!-- 값의 주인은 레시피 티칭의 PRINT START 다 — 여기서 Set 하면 그 자리가 바뀐다.
+                <!-- 값의 주인은 레시피 티칭의 PRINT ORIGIN 이다 — 여기서 Set 하면 그 자리가 바뀐다.
                      어디에 적히는지 안 보이면 "원점만 바꾼 줄" 알고 누르게 된다. -->
                 <TextBlock x:Name="OrgWhere" Foreground="#64748B" FontSize="11" Margin="0,0,0,8"
-                           Text="레시피 티칭의 PRINT START (X·Y) 에 저장됩니다 — Z 는 티칭값 그대로."/>
+                           Text="레시피 티칭의 PRINT ORIGIN (X·Y) 에 저장됩니다 — Z 는 티칭값 그대로."/>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
@@ -142,12 +142,12 @@
             <Button Grid.Column="2" Style="{StaticResource ActBtn}" Background="#1D4ED8"
                     Content="Set Print Origin" Click="Set_Click"/>
         </Grid>
-
-        <!-- 안내 -->
+        <!-- 안내는 한 줄이다. "인쇄가 시작되는 원점입니다"는 제목이 이미 말하고 있었고,
+             "Glass View Camera 가 보고 있는 위치의 중앙"은 사실과 달랐다 — 카메라 오프셋
+             보정은 아직 없고 현재 스테이지 위치를 그대로 잡는다. 남길 것은 그 사실 하나다.
+             (어디에 적히는지는 Print Origin 제목 밑에 이미 있다) -->
         <TextBlock Grid.Row="5" Foreground="#94A3B8" FontSize="12" TextAlignment="Center"
-                   TextWrapping="Wrap" VerticalAlignment="Bottom" Margin="0,12,0,0">
-            <Run Text="인쇄가 시작되는 인쇄 원점입니다."/><LineBreak/>
-            <Run Text="Set Print Origin 시, Glass View Camera 가 보고 있는 위치의 중앙이 인쇄 원점으로 설정됩니다."/>
-        </TextBlock>
+                   TextWrapping="Wrap" VerticalAlignment="Top" Margin="0,12,0,0"
+                   Text="현재 스테이지 위치(X·Y)를 인쇄 원점으로 잡습니다."/>
     </Grid>
 </Window>

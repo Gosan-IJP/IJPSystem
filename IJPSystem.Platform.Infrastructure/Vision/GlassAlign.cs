@@ -217,7 +217,15 @@ namespace IJPSystem.Platform.Infrastructure.Vision
         /// </summary>
         public double MaxAngleDeg { get; set; } = 2.0;
 
-        /// <summary>이보다 멀리 벗어났으면 자동으로 고치지 않는다. 이유는 각도와 같다.</summary>
+        /// <summary>
+        /// 이보다 멀리 벗어났으면 자동으로 고치지 않는다.
+        ///
+        /// <para>정렬 한 판에서 이 선에 걸리는 자리는 <b>회전 보정 직후</b>다 — T 는 척 회전중심을
+        /// 기준으로 돌아서, 돌린 만큼 글라스가 딸려 나간다. 그 이동을 흡수하는 것이 뒤이은 X·Y
+        /// 보정의 일이므로, 이 값은 <see cref="MaxAngleDeg"/> 가 허락한 회전이 만들어 낼 수 있는
+        /// 이동을 덮어야 한다. 반으로 접어 두면 각도를 고칠 때마다 스스로를 막는다
+        /// (실장 2026-08-28, <see cref="ForCamera"/> 참고).</para>
+        /// </summary>
         public double MaxShiftMm { get; set; } = 5.0;
 
         /// <summary>두 마크가 이보다 가까우면 각도를 내지 않는다. 기선이 짧으면 오차가 그만큼 커진다.</summary>
@@ -260,8 +268,22 @@ namespace IJPSystem.Platform.Infrastructure.Vision
         /// 찾았습니다"가 뜨고, 원인이 글라스인지 조명인지 매칭인지 알 수 없게 된다.</para>
         ///
         /// <para>그래서 한계를 <b>시야에서 계산</b>한다. 가장자리는 템플릿이 잘려 매칭이 무너지므로
-        /// 화면 반폭의 75%까지만 쓰고, 그 여유를 <b>어긋남과 기울기가 절반씩</b> 나눠 갖는다 —
-        /// 둘이 같은 예산을 쓰기 때문이다(밀린 채로 돌아 있으면 둘이 겹친다).</para>
+        /// 화면 반폭의 75%까지만 쓴다.</para>
+        ///
+        /// <para><b>둘은 예산을 나눠 갖지 않는다</b>(2026-08-28 에 절반씩 쪼개던 것을 고쳤다).
+        /// 겹친다고 본 것이 잘못이었다 — 두 한계는 <b>서로 다른 순간, 다른 마크</b>에서 걸린다:</para>
+        /// <list type="bullet">
+        ///   <item><see cref="MaxAngleDeg"/> 는 <b>회전 보정 전</b> 마크2 에서. 큰 값은 기선×sinθ 다.</item>
+        ///   <item><see cref="MaxShiftMm"/> 는 <b>회전 보정 뒤</b> 마크1 에서. 큰 값은 척 회전중심
+        ///         때문에 딸려 나간 이동(회전반경×θ)이다 — 그걸 흡수하는 것이 그 단계의 일이다.</item>
+        /// </list>
+        /// <para>그래서 어긋남 한계를 반으로 접으면 <b>각도를 고칠 때마다 스스로 막는다</b>. 실제로
+        /// 0.103° 짜리 판이 8단계를 통과해도 12단계에서 "너무 많이 벗어났습니다"로 섰다.</para>
+        ///
+        /// <para>둘 다 시야 전체(75%)를 쓰면 아귀가 맞는다 — 허용 각까지 돌아 있는 판을 고쳤을 때
+        /// 딸려 나가는 이동은 <c>회전반경/기선 × 시야</c> 이므로, <b>회전중심이 기선보다 가까우면</b>
+        /// 언제나 어긋남 한계 안이다. 10호기는 회전반경 ≈121mm · 기선 150mm 라 80% 만 쓴다
+        /// (실측: T -0.055° 에 마크가 116px 이동 → 121mm).</para>
         /// </summary>
         /// <param name="micronPerPx">화소 크기[µm]. 0 이하면 기본값을 그대로 둔다.</param>
         /// <param name="baselineMm">두 마크 사이 거리[mm] — 기선이 길수록 허용 각이 좁아진다.</param>
@@ -271,7 +293,7 @@ namespace IJPSystem.Platform.Infrastructure.Vision
             if (micronPerPx <= 0 || widthPx <= 0 || heightPx <= 0) return lim;
 
             double halfMm = Math.Min(widthPx, heightPx) * micronPerPx / 2000.0;
-            double reach  = halfMm * 0.75 / 2.0;          // 75% 까지, 어긋남과 기울기가 절반씩
+            double reach  = halfMm * 0.75;                // 가장자리 25% 는 버린다 — 템플릿이 잘린다
 
             lim.MaxShiftMm = reach;
             if (baselineMm > 1.0)
@@ -378,20 +400,32 @@ namespace IJPSystem.Platform.Infrastructure.Vision
         /// <summary>
         /// 마크2 를 카메라 밑으로 데려오는 스테이지 이동.
         ///
-        /// <para><b>마크2 는 마크1 에서 -Y 쪽(글라스 아래쪽)에 있다.</b> 카메라는 고정이므로
-        /// 아래에 있는 마크를 올려다 붙이려면 글라스를 <b>+Y 로</b> 밀어야 한다.
-        /// 그래서 이동 부호는 레시피 간격 그대로다(10호기 배치, 2026-08-25).</para>
+        /// <para><b>마크2 는 마크1 에서 +Y 쪽(글라스 위쪽)에 있다.</b> 카메라는 고정이므로
+        /// 위에 있는 마크를 렌즈로 내리려면 글라스를 <b>-Y 로</b> 밀어야 한다.
+        /// 그래서 이동 부호는 레시피 간격의 반대다(10호기 배치 도면, 2026-08-27 확정).</para>
         ///
         /// <para>이 함수와 <see cref="DesignedSeparation"/> 는 항상 짝으로 쓴다 —
         /// 둘 중 하나만 부호를 뒤집으면 정렬이 반대로 돌고, 그건 모터가 반대로 나간다는 뜻이다.
         /// 짝을 놓칠 자리를 없애려고 <see cref="SolveAngleFromPitch"/> 를 따로 두었다.</para>
+        ///
+        /// <para><b>X 는 움직이지 않는다(2026-08-27).</b> 두 마크는 글라스에서 Y 로만 떨어져 있다 —
+        /// 그래서 마크2 로 가는 이동은 순수 -Y 다. <paramref name="pitchXMm"/> 을 받고도 쓰지 않는
+        /// 이유는 레시피에 값이 잘못 들어와도 <b>X 가 나가지 않게</b> 하기 위해서다. 예전에는 그 값을
+        /// 그대로 이동에 썼는데, 시야가 1.4mm(1280px × 1.125µm/px)뿐이라 X 로 조금만 나가도 마크가
+        /// 화면 밖으로 사라진다 — 그러면 "못 찾았습니다"만 뜨고 원인을 짚을 수 없다.</para>
+        ///
+        /// <para>X 가 고정이라 <b>마크2 가 화면에서 X 로 벗어난 양이 곧 글라스 기울기</b>가 된다.
+        /// 눈으로도 정렬 여부를 볼 수 있다는 뜻이다.</para>
         /// </summary>
         public static (double Dx, double Dy) StageMoveToMark2(double pitchXMm, double pitchYMm)
-            => (pitchXMm, pitchYMm);
+            => (0, -pitchYMm);
 
-        /// <summary>설계상 마크1 → 마크2 벡터. 마크2 가 -Y 쪽이므로 이동과 반대다.</summary>
+        /// <summary>
+        /// 설계상 마크1 → 마크2 벡터. 마크2 가 +Y 쪽이므로 레시피 간격 그대로다.
+        /// <see cref="StageMoveToMark2"/> 와 정확히 반대여야 한다 — X 를 안 움직이니 여기도 X 는 없다.
+        /// </summary>
         public static (double X, double Y) DesignedSeparation(double pitchXMm, double pitchYMm)
-            => (-pitchXMm, -pitchYMm);
+            => (0, pitchYMm);
 
         /// <summary>
         /// 잰 각도를 <b>T 축에 줄 값</b>으로 바꾼다.
@@ -465,7 +499,10 @@ namespace IJPSystem.Platform.Infrastructure.Vision
 
             if (Math.Abs(angle) > lim.MaxAngleDeg)
                 return new AngleResult(AlignVerdict.AngleTooLarge, angle, mx, my, false,
-                    $"{angle:+0.000;-0.000}° 로 너무 많이 돌아 있습니다(한계 ±{lim.MaxAngleDeg:F1}°) — " +
+                    // 한계는 시야에서 계산돼 나오므로 0.073° 같은 값이다. F1 로 찍으면 0.1°
+                    // 로 반올림돼, 0.103° 가 "간발의 차로 걸렸다"처럼 읽힌다 — 실제로는 40%
+                    // 넘게 벗어난 값이다(실장 2026-08-28 11:16). Summary 와 같은 자릿수로 맞춘다.
+                    $"{angle:+0.000;-0.000}° 로 너무 많이 돌아 있습니다(한계 ±{lim.MaxAngleDeg:F3}°) — " +
                     "글라스를 다시 놓고 시작하세요.");
 
             bool within = Math.Abs(angle) <= lim.AngleToleranceDeg;

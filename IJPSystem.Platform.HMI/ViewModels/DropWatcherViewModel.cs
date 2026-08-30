@@ -260,6 +260,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
         public string SpitLabel => IsSpitting ? "■ Spit DW (ON)" : "Spit DW";
 
+        /// <summary>
+        /// 설정은 Meteor 인데 어댑터 준비가 실패해 가상으로 내려갔는가.
+        ///
+        /// <para>이 상태에서는 Spit 버튼이 멀쩡히 켜지고 로그도 정상처럼 흐르는데 <b>잉크만
+        /// 안 나온다.</b> 누르기 전에 화면에 떠야 한다 — 실장 브링업에서 제일 오래 헤맬 자리다.</para>
+        ///
+        /// <para>설정부터 가상인 경우는 false 다. 그건 정상이고, 경고를 띄우면 개발 PC 에서
+        /// 늘 떠 있어 아무도 안 보게 된다.</para>
+        /// </summary>
+        public bool HeadFellBack => SpitService.DidFallBack;
+
+        /// <summary>가상으로 내려간 이유(예외 종류 포함). 정상이면 빈 문자열.</summary>
+        public string HeadFallbackReason => SpitService.FallbackReason ?? "";
+
         // ── Drop Watcher Parameter ────────────────────────────────────────────
         private int _frequencyHz = 1000;
         public int FrequencyHz { get => _frequencyHz; set => SetProperty(ref _frequencyHz, value); }

@@ -74,60 +74,10 @@
                                  실제로 붙잡은 카메라의 ID 를 그대로 보여준다(CAM_GV / 옛 CAM_02). -->
                             <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"
                                        Text="{Binding CamStatus.CameraId, StringFormat=GLASS VIEW  —  {0}, FallbackValue=GLASS VIEW}"/>
-                            <Border Margin="12,0,0,0" CornerRadius="6" Padding="8,3">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="#450A0A"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding CamStatus.IsConnected}" Value="True">
-                                                <Setter Property="Background" Value="#14532D"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <TextBlock FontSize="11" FontWeight="Bold">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Text"       Value="● DISCONNECTED"/>
-                                            <Setter Property="Foreground" Value="#EF4444"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding CamStatus.IsConnected}" Value="True">
-                                                    <Setter Property="Text"       Value="● CONNECTED"/>
-                                                    <Setter Property="Foreground" Value="#22C55E"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </Border>
 
-                            <!-- LIVE 뱃지 -->
-                            <Border Margin="12,0,0,0" CornerRadius="6" Padding="8,3"
-                                    Visibility="{Binding IsLiveMode, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="#7F1D1D"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsLiveMode}" Value="True">
-                                                <DataTrigger.EnterActions>
-                                                    <BeginStoryboard>
-                                                        <Storyboard RepeatBehavior="Forever" AutoReverse="True">
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                             From="1.0" To="0.3" Duration="0:0:0.6"/>
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </DataTrigger.EnterActions>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse Width="7" Height="7" Fill="#EF4444"
-                                             Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="LIVE" Foreground="#FCA5A5"
-                                               FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
+                            <!-- CONNECTED / LIVE 뱃지는 아래 정보 바 오른쪽 끝으로 옮겼다(2026-08-28).
+                                 노출 칸이 들어오면서 헤더 오른쪽 툴이 왼쪽으로 밀려 뱃지와 겹쳤다.
+                                 정보 바는 늘 비어 있던 자리이고, 뱃지도 '지금 상태' 표시라 성격이 맞는다. -->
                         </StackPanel>
 
                         <!-- 우측 툴 — 자주 쓰는 것을 전부 위로 올렸다(2026-08-21).
@@ -157,6 +107,38 @@
                                                FontWeight="Bold" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
+
+                            <!-- 노출(ms) — 조명 밝기를 못 바꾸는 대신 화면 밝기를 여기서 맞춘다.
+                                 글라스뷰 조명(iCore iPulse)은 ON/OFF 뿐이고 밝기 레지스터가 없다.
+                                 ※ 값의 주인은 VisionConfig 의 DefaultExposureMs 다 — 여기 값은
+                                   이번 실행에만 살고 저장되지 않는다. ↺ 로 설정값 복귀. -->
+                            <Border Height="34" Margin="0,0,10,0" Padding="9,0" CornerRadius="6"
+                                    Background="#0D1520" BorderBrush="#334155" BorderThickness="1"
+                                    ToolTip="카메라 노출[ms]. 밝게 하려면 올리고, 라이브가 끊기면 내리세요.&#x0a;이번 실행에만 적용됩니다 — 굳히려면 VisionConfig 의 DefaultExposureMs 를 고치세요.">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="EXP" Foreground="#64748B" FontSize="10"
+                                               FontWeight="Bold" FontFamily="Consolas"
+                                               VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                    <TextBox x:Name="ExposureBox" Width="46" Height="22"
+                                             KeyDown="ExposureBox_KeyDown"
+                                             Text="{Binding ExposureMs, StringFormat={}{0:F2}}"
+                                             Background="#0B0F1A" Foreground="#E2E8F0"
+                                             BorderBrush="#1E293B" BorderThickness="1"
+                                             FontFamily="Consolas" FontSize="12"
+                                             TextAlignment="Right" VerticalContentAlignment="Center"/>
+                                    <TextBlock Text="ms" Foreground="#64748B" FontSize="10"
+                                               FontFamily="Consolas"
+                                               VerticalAlignment="Center" Margin="4,0,0,0"/>
+
+                                    <!-- 설정값과 다를 때만 켜진다 — 임시로 바꿔 둔 상태인지가 한눈에 보인다. -->
+                                    <Button Command="{Binding ResetExposureCommand}" Content="↺"
+                                            Width="22" Height="22" Margin="6,0,0,0" Padding="0"
+                                            Background="#1E293B" Foreground="#FBBF24"
+                                            BorderBrush="#334155" BorderThickness="1"
+                                            FontSize="12" Cursor="Hand"
+                                            ToolTip="{Binding ConfigExposureMs, StringFormat=설정값 {0:F2}ms 로 되돌리기}"/>
+                                </StackPanel>
+                            </Border>
 
                             <Button Margin="0,0,8,0" Width="76" Height="34"
                                     Command="{Binding CaptureCommand}" Content="캡쳐"
@@ -314,7 +296,10 @@
                                        TextTrimming="CharacterEllipsis" MaxWidth="400"/>
                         </Border>
 
-                        <!-- ⑤ 라이브 FPS 오버레이 (우상단, 라이브 중일 때) -->
+                        <!-- ⑤ 라이브 FPS · 촬상 수 오버레이 (우상단, 라이브 중일 때).
+                             같은 촬상 수가 아래 정보 바에도 있었다 → 정보 바 쪽을 뺐다(2026-08-28).
+                             눈이 가 있는 곳은 그림이고, 프레임이 실제로 넘어오는지는 이 숫자가 도는지로
+                             본다 — fps 표시는 타이머 주기라 카메라가 멈춰도 그대로다. -->
                         <Border VerticalAlignment="Top" HorizontalAlignment="Right"
                                 Background="#CC0D1117" CornerRadius="0,0,0,6" Padding="8,4"
                                 Visibility="{Binding IsLiveMode, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -331,17 +316,80 @@
                 </Border>
 
                 <!-- 하단 정보 바 -->
-                <Border Grid.Row="2" Background="#1E293B" CornerRadius="0,0,12,12" Padding="16,9">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="LAST CAPTURE : " Foreground="#475569"
-                                   FontSize="11" FontFamily="Consolas"/>
-                        <TextBlock Text="{Binding CaptureTimeText}" Foreground="#94A3B8"
-                                   FontSize="11" FontFamily="Consolas" FontWeight="Bold"/>
-                        <TextBlock Text="        CAPTURE COUNT : " Foreground="#475569"
-                                   FontSize="11" FontFamily="Consolas"/>
-                        <TextBlock Text="{Binding CaptureCount}" Foreground="#94A3B8"
-                                   FontSize="11" FontFamily="Consolas" FontWeight="Bold"/>
-                    </StackPanel>
+                <Border Grid.Row="2" Background="#1E293B" CornerRadius="0,0,12,12" Padding="16,7">
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="LAST CAPTURE : " Foreground="#475569"
+                                       FontSize="11" FontFamily="Consolas"/>
+                            <TextBlock Text="{Binding CaptureTimeText}" Foreground="#94A3B8"
+                                       FontSize="11" FontFamily="Consolas" FontWeight="Bold"/>
+                            <!-- CAPTURE COUNT 는 뺐다(2026-08-28) — 라이브 오버레이(우상단)에
+                                 같은 값이 있어 두 군데서 같이 돌고 있었다. -->
+                        </StackPanel>
+
+                        <!-- 연결 · 라이브 상태 — 헤더에서 내려온 자리(2026-08-28).
+                             오른쪽 끝에 붙여 둔다: 헤더 툴은 개수가 늘 늘어나는 쪽이라
+                             거기 두면 언젠가 또 밀려서 겹친다. 여기는 아무도 안 쓰는 자리다. -->
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center">
+
+                            <!-- LIVE 뱃지 -->
+                            <Border Margin="0,0,10,0" CornerRadius="6" Padding="8,2"
+                                    Visibility="{Binding IsLiveMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#7F1D1D"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsLiveMode}" Value="True">
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                             From="1.0" To="0.3" Duration="0:0:0.6"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="7" Height="7" Fill="#EF4444"
+                                             Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="LIVE" Foreground="#FCA5A5"
+                                               FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 연결 뱃지 -->
+                            <Border CornerRadius="6" Padding="8,2">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#450A0A"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CamStatus.IsConnected}" Value="True">
+                                                <Setter Property="Background" Value="#14532D"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock FontSize="11" FontWeight="Bold">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text"       Value="● DISCONNECTED"/>
+                                            <Setter Property="Foreground" Value="#EF4444"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding CamStatus.IsConnected}" Value="True">
+                                                    <Setter Property="Text"       Value="● CONNECTED"/>
+                                                    <Setter Property="Foreground" Value="#22C55E"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
                 </Border>
 
             </Grid>
@@ -363,9 +411,15 @@
                         BorderBrush="#334155" BorderThickness="1"
                         DataContext="{Binding Align}">
                     <StackPanel>
+                        <!-- 등록된 패턴 크기·기준점, 그리고 지금 끌고 있는 영역 크기.
+                             카드 맨 아래에 있던 것을 머리말로 올렸다(2026-08-28) — 그 자리는
+                             교정값이 쓴다. 둘 다 짧은 고정폭 숫자라 여기가 더 어울린다. -->
                         <DockPanel Margin="0,0,0,12">
-                            <TextBlock Text="등록 이미지" Foreground="#3B82F6"
+                            <TextBlock Text="PATTERN TEMPLATE" Foreground="#3B82F6"
                                        FontSize="11" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding RoiSizeText}" Foreground="#94A3B8"
+                                       FontSize="10" FontFamily="Consolas"
+                                       DockPanel.Dock="Right" Margin="8,0,0,0"/>
                             <TextBlock Text="{Binding ReferenceText}" Foreground="#475569"
                                        FontSize="10" FontFamily="Consolas"
                                        HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
@@ -384,7 +438,7 @@
                                 <Grid>
                                     <Image Source="{Binding Preview}" Stretch="Uniform" Margin="6"
                                            RenderOptions.BitmapScalingMode="LowQuality"/>
-                                    <TextBlock Text="등록된 패턴 없음" Foreground="#334155"
+                                    <TextBlock Text="No pattern" Foreground="#334155"
                                                FontSize="11" HorizontalAlignment="Center"
                                                VerticalAlignment="Center">
                                         <TextBlock.Style>
@@ -401,14 +455,21 @@
                                 </Grid>
                             </Border>
 
-                            <StackPanel Grid.Column="2" Width="128" VerticalAlignment="Center">
+                            <!-- 레시피가 자동 정렬 [미사용]이면 패턴 등록·저장도 잠근다.
+                                 정렬을 아예 못 하는 장비가 있어서 이 설정을 "이 호기에 정렬 기능이
+                                 있는가"로도 쓰기 때문이다 — 그런 장비에서 패턴만 등록되게 두면
+                                 쓰이지도 않을 패턴이 남아 나중에 원인 추적을 흐린다.
+                                 ※ DataContext 가 Align 이라 GlassViewModel 은 UserControl 을 거쳐 잡는다. -->
+                            <StackPanel Grid.Column="2" Width="128" VerticalAlignment="Center"
+                                        IsEnabled="{Binding DataContext.AutoAlignEnabled,
+                                                    RelativeSource={RelativeSource AncestorType=UserControl}}">
                                 <Button Command="{Binding StartRegisterCommand}"
                                         Content="{Binding RegisterButtonText}"
                                         Height="52" Margin="0,0,0,10"
                                         Style="{StaticResource MutedActionButtonStyle}"
                                         Background="#0E7490" Foreground="White"
                                         FontSize="13" FontWeight="Bold"/>
-                                <Button Command="{Binding SaveCommand}" Content="패턴저장"
+                                <Button Command="{Binding SaveCommand}" Content="Save Pattern"
                                         Height="52"
                                         Style="{StaticResource MutedActionButtonStyle}"
                                         Background="#0E7490" Foreground="White"
@@ -416,42 +477,48 @@
                             </StackPanel>
                         </Grid>
 
-                        <!-- 등록 중 안내 · 고른 영역 크기 -->
-                        <Grid Margin="0,10,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{Binding HintText}" Foreground="#64748B"
-                                       FontSize="10" TextWrapping="Wrap"/>
-                            <TextBlock Grid.Column="1" Text="{Binding RoiSizeText}" Foreground="#94A3B8"
-                                       FontSize="10" FontFamily="Consolas" VerticalAlignment="Top"
-                                       Margin="8,0,0,0"/>
-                        </Grid>
+                        <!-- 등록 중 안내 — 미리보기 바로 아래. 무엇을 등록하는 중인지 설명하는
+                             줄이라 미리보기 옆에 붙어 있어야 한다. -->
+                        <TextBlock Text="{Binding HintText}" Foreground="#64748B"
+                                   FontSize="10" TextWrapping="Wrap" Margin="0,8,0,0"/>
 
-                        <!-- 이름 · 저장된 패턴 고르기 -->
-                        <Grid Margin="0,10,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock Grid.Column="0" Text="이름" Foreground="#64748B"
-                                       FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <Border Grid.Column="1" Background="#0B0F1A" CornerRadius="6"
-                                    BorderBrush="#334155" BorderThickness="1">
-                                <TextBox Text="{Binding PatternName, UpdateSourceTrigger=PropertyChanged}"
-                                         Background="Transparent" Foreground="#E2E8F0" CaretBrush="#E2E8F0"
-                                         BorderThickness="0" Padding="8,5"
-                                         FontSize="11" FontFamily="Consolas"/>
-                            </Border>
-                            <ComboBox Grid.Column="3" ItemsSource="{Binding Patterns}"
-                                      SelectedItem="{Binding SelectedPattern, Mode=TwoWay}"
-                                      Style="{StaticResource ModernComboBoxStyle}" Height="28" Width="170"
-                                      ToolTip="저장된 패턴 불러오기"/>
-                        </Grid>
+                        <!-- ── 지금 쓰는 픽셀↔mm 배율 ─────────────────────────────
+                             실측 교정인지 사양값인지가 먼저 보여야 한다. 둘은 믿는 정도가 다르다 —
+                             사양값은 배율만 맞고 카메라 기울기는 0 으로 본다. 정렬이 자꾸 덜 맞을 때
+                             제일 먼저 확인할 곳이라, 패턴 카드 맨 아래 한 줄로 늘 띄워 둔다.
+                             ※ DataContext 가 Align 이라 GlassViewModel 은 UserControl 을 거쳐 잡는다. -->
+                        <Border Margin="0,10,0,0" CornerRadius="6" Padding="10,6"
+                                Background="#0B0F1A" BorderThickness="1"
+                                DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <!-- 사양값이면 노랑 — "아직 재지 않았다"가 한눈에 보여야 한다 -->
+                                    <Setter Property="BorderBrush" Value="#78350F"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsMeasuredCalibration}" Value="True">
+                                            <Setter Property="BorderBrush" Value="#334155"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <DockPanel>
+                                <TextBlock Text="SCALE" FontSize="10" FontWeight="Bold" FontFamily="Consolas"
+                                           VerticalAlignment="Center" Margin="0,0,10,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#FBBF24"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsMeasuredCalibration}" Value="True">
+                                                    <Setter Property="Foreground" Value="#3B82F6"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock Text="{Binding CalibrationText}" Foreground="#CBD5E1"
+                                           FontSize="10" FontFamily="Consolas" TextWrapping="Wrap"/>
+                            </DockPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
 
@@ -476,19 +543,21 @@
                             <TextBlock Text="PATTERN FIND" Foreground="#3B82F6"
                                        FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
 
-                            <Grid Margin="0,0,0,12">
+                            <Grid Margin="0,0,0,12"
+                                  IsEnabled="{Binding DataContext.AutoAlignEnabled,
+                                              RelativeSource={RelativeSource AncestorType=UserControl}}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
-                                <Button Grid.Column="0" Command="{Binding FindCommand}" Content="패턴 찾기"
+                                <Button Grid.Column="0" Command="{Binding FindCommand}" Content="Find Pattern"
                                         Height="38"
                                         Style="{StaticResource MutedActionButtonStyle}"
                                         Background="#1E3A5F" Foreground="White"
                                         FontSize="12" FontWeight="Bold"/>
-                                <Button Grid.Column="2" Command="{Binding ClearCommand}" Content="지우기"
+                                <Button Grid.Column="2" Command="{Binding ClearCommand}" Content="Clear"
                                         Width="64" Height="38"
                                         Style="{StaticResource MutedActionButtonStyle}"
                                         Background="#1E293B" Foreground="#94A3B8"
@@ -506,7 +575,7 @@
                                     <RowDefinition Height="Auto"/>   <!-- 2 벗어난 양 -->
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="점수" Foreground="#64748B"
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Score" Foreground="#64748B"
                                            FontSize="11" Margin="0,0,8,6"/>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ScoreText}"
                                            FontSize="12" FontFamily="Consolas" Margin="0,0,0,6">
@@ -522,13 +591,13 @@
                                     </TextBlock.Style>
                                 </TextBlock>
 
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="위치" Foreground="#64748B"
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Position" Foreground="#64748B"
                                            FontSize="11" Margin="0,0,8,6"/>
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PosText}"
                                            Foreground="#E2E8F0" FontSize="12" FontFamily="Consolas"
                                            Margin="0,0,0,6"/>
 
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="벗어난 양" Foreground="#64748B"
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Offset" Foreground="#64748B"
                                            FontSize="11" Margin="0,0,8,0"/>
                                 <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding OffsetText}"
                                            Foreground="#60A5FA" FontSize="12" FontFamily="Consolas"
@@ -545,7 +614,7 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock Grid.Column="0" Text="Score" Foreground="#64748B"
+                                <TextBlock Grid.Column="0" Text="Min Score" Foreground="#64748B"
                                            FontSize="11" VerticalAlignment="Center"/>
                                 <Border Grid.Column="1" Background="#0B0F1A" CornerRadius="6"
                                         BorderBrush="#1E293B" BorderThickness="1" Width="66" Padding="8,4">
@@ -554,7 +623,7 @@
                                                TextAlignment="Right"
                                                ToolTip="레시피 값입니다. 바꾸려면 레시피 화면 → 글라스 정보 → 정렬 합격 점수."/>
                                 </Border>
-                                <TextBlock Grid.Column="2" Text="레시피 값" Foreground="#475569"
+                                <TextBlock Grid.Column="2" Text="from recipe" Foreground="#475569"
                                            FontSize="10" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </Grid>
 
@@ -563,22 +632,53 @@
                                        TextWrapping="Wrap" Margin="0,10,0,0"
                                        Visibility="{Binding HasSceneWarning, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
-                            <TextBlock Text="※ 스테이지는 움직이지 않습니다. 벗어난 양만 알려 줍니다."
-                                       Foreground="#475569" FontSize="10" TextWrapping="Wrap"
-                                       Margin="0,12,0,0"/>
+                            <!-- ── 교정 ────────────────────────────────────────────
+                                 이 카드 아래가 비어 있어 여기 둔다. 하는 일도 이웃이다 —
+                                 [Find Pattern] 이 "지금 어디에 있나"를 픽셀로 답하고,
+                                 교정이 그 픽셀을 mm 로 옮기는 값을 정한다.
+
+                                 배율이 먼저다. 각도 계산이 배율 행렬을 쓰므로 배율이 틀린 채로
+                                 T 를 재면 틀린 각도로 부호를 판정한다 → [Calibrate T] 는
+                                 실측 배율이 서기 전에는 꺼져 있다(GlassViewModel 참고).
+                                 ※ DataContext 가 Align 이라 GlassViewModel 은 UserControl 을 거쳐 잡는다. -->
+                            <StackPanel Margin="0,16,0,0"
+                                        DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                <Border Height="1" Background="#1E293B" Margin="0,0,0,12"/>
+                                <Button Command="{Binding CalibrateScaleCommand}"
+                                        Content="Calibrate Scale" Height="34" Margin="0,0,0,6"
+                                        Style="{StaticResource MutedActionButtonStyle}"
+                                        Background="#1E3A5F" Foreground="White"
+                                        FontSize="11" FontWeight="Bold"
+                                        ToolTip="마크1 자리에서 X·Y 를 300µm 씩 밀어 보고 µm/px · 카메라 기울기를 잽니다(약 10초)."/>
+                                <Button Command="{Binding CalibrateTCommand}"
+                                        Content="Calibrate T" Height="34"
+                                        Style="{StaticResource MutedActionButtonStyle}"
+                                        Background="#1E293B" Foreground="#CBD5E1"
+                                        FontSize="11" FontWeight="Bold"
+                                        ToolTip="마크 두 개로 각을 재고 T 를 0.05° 돌려 다시 잽니다 — +T 방향과 눈금비를 확인합니다(약 1분). 배율 교정이 먼저입니다."/>
+                            </StackPanel>
+
                         </StackPanel>
                     </Border>
 
                     <!-- 자동 동작 — 시퀀스 화면의 GLASS ALIGN 과 같은 동작이다.
                          단계 정의(GlassAlignSequence)를 그대로 가져다 돌린다: 여기서 순서를
                          다시 쓰면 두 곳이 갈라지고, 갈라진 쪽이 실제로 도는 쪽일 때가 온다. -->
-                    <Border Grid.Column="2"
-                            Background="#111827" CornerRadius="12" Padding="16"
-                            BorderBrush="#334155" BorderThickness="1"
-                            VerticalAlignment="Top">
+                    <StackPanel Grid.Column="2" VerticalAlignment="Top">
+                    <Border Background="#111827" CornerRadius="12" Padding="16"
+                            BorderBrush="#334155" BorderThickness="1">
                         <StackPanel>
-                            <TextBlock Text="자동 동작" Foreground="#3B82F6"
+                            <TextBlock Text="AUTO ALIGN" Foreground="#3B82F6"
                                        FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
+
+                            <!-- 왜 회색인지 말해 준다 — 이유 없이 꺼져 있으면 고장으로 읽고,
+                                 레시피 화면까지 가서야 [미사용]이었다는 것을 알게 된다. -->
+                            <Border Background="#1C1917" CornerRadius="6" Padding="10,7" Margin="0,0,0,10"
+                                    BorderBrush="#57534E" BorderThickness="1"
+                                    Visibility="{Binding AutoAlignDisabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Foreground="#FBBF24" FontSize="10" TextWrapping="Wrap"
+                                           Text="적용된 레시피가 자동 정렬을 [미사용]으로 두었습니다 — 패턴 등록·찾기를 포함해 정렬 기능이 모두 잠깁니다. 레시피 화면 → 기본 설정에서 [사용]으로 바꾼 뒤 APPLY 하세요."/>
+                            </Border>
 
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -588,7 +688,7 @@
                                 </Grid.ColumnDefinitions>
 
                                 <Button Grid.Column="0" Command="{Binding AutoAlignCommand}"
-                                        Content="자동 정렬" Height="38"
+                                        Content="Auto Align" Height="38"
                                         Style="{StaticResource MutedActionButtonStyle}"
                                         Background="#1E3A5F" Foreground="White"
                                         FontSize="12" FontWeight="Bold"
@@ -596,7 +696,7 @@
 
                                 <!-- 스테이지가 도는 동안 세울 자리가 있어야 한다. -->
                                 <Button Grid.Column="2" Command="{Binding StopAutoAlignCommand}"
-                                        Content="중지" Width="64" Height="38"
+                                        Content="Stop" Width="64" Height="38"
                                         Style="{StaticResource MutedActionButtonStyle}"
                                         Background="#1E293B" Foreground="#94A3B8"
                                         FontSize="12" FontWeight="Bold"/>
@@ -606,14 +706,59 @@
                             <TextBlock Text="{Binding AutoAlignStatus}" Foreground="#60A5FA"
                                        FontSize="11" TextWrapping="Wrap" Margin="0,12,0,0"/>
 
-                            <TextBlock Text="※ 마크 두 개로 T 를 맞춘 뒤 X·Y 를 맞춥니다. 레시피의 허용 오차 안에 들면 끝납니다."
-                                       Foreground="#475569" FontSize="10" TextWrapping="Wrap"
-                                       Margin="0,10,0,0"/>
-                            <TextBlock Text="※ 실측 교정이 없으면 사양 분해능(VisionConfig)으로 돕니다 — 배율에 렌즈 공차만큼 오차가 남습니다."
-                                       Foreground="#475569" FontSize="10" TextWrapping="Wrap"
-                                       Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
+
+                    <!-- Glass Align 위치 이동 — 눈으로 확인하러 가는 길.
+                         마크가 시야에 들어오는지, 간격이 맞는지는 결국 렌즈로 봐야 안다.
+                         자동 정렬을 돌려 실패 메시지로 알아내는 것보다 여기서 한 번
+                         가 보는 편이 빠르다.
+
+                         자동 동작 안에 들어 있던 것을 밖으로 뺐다(2026-08-27) — 자동 정렬은
+                         한 번 눌러 끝까지 도는 일이고 이쪽은 손으로 확인하며 자리를 잡는 일이라,
+                         같은 테두리 안에 있으면 자동 정렬의 하위 단계처럼 읽힌다. -->
+                    <Border Background="#111827" CornerRadius="12" Padding="16"
+                            BorderBrush="#334155" BorderThickness="1"
+                            Margin="0,10,0,0">
+                        <StackPanel>
+                            <TextBlock Text="GLASS ALIGN POSITION" Foreground="#3B82F6"
+                                       FontSize="11" FontWeight="Bold" Margin="0,0,0,12"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Button Grid.Column="0" Command="{Binding MoveMark1Command}"
+                                        Content="Go to Mark1" Height="34"
+                                        Style="{StaticResource MutedActionButtonStyle}"
+                                        Background="#1E293B" Foreground="#CBD5E1"
+                                        FontSize="11" FontWeight="Bold"
+                                        ToolTip="레시피의 GLASS ALIGN 티칭 자리로 이동한 뒤 마크1 을 재서 기준으로 잡습니다."/>
+
+                                <!-- 마크2 는 마크1 에서 피듀셜 간격만큼 -Y 쪽이다(X 는 그대로). -->
+                                <Button Grid.Column="2" Command="{Binding MoveMark2Command}"
+                                        Content="Go to Mark2" Height="34"
+                                        Style="{StaticResource MutedActionButtonStyle}"
+                                        Background="#1E293B" Foreground="#CBD5E1"
+                                        FontSize="11" FontWeight="Bold"
+                                        ToolTip="지금 자리에서 피듀셜 간격만큼 -Y 로만 이동한 뒤, 마크1 과 견줘 정렬 여부를 알려 줍니다."/>
+                            </Grid>
+
+                            <!-- 조그로 마크를 시야 한가운데 맞춰 놓고 그 자리를 그대로 굳히는 자리.
+                                 티칭 화면까지 가서 포인트를 고르고 [현재값 적용] → [저장] 하는 길이
+                                 이미 있지만, 정렬을 맞추는 동안에는 눈이 이 화면에 붙어 있다. -->
+                            <Button Command="{Binding SaveCurrentAsMark1Command}"
+                                    Content="Teach Mark1 Here"
+                                    Height="34" Margin="0,8,0,0"
+                                    Style="{StaticResource MutedActionButtonStyle}"
+                                    Background="#1E3A5F" Foreground="White"
+                                    FontSize="11" FontWeight="Bold"
+                                    ToolTip="지금 축 위치를 적용된 레시피의 GLASS ALIGN 티칭 자리에 덮어씁니다(포인트에 이미 있는 축만)."/>
+                        </StackPanel>
+                    </Border>
+                    </StackPanel>
                 </Grid>
 
                 <!-- ── 조그 (이미지 레이아웃: D-패드 + Continuous + Z/T + Motion State) ──
@@ -732,8 +877,6 @@
                             </StackPanel>
                         </Grid>
 
-                        <TextBlock Text="※ 서보 ON·알람 해제 상태에서만 동작합니다"
-                                   Foreground="#475569" FontSize="10" Margin="0,12,0,0"/>
                     </StackPanel>
                 </Border>
 

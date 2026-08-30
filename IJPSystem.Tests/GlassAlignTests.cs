@@ -284,22 +284,85 @@ namespace IJPSystem.Tests
         }
 
         // ── 이동 방향 · 실제 광학계 ──────────────────────────────────────
-
         /// <summary>
-        /// 마크2 는 마크1 에서 -Y 쪽에 있다. 그것을 고정 카메라 밑으로 올리려면 글라스는 +Y 로 간다.
-        /// 부호가 뒤집히면 정렬이 반대로 돌므로 규약을 못으로 박아 둔다.
+        /// 마크2 는 마크1 에서 +Y 쪽에 있다(배치 도면). 그것을 고정 카메라 밑으로 내리려면
+        /// 글라스는 -Y 로 간다. 부호가 뒤집히면 정렬이 반대로 돌므로 규약을 못으로 박아 둔다.
         /// </summary>
         [Fact]
-        public void 마크2로_갈_때_스테이지는_플러스Y로_간다()
+        public void 마크2로_갈_때_스테이지는_마이너스Y로_간다()
         {
             var move = GlassAlign.StageMoveToMark2(0, 160);
             Assert.Equal(0, move.Dx);
-            Assert.Equal(+160, move.Dy);
+            Assert.Equal(-160, move.Dy);
 
-            // 설계 간격 벡터는 그 반대 — 마크2 가 아래쪽이므로.
+            // 설계 간격 벡터는 그 반대 — 마크2 가 위쪽이므로 레시피 간격 그대로다.
             var sep = GlassAlign.DesignedSeparation(0, 160);
             Assert.Equal(0, sep.X);
-            Assert.Equal(-160, sep.Y);
+            Assert.Equal(+160, sep.Y);
+        }
+
+        /// <summary>이동과 설계 간격은 항상 반대 부호다 — 한쪽만 뒤집으면 정렬이 반대로 돈다.</summary>
+        [Theory]
+        [InlineData(0, 160)]
+        [InlineData(120, 0)]
+        [InlineData(80, -40)]
+        public void 이동과_설계간격은_항상_반대다(double px, double py)
+        {
+            var move = GlassAlign.StageMoveToMark2(px, py);
+            var sep  = GlassAlign.DesignedSeparation(px, py);
+            Assert.Equal(-move.Dx, sep.X, 9);
+            Assert.Equal(-move.Dy, sep.Y, 9);
+        }
+
+        /// <summary>
+        /// 마크2 이동에 <b>X 는 없다</b>(2026-08-27). 레시피에 X 간격이 잘못 들어와도 마찬가지다 —
+        /// 시야가 1.4mm 뿐이라 X 로 조금만 나가도 마크가 화면 밖으로 사라지고, 그러면
+        /// "못 찾았습니다"만 뜨고 원인을 짚을 수 없다.
+        ///
+        /// <para>X 가 고정이라야 마크2 가 화면에서 X 로 벗어난 양이 곧 기울기가 된다 —
+        /// 정렬 확인이 성립하는 근거이므로 규약을 못으로 박아 둔다.</para>
+        /// </summary>
+        [Theory]
+        [InlineData(0, 160)]
+        [InlineData(120, 160)]     // X 간격이 들어와도
+        [InlineData(-75.5, 160)]   // 부호가 어느 쪽이어도
+        public void 마크2_이동은_X를_건드리지_않는다(double px, double py)
+        {
+            var move = GlassAlign.StageMoveToMark2(px, py);
+            Assert.Equal(0, move.Dx);
+            Assert.Equal(-py, move.Dy, 9);
+
+            // 설계 간격도 같이 X 를 버려야 각도 계산이 이동과 어긋나지 않는다.
+            var sep = GlassAlign.DesignedSeparation(px, py);
+            Assert.Equal(0, sep.X);
+            Assert.Equal(+py, sep.Y, 9);
+        }
+
+        /// <summary>
+        /// X 를 안 움직였으므로, 반듯한 글라스는 마크2 가 <b>마크1 과 같은 화면 X</b> 에 온다.
+        /// 화면 X 로 벗어난 만큼이 그대로 기울기로 나와야 정렬 확인이 성립한다.
+        /// </summary>
+        [Fact]
+        public void 마크2가_화면X로_벗어난_만큼이_기울기다()
+        {
+            var cal = Cam5um();
+            var m1  = At(640, 480);
+
+            // 반듯하면 마크2 가 마크1 과 같은 화면 자리에 온다 — 회전 0.
+            var straight = GlassAlign.SolveAngleFromPitch(m1, m1, 0, 160, cal);
+            Assert.True(straight.Ok);
+            Assert.Equal(0, straight.AngleDeg, 6);
+
+            // 화면 X 로 벗어난 픽셀이 스테이지로 몇 mm 인지는 교정이 말해 준다.
+            const int offPx = 200;
+            double offMm = Math.Abs(cal.ToMm(offPx, 0).X);
+
+            var tilted = GlassAlign.SolveAngleFromPitch(m1, At(640 + offPx, 480), 0, 160, cal);
+            Assert.True(tilted.Ok);
+
+            // 기선 160mm 에 대해 atan(벗어난 거리 / 160).
+            double expected = Math.Atan2(offMm, 160.0) * 180.0 / Math.PI;
+            Assert.Equal(expected, Math.Abs(tilted.AngleDeg), 4);
         }
 
         [Theory]
@@ -310,11 +373,9 @@ namespace IJPSystem.Tests
         {
             var cal = Cam5um();
             var m1 = At(640, 480);
-
-            // 실제 장비대로: 스테이지 +Y 160, 설계 간격은 (0,-160).
-            var m2 = Mark2For(deg, 0, -160, 0, +160, m1);
-
-            var direct = GlassAlign.SolveAngle(m1, m2, 0, +160, 0, -160, cal);
+            // 실제 장비대로: 스테이지 -Y 160, 설계 간격은 (0,+160).
+            var m2 = Mark2For(deg, 0, +160, 0, -160, m1);
+            var direct = GlassAlign.SolveAngle(m1, m2, 0, -160, 0, +160, cal);
             var byPitch = GlassAlign.SolveAngleFromPitch(m1, m2, 0, 160, cal);
 
             Assert.True(byPitch.Ok);
@@ -816,12 +877,35 @@ namespace IJPSystem.Tests
             // 마크2 를 5.6mm(≈5000px) 밀어낸다 — 화면에 있을 수가 없는 값이었다.
             var lim = AlignLimits.ForCamera(Spec, 1280, 1024, 160);
 
-            Assert.InRange(lim.MaxShiftMm, 0.15, 0.30);
-            Assert.InRange(lim.MaxAngleDeg, 0.03, 0.12);
+            Assert.InRange(lim.MaxShiftMm, 0.30, 0.50);
+            Assert.InRange(lim.MaxAngleDeg, 0.10, 0.20);
 
             // 한계까지 기울어도 마크2 는 화면 안이어야 한다 — 그러라고 시야에서 뽑았다.
             double markShiftMm = 160 * Math.Sin(lim.MaxAngleDeg * Math.PI / 180);
             Assert.True(markShiftMm <= 1024 * Spec / 2000.0, $"{markShiftMm:F3}mm 는 화면 밖이다");
+        }
+
+        /// <summary>
+        /// 허용 각까지 돌아 있는 판을 고쳤을 때 딸려 나가는 이동이 <b>어긋남 한계 안</b>이어야 한다.
+        ///
+        /// <para>아니면 각도를 고칠수록 뒤 단계가 막힌다 — 실제로 그랬다(2026-08-28 11:16,
+        /// 0.103° 판이 회전 뒤 0.217mm 밀려 한계 0.192mm 를 넘었다). 두 한계를 절반씩
+        /// 쪼개 두면 회전반경이 기선보다 짧아도 반드시 걸린다.</para>
+        /// </summary>
+        [Theory]
+        [InlineData(121.0, 150.0)]   // 10호기 실측 — 회전반경 121mm · 기선 150mm
+        [InlineData(121.0, 160.0)]
+        [InlineData(149.0, 150.0)]   // 회전중심이 기선만큼 멀어도 아슬아슬하게 든다
+        public void 허용_각을_고쳐도_어긋남_한계_안이다(double chuckRadiusMm, double baselineMm)
+        {
+            var lim = AlignLimits.ForCamera(Spec, 1280, 1024, baselineMm);
+
+            // T 를 한계각만큼 돌리면 마크는 회전반경 × θ 만큼 딸려 나간다.
+            double pulledMm = chuckRadiusMm * lim.MaxAngleDeg * Math.PI / 180.0;
+
+            Assert.True(pulledMm <= lim.MaxShiftMm,
+                $"한계각 {lim.MaxAngleDeg:F3}° 를 고치면 {pulledMm:F3}mm 밀리는데 " +
+                $"어긋남 한계는 {lim.MaxShiftMm:F3}mm 뿐이다 — 12단계가 스스로 막힌다");
         }
 
         [Fact]

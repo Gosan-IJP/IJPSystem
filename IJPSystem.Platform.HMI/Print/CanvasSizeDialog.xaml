@@ -3,8 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Set size of canvas" Height="380" Width="460"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-        Background="#F1F3F5" FontFamily="Segoe UI">
-    <Border Margin="14" Background="White" BorderBrush="#C7CBD1" BorderThickness="1" CornerRadius="3">
+        Background="#0B0F1A" FontFamily="Segoe UI">
+    <!-- 색은 나머지 화면과 같은 팔레트다(2026-08-29) — 바탕 #0B0F1A · 카드 #111827 ·
+         선 #334155 · 글자 #E2E8F0. 이 창만 밝으면 인쇄 화면 위에서 다른 프로그램처럼 보인다. -->
+    <Border Margin="14" Background="#111827" BorderBrush="#334155" BorderThickness="1" CornerRadius="8">
         <Grid Margin="24,20">
             <!-- 입력 줄은 Auto — 예전에는 * 로 두고 가운데 정렬해서, 내용이 칸보다 몇 px 만 커져도
                  위아래로 똑같이 삐져나가 "Width (mm)" 글자의 윗부분이 잘렸다.
@@ -16,29 +18,32 @@
                 <RowDefinition Height="Auto"/>   <!-- 버튼 -->
             </Grid.RowDefinitions>
 
-            <TextBlock Grid.Row="0" Foreground="#1F2937" FontSize="14">
+            <TextBlock Grid.Row="0" Foreground="#E2E8F0" FontSize="14">
                 <Run Text="Please set your Canvas size"/><LineBreak/>
-                <Run Text="(max size: 200mm x 200mm)"/>
+                <Run Text="(max size: 200mm x 200mm)" Foreground="#94A3B8"/>
             </TextBlock>
 
             <StackPanel Grid.Row="1" Margin="0,18,0,0">
-                <TextBlock Text="Width (mm)" Foreground="#1F2937" FontSize="14" Margin="0,0,0,4"/>
+                <TextBlock Text="Width (mm)" Foreground="#94A3B8" FontSize="14" Margin="0,0,0,4"/>
+                <!-- 기본 TextBox 는 글자가 검정이라 어두운 바탕에서 안 보인다 — 전경·캐럿을 함께 준다. -->
                 <TextBox x:Name="WidthBox" Width="150" HorizontalAlignment="Left" Height="28"
                          VerticalContentAlignment="Center" FontFamily="Consolas" FontSize="14"
-                         Background="#E2E5E9" BorderBrush="#9CA3AF" Text="200"/>
-                <TextBlock Text="Length (mm)" Foreground="#1F2937" FontSize="14" Margin="0,12,0,4"/>
+                         Background="#0B0F1A" Foreground="#E2E8F0" CaretBrush="#E2E8F0"
+                         SelectionBrush="#1E3A5F" BorderBrush="#334155" Text="200"/>
+                <TextBlock Text="Length (mm)" Foreground="#94A3B8" FontSize="14" Margin="0,12,0,4"/>
                 <TextBox x:Name="LengthBox" Width="150" HorizontalAlignment="Left" Height="28"
                          VerticalContentAlignment="Center" FontFamily="Consolas" FontSize="14"
-                         Background="#E2E5E9" BorderBrush="#9CA3AF" Text="200"/>
-                <TextBlock x:Name="ErrorText" Foreground="#DC2626" FontSize="12" Margin="0,8,0,0"/>
+                         Background="#0B0F1A" Foreground="#E2E8F0" CaretBrush="#E2E8F0"
+                         SelectionBrush="#1E3A5F" BorderBrush="#334155" Text="200"/>
+                <TextBlock x:Name="ErrorText" Foreground="#F87171" FontSize="12" Margin="0,8,0,0"/>
             </StackPanel>
 
             <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0">
                 <Button Content="OK" Width="150" Height="36" Margin="0,0,12,0"
-                        Background="#2563EB" Foreground="White" BorderThickness="0" FontWeight="Bold"
+                        Background="#1E3A5F" Foreground="White" BorderThickness="0" FontWeight="Bold"
                         IsDefault="True" Click="Ok_Click"/>
                 <Button Content="Cancel" Width="150" Height="36"
-                        Background="#E5E7EB" Foreground="#1F2937" BorderBrush="#9CA3AF"
+                        Background="#1E293B" Foreground="#CBD5E1" BorderBrush="#334155"
                         IsCancel="True" Click="Cancel_Click"/>
             </StackPanel>
         </Grid>

@@ -74,19 +74,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public bool IsJogSpeedFast   { get => _jogSpeedScale == 2.0;  set { if (value) JogSpeedScale = 2.0; } }
 
         // ── Motion 패널 (Home / Absolute·Relative / Axis / Target / Move) ──
-        private static readonly string[] _motionAxisTags = { "X", "Y", "Z", "T" };
-
-        // Axis 콤보 선택(0=X,1=Y,2=Z,3=T)
-        private int _motionAxisIndex = 0;
-        public int MotionAxisIndex
-        {
-            get => _motionAxisIndex;
-            set
-            {
-                if (SetProperty(ref _motionAxisIndex, Math.Clamp(value, 0, 3)))
-                    OnPropertyChanged(nameof(SelectedMotionAxis));
-            }
-        }
+        //
+        // 축 콤보는 항목을 박아 두지 않고 <b>config 가 실제로 올린 축</b>을 그대로 보여준다
+        // (2026-08-28, DW-X/DW-Y 추가하면서). 3축기와 6축기가 같은 바이너리를 쓰므로 박아 두면
+        // 없는 축이 유령 항목으로 남고, 골라도 Move 만 조용히 꺼진 채 이유를 말하지 않는다.
+        // 이름도 "Axis X" 대신 config 의 Name("X AXIS")을 쓴다 — 로그·모터 화면과 표기가 맞는다.
 
         // 좌표 모드 콤보(0=Absolute, 1=Relative)
         private int _motionModeIndex = 0;
@@ -107,18 +99,38 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // +/- 버튼 증분(mm)
         private const double MotionStep = 1.0;
 
-        // 현재 선택된 Motion 대상 축
-        public AxisViewModel? SelectedMotionAxis => ResolveByTag(_motionAxisTags[Math.Clamp(_motionAxisIndex, 0, 3)]);
+        // 현재 선택된 Motion 대상 축. 아직 아무것도 고르지 않았으면 첫 축이다 —
+        // 계산 getter 로 두어, 축 목록이 뒤늦게 채워져도 빈 칸이 남지 않는다.
+        private AxisViewModel? _selectedMotionAxis;
+        public AxisViewModel? SelectedMotionAxis
+        {
+            get => _selectedMotionAxis ?? AxisList.FirstOrDefault();
+            set => SetProperty(ref _selectedMotionAxis, value);
+        }
 
         public ICommand MotionMoveCommand     { get; private set; } = null!;
         public ICommand MotionStepUpCommand   { get; private set; } = null!;
         public ICommand MotionStepDownCommand { get; private set; } = null!;
 
-        // 티칭 포인트 바로가기 — 활성 레시피의 READY / PRINT START / PRINT END / PURGE 좌표로 이동
-        public ICommand MoveReadyCommand      { get; private set; } = null!;
-        public ICommand MovePrintStartCommand { get; private set; } = null!;
-        public ICommand MovePrintEndCommand   { get; private set; } = null!;
-        public ICommand MovePurgeCommand      { get; private set; } = null!;
+        /// <summary>
+        /// 티칭 포인트 바로가기에 띄울 자리들 — 활성 레시피의 티칭 좌표로 전축 이동한다.
+        ///
+        /// <para><see cref="PointNames.All"/> 을 그대로 쓰지 않는 이유: 여기는 패턴 인쇄 화면이라
+        /// 손으로 가 볼 일이 있는 자리만 둔다. PRINT HEAD UP/DOWN 은 Z 한 축의 상태이지
+        /// 가는 자리가 아니고, PRINT END 는 인쇄가 끝나는 곳이라 손으로 갈 일이 없다.</para>
+        ///
+        /// <para>이름과 아이콘은 모터 화면의 TEACHING POSITION 과 <b>같은 것</b>을 쓴다
+        /// (<c>MotorControlView</c>) — 같은 동작을 두 화면에서 다르게 부르면, 한쪽에서 익힌 것이
+        /// 다른 쪽에서 안 통한다.</para>
+        /// </summary>
+        public IReadOnlyList<string> MotionPoints { get; } = new[]
+        {
+            PointNames.Ready, PointNames.GlassAlign, PointNames.Purge,
+            PointNames.PrintOrigin, PointNames.DropWatcher,
+        };
+
+        /// <summary>티칭 위치로 이동. CommandParameter 로 포인트 이름을 받는다.</summary>
+        public ICommand MovePointCommand { get; private set; } = null!;
 
         // 포인트 이동 중 중복 클릭 차단
         private bool _isPointMoving;
@@ -128,10 +140,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             private set
             {
                 if (!SetProperty(ref _isPointMoving, value)) return;
-                (MoveReadyCommand      as RelayCommand)?.RaiseCanExecuteChanged();
-                (MovePrintStartCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                (MovePrintEndCommand   as RelayCommand)?.RaiseCanExecuteChanged();
-                (MovePurgeCommand      as RelayCommand)?.RaiseCanExecuteChanged();
+                (MovePointCommand as RelayCommand)?.RaiseCanExecuteChanged();
             }
         }
 
@@ -240,6 +249,66 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
         public ICommand SetVoltageCommand { get; private set; } = null!;
 
+        /// <summary>[Set Voltage] 결과 — 걸렸는지, 못 걸었으면 왜인지 화면에 남긴다.</summary>
+        private string _voltageStatus = "";
+        public string VoltageStatus
+        {
+            get => _voltageStatus;
+            private set => SetProperty(ref _voltageStatus, value);
+        }
+
+        /// <summary>보정이 실제로 헤드에 들어갔는가 — 실패 문구를 빨갛게 띄우는 데 쓴다.</summary>
+        private bool _voltageApplied;
+        public bool VoltageApplied
+        {
+            get => _voltageApplied;
+            private set => SetProperty(ref _voltageApplied, value);
+        }
+
+        // 전압 보정 경로. 설정(DriverMode.Head)이 고른다 — 실물이 실패해도 가상으로 떨어지지
+        // 않는다. 안 붙은 헤드에 전압이 걸린 것처럼 보이는 쪽이 훨씬 위험하다.
+        private IJPSystem.Platform.Domain.Models.Printing.IHeadVoltage? _headVoltage;
+        private IJPSystem.Platform.Domain.Models.Printing.IHeadVoltage HeadVoltage
+        {
+            get
+            {
+                if (_headVoltage == null)
+                {
+                    string mode = Infrastructure.Config.AppSettingsService.Current?.DriverMode?.Head?.Trim() ?? "None";
+                    _headVoltage = string.Equals(mode, "Virtual", StringComparison.OrdinalIgnoreCase)
+                        ? new Infrastructure.Devices.PrintHead.VirtualHeadVoltage(
+                              m => _mainVM.AddLog("[PRINT] " + m, LogLevel.Info))
+                        : new Infrastructure.Devices.PrintHead.MeteorHeadVoltage(
+                              string.Equals(mode, "Meteor", StringComparison.OrdinalIgnoreCase) ? _mainVM.HeadSource : null,
+                              m => _mainVM.AddLog("[PRINT] " + m, LogLevel.Info));
+                }
+                return _headVoltage;
+            }
+        }
+
+        /// <summary>
+        /// [Set Voltage] — 화면의 보정값을 헤드에 건다.
+        ///
+        /// <para>결과를 반드시 화면에 남긴다. 예전에는 로그 한 줄만 찍고 아무 데도 보내지
+        /// 않았는데, 눌리고 로그까지 찍히니 걸린 것처럼 보였다 — 안 걸린 채로 인쇄가
+        /// 나가는 것이 이 버튼의 가장 나쁜 실패다.</para>
+        /// </summary>
+        private void ApplyVoltageOffset()
+        {
+            try
+            {
+                HeadVoltage.Apply(VoltageOffset);
+                VoltageApplied = true;
+                VoltageStatus  = $"적용 {HeadVoltage.AppliedPercent:F2} %";
+            }
+            catch (Exception ex)
+            {
+                VoltageApplied = false;
+                VoltageStatus  = "미적용 — " + ex.Message;
+                _mainVM.AddLog("[PRINT] 전압 보정 실패 — " + ex.Message, LogLevel.Warning);
+            }
+        }
+
         // Print Velocity 입력 클램프 범위 (mm/s). 화면에 범위 안내는 표시하지 않는다.
         private const double PrintVelocityMin = 30.0;
         private const double PrintVelocityMax = 100.0;
@@ -314,12 +383,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 if (_originManager == null)
                 {
-                    // 원점의 주인은 레시피의 PRINT START 티칭값이다 — 파일에 따로 두면 갈라진다.
+                    // 원점의 주인은 레시피의 PRINT ORIGIN 티칭값이다 — 파일에 따로 두면 갈라진다.
                     _originManager = new IJPSystem.Platform.Application.Printing.PrintOriginManager(
                         new SharedAxisStageAdapter(_mainVM), new Services.RecipePrintOriginStore(_mainVM));
-                    _originManager.Load();   // 티칭된 PRINT START 를 원점으로 읽어 온다
+                    _originManager.Load();   // 티칭된 PRINT ORIGIN 을 원점으로 읽어 온다
                     _originManager.PrintOriginChanged += (_, _) => SyncOriginFromManager();
                     SyncOriginFromManager();
+
+                    // 티칭 화면에서 자리를 옮기면 여기도 따라간다. 안 걸어 두면 이 화면은
+                    // 처음 읽은 값을 계속 들고 있고, 어긋남은 인쇄가 엉뚱한 자리에서
+                    // 시작해야 드러난다. (레시피를 갈아 끼울 때도 목록이 새로 만들어진다)
+                    if (_mainVM.RecipeVM != null)
+                        _mainVM.RecipeVM.PropertyChanged += (_, e) =>
+                        {
+                            if (e.PropertyName == nameof(RecipeViewModel.TeachingPoints))
+                                _originManager?.Load();
+                        };
                 }
                 return _originManager;
             }
@@ -631,29 +710,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             (PrintCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
 
-        // ── Load Image (Visual Monitor 에 띄울 이미지) ────────────────
-        private string _loadedImagePath = "";
-        /// <summary>불러온 이미지의 전체 경로. 비어 있으면 아직 불러오지 않은 상태.</summary>
-        public string LoadedImagePath
-        {
-            get => _loadedImagePath;
-            private set
-            {
-                if (!SetProperty(ref _loadedImagePath, value)) return;
-                OnPropertyChanged(nameof(LoadedImageName));
-                OnPropertyChanged(nameof(HasLoadedImage));
-            }
-        }
-        /// <summary>불러온 이미지의 파일명(버튼 아래 표시용).</summary>
-        public string LoadedImageName =>
-            string.IsNullOrEmpty(_loadedImagePath) ? "" : System.IO.Path.GetFileName(_loadedImagePath);
-        public bool HasLoadedImage => !string.IsNullOrEmpty(_loadedImagePath);
-
         // ── Commands ─────────────────────────────────────────────────
         public ICommand PrintCommand          { get; }
         public ICommand LoadPrintDataCommand  { get; }
         public ICommand AbortCommand          { get; }
-        public ICommand LoadImageCommand      { get; private set; } = null!;
 
         /// <summary>
         /// 화면 상단 Visual Monitor(라이브 뷰 + 크로스라인 + 뷰 툴). 공용 VisualMonitorViewModel 을 재사용한다.
@@ -676,18 +736,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
             MotionStepUpCommand   = new RelayCommand(_ => MotionTarget = Math.Round(MotionTarget + MotionStep, 3));
             MotionStepDownCommand = new RelayCommand(_ => MotionTarget = Math.Round(MotionTarget - MotionStep, 3));
 
-            MoveReadyCommand      = new RelayCommand(async _ => await MoveToPointAsync(PointNames.Ready),
-                                                     _ => !IsPointMoving && !IsPrinting);
-            MovePrintStartCommand = new RelayCommand(async _ => await MoveToPointAsync(PointNames.PrintStart),
-                                                     _ => !IsPointMoving && !IsPrinting);
-            MovePrintEndCommand   = new RelayCommand(async _ => await MoveToPointAsync(PointNames.PrintEnd),
-                                                     _ => !IsPointMoving && !IsPrinting);
-            MovePurgeCommand      = new RelayCommand(async _ => await MoveToPointAsync(PointNames.Purge),
-                                                     _ => !IsPointMoving && !IsPrinting);
+            MovePointCommand = new RelayCommand(
+                async p => await MoveToPointAsync(p as string ?? ""),
+                _ => !IsPointMoving && !IsPrinting);
 
             SpitCommand = new RelayCommand(async _ => await ToggleSpitAsync());
-
-            LoadImageCommand = new RelayCommand(_ => ExecuteLoadImage());
 
             // Purge 압력
             SetPurgeCommand    = new RelayCommand(_ => ApplyPurgeSetpoint());
@@ -704,8 +757,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ToggleValveLCommand = new RelayCommand(_ => ToggleValve(DoValveL, !IsValveLOn, v => IsValveLOn = v, "Valve L"));
             ToggleValveRCommand = new RelayCommand(_ => ToggleValve(DoValveR, !IsValveROn, v => IsValveROn = v, "Valve R"));
 
-            SetVoltageCommand = new RelayCommand(_ =>
-                _mainVM.AddLog($"[PRINT] Voltage offset = {VoltageOffset:F2} % (범위 {VoltageOffsetMin}~{VoltageOffsetMax})", LogLevel.Info));
+            SetVoltageCommand = new RelayCommand(_ => ApplyVoltageOffset());
 
             RefreshPrintVelocity();
             RefreshValveStates();
@@ -982,7 +1034,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
 
         /// <summary>
-        /// 활성 레시피에 티칭된 포인트(READY/PRINT START/PRINT END/PURGE) 좌표로 이동한다.
+        /// 활성 레시피에 티칭된 포인트(READY/PRINT ORIGIN/PRINT END/PURGE) 좌표로 이동한다.
         /// 좌표는 RecipeVM 의 활성 스냅샷에서 오므로, 레시피를 APPLY 하지 않았으면 이동할 축이 없다
         /// (MotionServiceAdapter 가 그 상황을 경고 로그로 남긴다).
         /// </summary>
@@ -1046,32 +1098,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
             await ax.MoveAsync();
         }
 
-        /// <summary>
-        /// Load Image — 이미지 파일을 골라 화면 상단 Visual Monitor 에 표시한다.
-        /// 로드에 실패하면 경로 표시를 갱신하지 않아 화면과 라벨이 어긋나지 않게 한다.
-        /// </summary>
-        private void ExecuteLoadImage()
-        {
-            // 직전에 고른 이미지 폴더 → 없으면 그림 폴더
-            string defaultDir = "";
-            if (!string.IsNullOrEmpty(_loadedImagePath))
-                defaultDir = System.IO.Path.GetDirectoryName(_loadedImagePath) ?? "";
-            if (!System.IO.Directory.Exists(defaultDir))
-                defaultDir = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
-
-            var dlg = new Microsoft.Win32.OpenFileDialog
-            {
-                Title            = "인쇄 이미지 선택",
-                Filter           = "이미지 파일|*.bmp;*.png;*.jpg;*.jpeg;*.tif;*.tiff|모든 파일|*.*",
-                InitialDirectory = defaultDir,
-                Multiselect      = false,
-            };
-            if (dlg.ShowDialog() != true) return;
-
-            if (Monitor.LoadImageFromFile(dlg.FileName))
-                LoadedImagePath = dlg.FileName;
-        }
-
         // 인쇄 원점 캡처는 PrintOriginWindow 모달 + PrintOriginManager 로 이관됨
         // (현재 위치 실시간 표시 + Set/Reset + 저장). SharedAxisStageAdapter 가 라이브 위치를 제공한다.
 
@@ -1111,7 +1137,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
                 return;
             }
-            // 시퀀스는 활성 레시피의 티칭 포인트(PRINT START/END 등)를 참조
+            // 시퀀스는 활성 레시피의 티칭 포인트(PRINT ORIGIN/END 등)를 참조
             if (string.IsNullOrEmpty(_mainVM.RecipeVM?.ActiveRecipeName))
             {
                 _mainVM.AddLog("[SEQ] PATTERN PRINT — 중단 (적용된 레시피 없음)", LogLevel.Warning);

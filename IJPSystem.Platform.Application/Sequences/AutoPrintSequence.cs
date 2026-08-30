@@ -61,7 +61,7 @@ namespace IJPSystem.Platform.Application.Sequences
             }
 
             steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_MoveStart",
-                ct => motion.MoveToPointAsync(PointNames.PrintStart, ct)));
+                ct => motion.MoveToPointAsync(PointNames.PrintOrigin, ct)));
 
             steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_MoveStartDone",
                 ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct)));
@@ -81,7 +81,7 @@ namespace IJPSystem.Platform.Application.Sequences
             {
                 // 인쇄 주행 방향: 양방향은 패스마다 교대, 단방향은 항상 Start→End.
                 bool forward = bidirectional ? (pass % 2 == 1) : true;
-                string scanTarget = forward ? PointNames.PrintEnd : PointNames.PrintStart;
+                string scanTarget = forward ? PointNames.PrintEnd : PointNames.PrintOrigin;
 
                 steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_Print",
                     ct => motion.MoveAxisToPointAsync(ScanAxisNo, scanTarget, ct, MotionProfileKind.Printing)));
@@ -92,7 +92,7 @@ namespace IJPSystem.Platform.Application.Sequences
                 // 단방향: 인쇄 후 시작점으로 복귀(비인쇄, Move 프로파일). 다음 패스도 같은 방향으로 인쇄하기 위함.
                 if (!bidirectional)
                 {
-                    string returnTarget = forward ? PointNames.PrintStart : PointNames.PrintEnd;
+                    string returnTarget = forward ? PointNames.PrintOrigin : PointNames.PrintEnd;
                     steps.Add(new SequenceStepDef(++n, "Step_AutoPrint_Return",
                         ct => motion.MoveAxisToPointAsync(ScanAxisNo, returnTarget, ct, MotionProfileKind.Move)));
 

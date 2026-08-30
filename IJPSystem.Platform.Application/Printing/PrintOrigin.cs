@@ -34,8 +34,8 @@ namespace IJPSystem.Platform.Application.Printing
     /// <summary>
     /// 인쇄 원점을 어디에 두는가.
     ///
-    /// <para><b>주인은 레시피의 PRINT START 티칭값이다.</b> 원점을 따로 파일에 두면 같은 값이
-    /// 두 군데 생기고, 티칭 화면에서 PRINT START 를 옮긴 날 둘이 갈라진다 — 화면에는 옛 원점이
+    /// <para><b>주인은 레시피의 PRINT ORIGIN 티칭값이다.</b> 원점을 따로 파일에 두면 같은 값이
+    /// 두 군데 생기고, 티칭 화면에서 PRINT ORIGIN 를 옮긴 날 둘이 갈라진다 — 화면에는 옛 원점이
     /// 뜨는데 인쇄는 새 자리에서 시작한다.</para>
     ///
     /// <para>쓰는 축은 <b>X·Y 뿐</b>이다. 인쇄 시작 위치에서 T 는 움직이지 않고, Z 는 헤드
@@ -89,7 +89,7 @@ namespace IJPSystem.Platform.Application.Printing
         }
 
         /// <summary>
-        /// 원점을 레시피의 PRINT START 티칭값에 두는 구성.
+        /// 원점을 레시피의 PRINT ORIGIN 티칭값에 두는 구성.
         ///
         /// <para>파일 저장은 하지 않는다 — 같은 값을 두 군데 두면 언젠가 갈라진다.</para>
         /// </summary>

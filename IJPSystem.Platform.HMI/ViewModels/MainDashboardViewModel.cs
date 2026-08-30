@@ -27,6 +27,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly Action<string>? _raiseAlarm;
         // (pointName, axisName) → mm — 활성 레시피의 스캔축 티칭 좌표 조회용
         private readonly Func<string, string, double?>? _getPointAxisMm;
+
+        /// <summary>레시피의 피듀셜 마크 간격 Y[mm] — 마크2 자리를 계산하는 데 쓴다.</summary>
+        private readonly Func<double>? _getFiducialPitchYMm;
         private readonly Func<bool>? _hasActiveAlarm;
         // 활성 레시피의 프린팅수(Swath) / 헤드길이 — 오토프린트 시퀀스 생성용
         private readonly Func<int>? _getSwathCount;
@@ -67,6 +70,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// 구간만 따로 그리고, 그 기준점이 이 값이다.</para>
         /// </summary>
         public double GlassAlignScanMm { get; private set; } = double.NaN;
+
+        /// <summary>
+        /// 마크2 자리의 스캔축 좌표[mm]. 티칭이나 레시피 간격이 없으면 NaN.
+        ///
+        /// <para><b>왜 좌표로 들고 있나</b>: 대시보드는 정렬 왕복을 그릴 때 "지금 마크1 쪽인가
+        /// 마크2 쪽인가"를 알아야 한다. 예전에는 그것을 <c>실측Y &gt; 마크1Y</c> 로 판단했는데,
+        /// 그건 <b>마크2 가 +Y 쪽</b>일 때만 맞는 식이다. 이 장비는 마크2 가 -Y 쪽이라
+        /// 그 가지에 영영 못 들어갔고, 정렬 내내 글라스가 제자리에 붙어 있었다(2026-08-28).</para>
+        ///
+        /// <para>방향은 <c>GlassAlign.StageMoveToMark2</c> 한 곳에서만 정한다 — 여기서 부호를
+        /// 다시 쓰면 언젠가 한쪽만 고치고, 그때 화면이 반대로 움직인다.</para>
+        /// </summary>
+        public double GlassAlignMark2ScanMm { get; private set; } = double.NaN;
         public double PrintEndScanMm   { get; private set; } = double.NaN;
         public bool   HasPrintRange => !double.IsNaN(PrintStartScanMm)
                                     && !double.IsNaN(PrintEndScanMm)
@@ -146,11 +162,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private void CachePrintRange()
         {
             ReadyScanMm      = _getPointAxisMm?.Invoke(PointNames.Ready,      ScanAxis) ?? double.NaN;
-            PrintStartScanMm = _getPointAxisMm?.Invoke(PointNames.PrintStart, ScanAxis) ?? double.NaN;
+            PrintStartScanMm = _getPointAxisMm?.Invoke(PointNames.PrintOrigin, ScanAxis) ?? double.NaN;
             PrintEndScanMm   = _getPointAxisMm?.Invoke(PointNames.PrintEnd,   ScanAxis) ?? double.NaN;
             GlassAlignScanMm = _getPointAxisMm?.Invoke(PointNames.GlassAlign, ScanAxis) ?? double.NaN;
+
+            // 마크2 자리 = 마크1 + 스테이지 이동량. 부호는 GlassAlign 이 정한다(위 설명 참고).
+            double pitchY = _getFiducialPitchYMm?.Invoke() ?? 0.0;
+            GlassAlignMark2ScanMm = double.IsNaN(GlassAlignScanMm) || pitchY <= 0
+                ? double.NaN
+                : GlassAlignScanMm + Infrastructure.Vision.GlassAlign.StageMoveToMark2(0, pitchY).Dy;
+
             OnPropertyChanged(nameof(ReadyScanMm));
             OnPropertyChanged(nameof(GlassAlignScanMm));
+            OnPropertyChanged(nameof(GlassAlignMark2ScanMm));
             OnPropertyChanged(nameof(PrintStartScanMm));
             OnPropertyChanged(nameof(PrintEndScanMm));
             OnPropertyChanged(nameof(HasPrintRange));
@@ -445,8 +469,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             Func<bool>? hasActiveAlarm = null,
             Func<int>? getSwathCount = null,
             Func<double>? getHeadLength = null,
-            Func<int>? getPrintDirection = null)
+            Func<int>? getPrintDirection = null,
+            Func<double>? getFiducialPitchYMm = null)
         {
+            _getFiducialPitchYMm = getFiducialPitchYMm;
             _logAction       = logAction;
             _onAlarmChanged  = onAlarmChanged;
             _raiseAlarm      = raiseAlarm;
@@ -459,6 +485,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _motion = motion;
 
             ActiveRecipeName = initialActiveRecipe;
+
+            // 정렬은 이 화면 밖에서도 시작된다(글라스 화면의 [Auto Align], 시퀀스 화면의 GLASS ALIGN).
+            // 예전에는 자동 인쇄가 돌린 정렬만 알아서, 다른 두 길로 돌리면 메인 화면의 글라스가
+            // 파킹 자리에 붙어 있었다(2026-08-28 실장). 이제 누가 돌리든 여기로 알려 온다.
+            Application.Sequences.GlassAlignServices.RunningChanged += OnExternalAlignChanged;
 
             // 시작 — 정지 상태면 시퀀스 시작, 일시정지 상태면 재개.
             // 연속 여부는 IsContinuousMode 토글로 결정(별도 연속 버튼 없음).
@@ -614,6 +645,39 @@ namespace IJPSystem.Platform.HMI.ViewModels
             get => _isAligning;
             private set => SetProperty(ref _isAligning, value);
         }
+
+        /// <summary>
+        /// 이 화면 밖에서 정렬이 시작·종료됐다 — 글라스 화면의 [Auto Align], 시퀀스 화면의 GLASS ALIGN.
+        ///
+        /// <para>자동 인쇄가 도는 중이면 손대지 않는다. 그쪽은 단계마다 <see cref="IsAligning"/> 을
+        /// 정확히 켜고 끄므로, 여기서 끼어들면 정렬이 끝난 뒤에도 켜진 채로 남는다.</para>
+        ///
+        /// <para>정렬 자리 좌표(<see cref="GlassAlignScanMm"/> 등)는 자동 인쇄 시작 때만 읽어
+        /// 두었다. 밖에서 시작한 판은 그 시점을 지나오지 않으므로 여기서 한 번 읽는다 —
+        /// 안 읽으면 값이 NaN 이라 화면이 "티칭 없음"으로 보고 파킹 자리에 그대로 둔다.</para>
+        /// </summary>
+        private void OnExternalAlignChanged(bool running)
+        {
+            // 이벤트는 시퀀스 스레드에서 온다 — 화면 값은 UI 스레드에서 건드린다.
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.CheckAccess())
+            {
+                dispatcher.BeginInvoke(new Action(() => OnExternalAlignChanged(running)));
+                return;
+            }
+
+            if (IsRunning) return;              // 자동 인쇄가 주인일 때는 그쪽 판단을 따른다
+
+            if (running)
+            {
+                CachePrintRange();
+                _logAction?.Invoke(
+                    $"[DASH] 정렬 애니메이션 — 마크1 Y={GlassAlignScanMm:F3} · 마크2 Y={GlassAlignMark2ScanMm:F3} · " +
+                    $"READY Y={ReadyScanMm:F3} · 티칭매핑={HasReadyMapping}",
+                    LogLevel.Info);
+            }
+            IsAligning = running;
+        }
         /// <summary>언어 변경 시 호출 — 진행 중이어도 표시명만 갱신</summary>
         public void RefreshStepNames()
         {
@@ -639,6 +703,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             CurrentStepNumber = 0;
             CurrentStepName = "STARTING";
             CachePrintRange();
+
+            // 정렬 애니메이션이 무엇을 근거로 그리는지 한 줄 남긴다 — 글라스가 안 움직인다는
+            // 신고가 올 때, 티칭이 없는 것인지 피듀셜 간격이 0 인 것인지 로그만으로 갈린다.
+            _logAction?.Invoke(
+                $"[DASH] 정렬 애니메이션 — 마크1 Y={GlassAlignScanMm:F3} · 마크2 Y={GlassAlignMark2ScanMm:F3} · " +
+                $"READY Y={ReadyScanMm:F3} · 티칭매핑={HasReadyMapping}",
+                LogLevel.Info);
+
             _machine.SetSystemStatus(MachineState.Running);
             _logAction?.Invoke(T("Log_Start"), LogLevel.Success);
 

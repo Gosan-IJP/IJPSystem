@@ -11,8 +11,8 @@ namespace IJPSystem.Platform.Application.Sequences
     ///
     /// <para><b>왜 이 순서인가</b></para>
     /// <para>
-    /// 마크2 는 글라스에서 마크1 보다 -Y 쪽에 있다. 카메라는 고정이므로 마크2 를 렌즈 밑으로
-    /// 데려오려면 글라스를 <b>+Y 로</b> 민다(레시피의 피듀셜 간격만큼). 두 자리에서 잰 픽셀 위치와
+    /// 마크2 는 글라스에서 마크1 보다 +Y 쪽에 있다. 카메라는 고정이므로 마크2 를 렌즈 밑으로
+    /// 데려오려면 글라스를 <b>-Y 로</b> 민다(레시피의 피듀셜 간격만큼). 두 자리에서 잰 픽셀 위치와
     /// 명령한 이동량을 합치면 두 마크의 실제 간격 벡터가 나오고, 그것이 설계 간격에서 몇 도
     /// 돌아 있는지가 곧 글라스 회전이다. 기선이 160mm 로 길어 각도가 아주 곱게 나온다.
     /// </para>
@@ -106,8 +106,10 @@ namespace IJPSystem.Platform.Application.Sequences
                 ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct));
 
             // 회전으로 딸려 나간 이동까지 여기서 함께 잡는다.
+            // ※ X·Y 만 되돌린다 — 티칭 포인트에 T 가 들어 있어 절대 이동을 하면 방금 준
+            //   회전 보정이 지워진다(실장 2026-08-27, ReturnToMark1Async 참고).
             yield return ("Step_GlassAlign_Mark1Return",
-                ct => Require(align).MoveToMark1Async(ct));
+                ct => Require(align).ReturnToMark1Async(ct));
 
             yield return ("Step_GlassAlign_Mark1ReturnDone",
                 ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 30_000, ct));

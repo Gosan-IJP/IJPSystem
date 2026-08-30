@@ -801,30 +801,32 @@
                         <ColumnDefinition Width="*"/>      <!-- Print 실행 -->
                     </Grid.ColumnDefinitions>
 
-                    <!-- ① Motion (Absolute / Axis / Move) + 티칭 포인트 바로가기 -->
-                    <!-- 남는 세로 공간은 Motion 카드가 흡수한다 → ②③ 카드와 바닥이 맞음.
-                         (StackPanel 로 감싸면 자식이 내용 높이만 가져서 왼쪽 컬럼만 짧아진다) -->
-                    <Grid Grid.Column="0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>     <!-- Motion 카드 -->
-                        <RowDefinition Height="Auto"/>  <!-- 티칭 포인트 바로가기(Ready/PrintStart/PrintEnd/Purge) -->
-                    </Grid.RowDefinitions>
-                    <Border Grid.Row="0" Style="{StaticResource CardBorder}" Padding="12">
+                    <!-- ① Motion (Absolute / Axis / Move) + 티칭 포인트 바로가기 — 카드 하나.
+                         카드를 둘로 나눠 두었을 때는 위 카드가 <c>*</c>, 아래가 <c>Auto</c> 였다.
+                         아래가 제 높이를 다 가져가고 남은 것만 위가 받는 구조라, 티칭 버튼이 다섯 개로
+                         늘자 위가 눌려 [Move] 가 잘렸다(2026-08-28). 한 카드로 합치고 ②③ 처럼
+                         통째로 스크롤한다 — 그래야 세로가 아무리 좁아져도 잘리는 것 없이 닿는다.
+                         Move 아래의 가로선이 "축 이동"과 "자리 이동"을 갈라 준다. -->
+                    <!-- 아래 여백이 8 인 것은 마지막 버튼이 Margin 4 를 달고 있기 때문이다(8+4=12). -->
+                    <Border Grid.Column="0" Style="{StaticResource CardBorder}" Padding="12,12,12,8">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel>
-                            <ComboBox Height="30" Background="#0D1520" Foreground="Black" BorderBrush="#334155"
-                                      VerticalContentAlignment="Center" FontWeight="Bold" Margin="0,0,0,5"
+                            <TextBlock Text="MOTION MOVEMENT" Style="{StaticResource MutedLabel}"
+                                       Margin="0,0,0,8"/>
+                            <ComboBox Height="28" Background="#0D1520" Foreground="Black" BorderBrush="#334155"
+                                      VerticalContentAlignment="Center" FontWeight="Bold" Margin="0,0,0,4"
                                       SelectedIndex="{Binding MotionModeIndex, Mode=TwoWay}">
                                 <ComboBoxItem Content="Absolute"/>
                                 <ComboBoxItem Content="Relative"/>
                             </ComboBox>
-                            <ComboBox Height="30" Background="#0D1520" Foreground="Black" BorderBrush="#334155"
-                                      VerticalContentAlignment="Center" FontWeight="Bold" Margin="0,0,0,5"
-                                      SelectedIndex="{Binding MotionAxisIndex, Mode=TwoWay}">
-                                <ComboBoxItem Content="Axis X"/>
-                                <ComboBoxItem Content="Axis Y"/>
-                                <ComboBoxItem Content="Axis Z"/>
-                                <ComboBoxItem Content="Axis T"/>
-                            </ComboBox>
+
+                            <!-- 축 목록은 config 가 올린 그대로다 — 3축기/6축기가 같은 바이너리라
+                                 박아 두면 없는 축이 유령 항목으로 남는다. 10호기는 DW-X / DW-Y 까지 나온다. -->
+                            <ComboBox Height="28" Background="#0D1520" Foreground="Black" BorderBrush="#334155"
+                                      VerticalContentAlignment="Center" FontWeight="Bold" Margin="0,0,0,4"
+                                      ItemsSource="{Binding AxisList}"
+                                      DisplayMemberPath="Info.Name"
+                                      SelectedItem="{Binding SelectedMotionAxis, Mode=TwoWay}"/>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -853,36 +855,44 @@
                                             Command="{Binding MotionStepDownCommand}"/>
                                 </StackPanel>
                             </Grid>
-                            <Button Style="{StaticResource ActionBtn}" Height="40"
+                            <Button Style="{StaticResource ActionBtn}" Height="34"
                                     Background="#475569" BorderBrush="#64748B" Content="Move"
                                     Command="{Binding MotionMoveCommand}"
                                     IsEnabled="{Binding SelectedMotionAxis.CanMove, FallbackValue=False}"/>
-                        </StackPanel>
-                    </Border>
 
-                    <!-- 티칭 포인트 바로가기 — 활성 레시피의 티칭 좌표로 전축 이동.
-                         순서는 인쇄 흐름(READY → PRINT START → PRINT END) 다음에 정비용 PURGE. -->
-                    <Border Grid.Row="1" Style="{StaticResource CardBorder}" Padding="8" Margin="0,10,0,0">
-                        <StackPanel>
-                            <Button Style="{StaticResource ActionBtn}" Height="34" Margin="0,0,0,6"
-                                    Background="#1E293B" BorderBrush="#475569" Content="Ready Position"
-                                    ToolTip="활성 레시피의 READY 티칭 포인트로 이동"
-                                    Command="{Binding MoveReadyCommand}"/>
-                            <Button Style="{StaticResource ActionBtn}" Height="34" Margin="0,0,0,6"
-                                    Background="#1E293B" BorderBrush="#475569" Content="Print Start Position"
-                                    ToolTip="활성 레시피의 PRINT START 티칭 포인트로 이동"
-                                    Command="{Binding MovePrintStartCommand}"/>
-                            <Button Style="{StaticResource ActionBtn}" Height="34" Margin="0,0,0,6"
-                                    Background="#1E293B" BorderBrush="#475569" Content="Print End Position"
-                                    ToolTip="활성 레시피의 PRINT END 티칭 포인트로 이동"
-                                    Command="{Binding MovePrintEndCommand}"/>
-                            <Button Style="{StaticResource ActionBtn}" Height="34"
-                                    Background="#1E293B" BorderBrush="#475569" Content="Purge Position"
-                                    ToolTip="활성 레시피의 PURGE 티칭 포인트로 이동"
-                                    Command="{Binding MovePurgeCommand}"/>
+                            <!-- 구분선 — 위는 축 하나를 좌표로 미는 일, 아래는 전축을 자리로 보내는 일.
+                                 성격이 달라서, 한 카드에 담더라도 눈으로는 갈라 놓는다. -->
+                            <Border Height="1" Background="#334155" Margin="0,10,0,10"/>
+
+                            <!-- 티칭 포인트 바로가기 — 활성 레시피의 티칭 좌표로 전축 이동.
+                                 이름·아이콘은 모터 화면의 TEACHING POSITION 과 같은 것을 쓴다(2026-08-28) —
+                                 같은 동작을 두 화면에서 다르게 부르면 한쪽에서 익힌 것이 다른 쪽에서 안 통한다.
+                                 목록은 VM 의 MotionPoints 가 정한다(포인트가 늘거나 줄면 화면이 따라온다). -->
+                            <ItemsControl ItemsSource="{Binding MotionPoints}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <!-- DataContext 가 문자열(포인트 이름)이라 Command 는 화면 VM 을 거슬러 찾는다 -->
+                                        <!-- 높이 30·간격 4 — 다섯 개가 스크롤 없이 한 카드에 들어오는 값이다.
+                                             더 늘릴 자리가 필요하면 여기가 아니라 목록을 줄이는 쪽이 맞다. -->
+                                        <Button Style="{StaticResource ActionBtn}" Height="30" Margin="0,0,0,4"
+                                                Background="#1E293B" BorderBrush="#475569"
+                                                Command="{Binding DataContext.MovePointCommand,
+                                                          RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip="활성 레시피의 티칭 좌표로 이동 (원점복귀·레시피 적용 후 가능)">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="◎" FontSize="13" Foreground="#60A5FA"
+                                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <TextBlock Text="{Binding}" FontSize="12" FontWeight="Bold"
+                                                           VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
+                        </ScrollViewer>
                     </Border>
-                    </Grid>
 
                     <!-- ② Voltage / Nozzle / Print 설정 -->
                     <Border Grid.Column="2" Style="{StaticResource CardBorder}" Padding="12">
@@ -918,6 +928,24 @@
                                         Background="#1D4ED8" BorderBrush="#3B82F6" Content="Set Voltage"
                                         Command="{Binding SetVoltageCommand}"/>
                             </Grid>
+                            <!-- 눌린 결과를 여기 남긴다. 버튼만 있고 결과가 없으면,
+                                 안 걸렸을 때도 걸린 것처럼 보인다. -->
+                            <TextBlock Text="{Binding VoltageStatus}" FontSize="10" Margin="0,0,0,6"
+                                       TextWrapping="Wrap" FontFamily="Consolas">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#F87171"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding VoltageApplied}" Value="True">
+                                                <Setter Property="Foreground" Value="#4ADE80"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding VoltageStatus}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                             <!-- 창을 닫고 나면 선택 결과가 아무 데도 안 남아, Spit 을 눌러 실패해야
                                  알 수 있었다. 개수를 라벨에 붙이고 미선택이면 주황으로 띄운다.
                                  번호는 툴팁에 — 3200개까지 갈 수 있어 라벨에는 못 넣는다. -->
@@ -1017,20 +1045,6 @@
                                                VerticalAlignment="Center" Margin="2,0,0,0"/>
                                 </Grid>
                             </Border>
-                            <Button Style="{StaticResource ActionBtn}" Height="40" Margin="0,0,0,8" Content="Load Image"
-                                    Command="{Binding LoadImageCommand}"
-                                    ToolTip="이미지 파일을 열어 상단 Visual Monitor 에 표시"/>
-
-                            <!-- 불러온 이미지명/경로 — 로드 전에는 숨김 -->
-                            <StackPanel Margin="0,0,0,8"
-                                        Visibility="{Binding HasLoadedImage, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <TextBlock Text="{Binding LoadedImageName}" Foreground="#E2E8F0"
-                                           FontSize="12" FontWeight="Bold" TextTrimming="CharacterEllipsis"
-                                           ToolTip="{Binding LoadedImagePath}"/>
-                                <TextBlock Text="{Binding LoadedImagePath}" Foreground="#94A3B8"
-                                           FontSize="10" TextTrimming="CharacterEllipsis"
-                                           ToolTip="{Binding LoadedImagePath}"/>
-                            </StackPanel>
                             <Button Height="54" FontSize="22" Command="{Binding PrintCommand}">
                                 <Button.Style>
                                     <Style TargetType="Button" BasedOn="{StaticResource ActionBtn}">

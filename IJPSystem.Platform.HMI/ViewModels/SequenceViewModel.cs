@@ -225,6 +225,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _cts = new CancellationTokenSource();
             _pauseGate.Set();
 
+            // 정렬 구간에 들어가면 대시보드 애니메이션이 따라오게 한다. 단계마다 열고 닫지 않고
+            // <b>구간이 이어지는 동안 하나</b>를 들고 있는다 — 단계 사이마다 껐다 켜면 메인 화면의
+            // 글라스가 한 프레임씩 파킹 자리로 튄다. 실패로 return 하는 길이 있어 finally 가 내린다.
+            IDisposable? alignScope = null;
+
             // 시퀀스 실제 실행 시작 — 화면 전환 차단 ON (try/finally 로 OFF 보장)
             _mainVM.SetSequenceRunning(true);
             try
@@ -247,6 +252,16 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 if (_cts.Token.IsCancellationRequested) break;
 
                 var step = ActiveSteps[i];
+
+                bool isAlign = step.NameKey.StartsWith("Step_GlassAlign_", StringComparison.Ordinal);
+                if (isAlign && alignScope == null)
+                    alignScope = IJPSystem.Platform.Application.Sequences.GlassAlignServices.BeginRun();
+                else if (!isAlign && alignScope != null)
+                {
+                    alignScope.Dispose();
+                    alignScope = null;
+                }
+
                 step.Status  = StepStatus.Running;
                 step.Elapsed = "-";
                 UpdateProgress(i, total);
@@ -306,6 +321,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
             finally
             {
+                alignScope?.Dispose();
                 _mainVM.SetSequenceRunning(false);
             }
         }

@@ -55,6 +55,9 @@ namespace IJPSystem.Platform.HMI.Print
         /// <summary>저장할 자리. 빈 레이어에서 열렸으면 그 파일에 덮어쓴다(대화상자 없이).</summary>
         private readonly string? _targetPath;
 
+        /// <summary>저장 이후 캔버스가 바뀌었나. 닫을 때 물어볼지 판단한다.</summary>
+        private bool _dirty;
+
         public EditPanelWindow(double widthMm, double lengthMm, double dpi, string? targetPath = null)
         {
             InitializeComponent();
@@ -248,6 +251,85 @@ namespace IJPSystem.Platform.HMI.Print
             FlushRows(minY, maxY);
         }
 
+        // ── 도형을 픽셀로 굽기 ───────────────────────────────────────
+        //
+        // 선·사각·마름모·타원은 그리는 동안에는 WPF 도형(미리보기)이다. 손을 떼는 순간
+        // 그 윤곽을 Line Width 만큼의 붓으로 훑어 픽셀 층에 찍고, 도형은 지운다.
+        //
+        // 왜 굽는가: WPF 도형은 안티에일리어싱이 들어간 <b>벡터</b>다. 화면에서는 매끈해
+        // 보이지만 저장할 때 회색 경계가 생기고, 굵기 7 이 정확히 7픽셀이라는 보장도 없다.
+        // 잉크젯 패턴은 "이 노즐을 쏜다/안 쏜다" 뿐이라 회색이라는 것이 없다 — 그릴 때
+        // 칸으로 확정해야 화면과 파일이 같아진다.
+
+        /// <summary>도형 윤곽을 잇는 점들(캔버스 좌표). 이 점들 사이를 붓으로 훑는다.</summary>
+        private IReadOnlyList<Point> OutlinePoints(Shape s)
+        {
+            var pts = new List<Point>();
+            static double Num(double v) => double.IsNaN(v) ? 0 : v;
+
+            switch (s)
+            {
+                case Line ln:
+                    pts.Add(new Point(ln.X1, ln.Y1));
+                    pts.Add(new Point(ln.X2, ln.Y2));
+                    break;
+
+                case Polygon poly:                     // 마름모 — 점이 이미 절대 좌표다
+                    foreach (var p in poly.Points) pts.Add(p);
+                    if (poly.Points.Count > 0) pts.Add(poly.Points[0]);
+                    break;
+
+                case Ellipse el:
+                {
+                    double a = Num(el.Width) / 2, b = Num(el.Height) / 2;
+                    double cx = Num(Canvas.GetLeft(el)) + a, cy = Num(Canvas.GetTop(el)) + b;
+
+                    // 둘레를 반 칸 간격으로 쪼갠다. 이보다 성기면 칸이 건너뛰어져 점선이 된다.
+                    double step = Math.Max(0.001, Math.Min(CellW, CellH) / 2);
+                    int n = (int)Math.Ceiling(Math.PI * (a + b) / step);
+                    n = Math.Clamp(n, 24, 20000);      // 위: 200mm 캔버스에서 점이 무한정 늘지 않게
+                    for (int i = 0; i <= n; i++)
+                    {
+                        double th = 2 * Math.PI * i / n;
+                        pts.Add(new Point(cx + a * Math.Cos(th), cy + b * Math.Sin(th)));
+                    }
+                    break;
+                }
+
+                default:                               // 사각형
+                {
+                    double l = Num(Canvas.GetLeft(s)), t = Num(Canvas.GetTop(s));
+                    double w = Num(s.Width), h = Num(s.Height);
+                    pts.Add(new Point(l, t));
+                    pts.Add(new Point(l + w, t));
+                    pts.Add(new Point(l + w, t + h));
+                    pts.Add(new Point(l, t + h));
+                    pts.Add(new Point(l, t));
+                    break;
+                }
+            }
+            return pts;
+        }
+
+        /// <summary>윤곽을 픽셀 층에 찍는다. 되돌리기는 펜 획과 똑같이 바뀐 칸만 들고 간다.</summary>
+        private int StampOutline(IReadOnlyList<Point> pts)
+        {
+            if (pts.Count == 0) return 0;
+
+            EnsurePixelLayer();
+            _cellSeen.Clear();
+            _strokeCells = new List<int>();
+            _strokeOn = true;
+
+            if (pts.Count == 1) PaintCellLine(pts[0], pts[0]);
+            else for (int i = 1; i < pts.Count; i++) PaintCellLine(pts[i - 1], pts[i]);
+
+            int n = _strokeCells.Count;
+            if (n > 0) { _added.Add(new PixelUndo(_strokeCells.ToArray(), true)); _redo.Clear(); }
+            _strokeCells = null;
+            return n;
+        }
+
         // ── 캔버스 드로잉 ────────────────────────────────────────────
         private void DrawCanvas_MouseDown(object sender, MouseButtonEventArgs e)
         {
@@ -280,7 +362,9 @@ namespace IJPSystem.Platform.HMI.Print
             {
                 _fillPending = false;
                 Point fp = e.GetPosition(DrawCanvas);
-                FloodFillAt((int)fp.X, (int)fp.Y);
+                // 채우기는 이미지 해상도에서 판단한다 — 화면 좌표를 픽셀 번호로 바꿔 넘긴다.
+                FloodFillAt((int)(fp.X / DrawCanvas.Width  * _pxW),
+                            (int)(fp.Y / DrawCanvas.Height * _pxH));
                 return;
             }
 
@@ -404,6 +488,7 @@ namespace IJPSystem.Platform.HMI.Print
                 {
                     _added.Add(new PixelUndo(_strokeCells.ToArray(), _strokeOn));
                     _redo.Clear();
+                    _dirty = true;
                 }
                 StatusInfo.Text = $"픽셀 {_strokeCells.Count}개 {(_strokeOn ? "켬" : "끔")} " +
                                   $"(붓 {Math.Max(1, (int)Math.Round(LineWidth))}px)";
@@ -411,8 +496,23 @@ namespace IJPSystem.Platform.HMI.Print
                 return;
             }
 
+            // 픽셀 편집이면 도형을 벡터로 남기지 않는다 — 굵기만큼의 칸을 실제로 켜고
+            // 미리보기 도형은 지운다. 화면에 보이는 계단이 곧 저장될 픽셀이다.
+            if (PixelEdit && _shape != null)
+            {
+                var pts = OutlinePoints(_shape);
+                DrawCanvas.Children.Remove(_shape);
+                _shape = null;
+
+                int brush = Math.Max(1, (int)Math.Round(LineWidth));
+                int n = StampOutline(pts);
+                if (n > 0) _dirty = true;
+                StatusInfo.Text = $"{_tool} — 픽셀 {n}개 켬 (붓 {brush}px, {brush * 25.4 / _dpi:0.0000}mm)";
+                return;
+            }
+
             UIElement? el = (UIElement?)_stroke ?? _shape;
-            if (el != null) { _added.Add(el); _redo.Clear(); }
+            if (el != null) { _added.Add(el); _redo.Clear(); _dirty = true; }
             _stroke = null; _shape = null;
         }
 
@@ -425,6 +525,7 @@ namespace IJPSystem.Platform.HMI.Print
 
         private void ClearCanvas_Click(object sender, RoutedEventArgs e)
         {
+            if (_added.Count > 0) _dirty = true;
             DrawCanvas.Children.Clear();
             _added.Clear(); _redo.Clear();
             _fillPending = false;
@@ -444,10 +545,12 @@ namespace IJPSystem.Platform.HMI.Print
             var item = _added[_added.Count - 1];
             _added.RemoveAt(_added.Count - 1);
 
-            if (item is PixelUndo pu) ApplyPixelUndo(pu, redo: false);
+            if (item is FlattenUndo fu) RestoreFlatten(fu);
+            else if (item is PixelUndo pu) ApplyPixelUndo(pu, redo: false);
             else if (item is UIElement el) DrawCanvas.Children.Remove(el);
 
             _redo.Push(item);
+            _dirty = true;
         }
 
         private void Redo_Click(object sender, RoutedEventArgs e)
@@ -455,10 +558,12 @@ namespace IJPSystem.Platform.HMI.Print
             if (_redo.Count == 0) return;
             var item = _redo.Pop();
 
-            if (item is PixelUndo pu) ApplyPixelUndo(pu, redo: true);
+            if (item is FlattenUndo fu) { ApplyFlatten(fu); _added.Clear(); }
+            else if (item is PixelUndo pu) ApplyPixelUndo(pu, redo: true);
             else if (item is UIElement el) DrawCanvas.Children.Add(el);
 
             _added.Add(item);
+            _dirty = true;
         }
 
         private void Fill_Click(object sender, RoutedEventArgs e)
@@ -467,15 +572,35 @@ namespace IJPSystem.Platform.HMI.Print
             StatusInfo.Text = "Fill — 채울 영역을 캔버스에서 클릭하세요.";
         }
 
-        /// <summary>클릭 지점과 연결된 같은 색 영역을 검정으로 채움(버킷 필).</summary>
+        /// <summary>클릭 지점과 연결된 흰 영역을 검정으로 채움(버킷 필). 좌표는 <b>이미지 픽셀</b>.</summary>
         private void FloodFillAt(int x, int y)
         {
             var m = RasterizeToMatrix(out int w, out int h);
             if (w == 0 || x < 0 || y < 0 || x >= w || y >= h) { StatusInfo.Text = "Fill — 캔버스 안을 클릭하세요."; return; }
-            var g = new PixelGrid(1, 1); g.Restore(m);
-            g.FloodFill(y, x, true);          // 매트릭스는 [row=y, col=x]
-            FlattenTo(g.Snapshot());
-            StatusInfo.Text = "Fill — 영역 채움 완료";
+
+            if (m[y, x]) { StatusInfo.Text = $"Fill — ({x},{y}) 는 이미 검정입니다. 비어 있는 안쪽을 클릭하세요."; return; }
+
+            var g = new PixelGrid(1, 1); g.Restore(m);   // Restore 가 복제하므로 m 은 원본으로 남는다
+            g.FloodFill(y, x, true);                     // 매트릭스는 [row=y, col=x]
+            var filled = g.Snapshot();
+
+            FlattenTo(filled);
+
+            // 경계가 한 군데라도 뚫려 있으면 바깥까지 새어 나간다 — 그 사실을 알려 준다.
+            // 예전에는 조용히 캔버스 전체가 까맣게 되어 "반대로 채워졌다"로 보였다.
+            StatusInfo.Text = LeakedToEdge(m, filled, w, h)
+                ? "Fill — ⚠ 경계가 열려 있어 바깥까지 채워졌습니다. Undo 후 선을 이어 주세요."
+                : "Fill — 영역 채움 완료";
+        }
+
+        /// <summary>채우기가 캔버스 테두리까지 번졌는지 — 닫힌 도형이면 테두리는 그대로다.</summary>
+        private static bool LeakedToEdge(bool[,] before, bool[,] after, int w, int h)
+        {
+            for (int x = 0; x < w; x++)
+                if ((!before[0, x] && after[0, x]) || (!before[h - 1, x] && after[h - 1, x])) return true;
+            for (int y = 0; y < h; y++)
+                if ((!before[y, 0] && after[y, 0]) || (!before[y, w - 1] && after[y, w - 1])) return true;
+            return false;
         }
 
         private void AutoFill_Click(object sender, RoutedEventArgs e)
@@ -524,13 +649,18 @@ namespace IJPSystem.Platform.HMI.Print
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
-            if (MessageBox.Show("Are you Sure to Save IMG?", "Save",
+            if (MessageBox.Show(this, "Are you Sure to Save IMG?", "Save",
                     MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
             {
                 StatusInfo.Text = "저장 취소";
                 return;
             }
+            SaveImage();
+        }
 
+        /// <summary>실제 저장. 저장했으면 true — 취소하거나 실패하면 false(창을 닫으면 안 된다).</summary>
+        private bool SaveImage()
+        {
             // 빈 레이어에서 열렸으면 그 파일에 그대로 덮어쓴다 — 래스터라이저가 기다리는
             // 자리가 정해져 있는데 다른 데 저장하면 그림이 변환으로 이어지지 않는다.
             string path;
@@ -546,7 +676,7 @@ namespace IJPSystem.Platform.HMI.Print
                     Filter = "BMP (*.bmp)|*.bmp",
                     FileName = $"Pattern_{DateTime.Now:yyMMdd_HHmmss}.bmp"
                 };
-                if (dlg.ShowDialog() != true) return;
+                if (dlg.ShowDialog() != true) { StatusInfo.Text = "저장 취소"; return false; }
                 path = dlg.FileName;
             }
 
@@ -557,59 +687,158 @@ namespace IJPSystem.Platform.HMI.Print
                 enc.Frames.Add(BitmapFrame.Create(rtb));
                 using (var fs = File.Create(path)) enc.Save(fs);
                 SavedImagePath = path;
+                _dirty = false;
                 StatusInfo.Text = "저장 완료: " + path;
+                return true;
             }
-            catch (Exception ex) { StatusInfo.Text = "저장 실패: " + ex.Message; }
+            catch (Exception ex)
+            {
+                StatusInfo.Text = "저장 실패: " + ex.Message;
+                MessageBox.Show(this, "저장하지 못했습니다.\n\n" + ex.Message, "Save",
+                                MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 저장하지 않고 닫으면 그린 것이 사라진다 — 묻고 닫는다.
+        /// 저장을 고르고도 실패하거나 파일 대화상자를 취소하면 닫지 않는다.
+        /// </summary>
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            base.OnClosing(e);
+            if (e.Cancel || !_dirty) return;
+
+            var r = MessageBox.Show(this,
+                "그린 내용이 아직 저장되지 않았습니다.\n저장하고 닫을까요?",
+                "Edit Panel", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+
+            if (r == MessageBoxResult.Cancel) { e.Cancel = true; return; }
+            if (r == MessageBoxResult.Yes && !SaveImage()) e.Cancel = true;
         }
 
         // ── 래스터화 / 결과 반영 ─────────────────────────────────────
+
+        /// <summary>
+        /// 캔버스를 <b>이미지 해상도</b>로 찍어 흑백 매트릭스로 만든다.
+        ///
+        /// <para>
+        /// 예전에는 화면 크기(760px)로 찍었다. 실제 이미지는 2362px 라 3배 넘게 줄어든
+        /// 그림 위에서 Fill 을 한 셈이고, 굵기 1~3px 로 그은 경계는 화면 크기에서는 1픽셀도
+        /// 안 돼 <b>사라진다</b>. 경계가 뚫리니 안쪽을 찍어도 바깥까지 번져서, 채우려던
+        /// 곳의 반대쪽이 까맣게 되는 것처럼 보였다. 저장 해상도에서 판단해야 맞다.
+        /// </para>
+        /// <para>
+        /// 한 줄씩 읽는 이유: 200mm 캔버스(4724²)를 통째로 잡으면 89MB 다. 이 앱은 x86 이라
+        /// 그만한 덩어리를 함부로 못 잡는다(픽셀 층이 1bpp 인 것과 같은 이유).
+        /// </para>
+        /// </summary>
         private bool[,] RasterizeToMatrix(out int w, out int h)
         {
             RemoveOverlays();
-            w = (int)Math.Round(DrawCanvas.Width);
-            h = (int)Math.Round(DrawCanvas.Height);
+            w = _pxW; h = _pxH;
             if (w <= 0 || h <= 0) { w = h = 0; return new bool[1, 1]; }
 
-            var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-            rtb.Render(DrawCanvas);
-
-            int stride = w * 4;
-            var px = new byte[h * stride];
-            rtb.CopyPixels(px, stride, 0);
+            var rtb = RenderCanvas(w, h);
 
             var m = new bool[h, w];
+            int stride = w * 4;
+            var row = new byte[stride];
             for (int y = 0; y < h; y++)
+            {
+                rtb.CopyPixels(new Int32Rect(0, y, w, 1), row, stride, 0);
                 for (int x = 0; x < w; x++)
                 {
-                    int i = y * stride + x * 4;
-                    byte b = px[i], gg = px[i + 1], r = px[i + 2], a = px[i + 3];
+                    int i = x * 4;
+                    byte b = row[i], gg = row[i + 1], r = row[i + 2], a = row[i + 3];
                     double lum = a < 10 ? 255 : 0.299 * r + 0.587 * gg + 0.114 * b;
                     m[y, x] = lum < 128;
                 }
+            }
             return m;
         }
 
-        /// <summary>흑백 매트릭스를 캔버스 위 한 장의 이미지로 얹어 평탄화(Undo 가능).</summary>
+        /// <summary>
+        /// 평탄화 되돌리기 — Fill/Auto Fill/Dithering 직전의 캔버스를 통째로 들고 있는다.
+        /// 한 장으로 굽기 전의 도형·픽셀 층을 그대로 되살려야 하므로 항목 하나로는 부족하다.
+        /// </summary>
+        private sealed record FlattenUndo(
+            UIElement[] Children, object[] Added,
+            WriteableBitmap? Pixels, Image? PixelImage, byte[] Bits, Image Flat);
+
+        /// <summary>
+        /// 흑백 매트릭스를 <b>한 장의 이미지로</b> 굽는다(Undo 가능).
+        ///
+        /// <para>
+        /// 예전에는 이 이미지를 기존 자식 <b>위에 얹기만</b> 했다. 이미지가 불투명(흰 바탕)이라
+        /// 밑에 있던 픽셀 층이 영영 가려지는데, <see cref="EnsurePixelLayer"/> 는 층이
+        /// "있다"고 보고 그대로 썼다 — Fill 을 한 번 누르면 그 뒤로 선을 그어도 화면에
+        /// 아무것도 안 나타났다. 그린 것이 묻힌 층에 들어가고 있었다.
+        /// 평탄화는 말 그대로 한 장으로 만드는 일이니, 자식을 비우고 이 이미지만 남긴다.
+        /// </para>
+        /// </summary>
         private void FlattenTo(bool[,] m)
         {
             int h = m.GetLength(0), w = m.GetLength(1);
-            var wb = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null);
-            int stride = w * 4;
-            var px = new byte[h * stride];
+
+            // 1bpp — 흑백뿐이라 비트 하나면 된다. 32비트로 잡으면 200mm 캔버스에서 89MB 다.
+            int stride = (w + 7) / 8;
+            var bits = new byte[stride * h];
             for (int y = 0; y < h; y++)
+            {
+                int rowBase = y * stride;
                 for (int x = 0; x < w; x++)
-                {
-                    int i = y * stride + x * 4;
-                    byte v = (byte)(m[y, x] ? 0 : 255);
-                    px[i] = v; px[i + 1] = v; px[i + 2] = v; px[i + 3] = 255;
-                }
-            wb.WritePixels(new Int32Rect(0, 0, w, h), px, stride, 0);
+                    if (m[y, x]) bits[rowBase + (x >> 3)] |= (byte)(0x80 >> (x & 7));
+            }
+
+            // 0 = 흰색(불투명) — 이 한 장이 캔버스 전체를 대신하므로 바탕까지 들고 있어야 한다.
+            var wb = new WriteableBitmap(w, h, 96, 96, PixelFormats.Indexed1,
+                new BitmapPalette(new List<Color> { Colors.White, Colors.Black }));
+            wb.WritePixels(new Int32Rect(0, 0, w, h), bits, stride, 0);
             wb.Freeze();
 
             var img = new Image { Source = wb, Width = DrawCanvas.Width, Height = DrawCanvas.Height };
+            // 확대했을 때 픽셀이 뭉개지면 안 된다 — 구운 뒤에도 칸이 칸으로 보여야 한다.
+            RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.NearestNeighbor);
+            RenderOptions.SetEdgeMode(img, EdgeMode.Aliased);
             Canvas.SetLeft(img, 0); Canvas.SetTop(img, 0);
-            DrawCanvas.Children.Add(img);
-            _added.Add(img); _redo.Clear();
+
+            // 굽기 직전 상태를 통째로 담는다. 이 매트릭스는 캔버스를 그대로 찍은 것이라
+            // 픽셀 층 내용도 이미 이 이미지 안에 들어 있다 — 버려도 그림은 남는다.
+            var kids = new UIElement[DrawCanvas.Children.Count];
+            DrawCanvas.Children.CopyTo(kids, 0);
+            var fu = new FlattenUndo(kids, _added.ToArray(), _pixels, _pixelImage, _bits, img);
+
+            ApplyFlatten(fu);
+            _added.Clear(); _added.Add(fu);   // 이력은 "평탄화" 한 걸음으로 접힌다
+            _redo.Clear();
+            _dirty = true;
+        }
+
+        /// <summary>캔버스를 구운 이미지 한 장으로 바꾼다. 픽셀 층은 다음 획이 새로 만든다.</summary>
+        private void ApplyFlatten(FlattenUndo fu)
+        {
+            ClearSelection();
+            RemoveCrosshair();
+            DrawCanvas.Children.Clear();
+            DrawCanvas.Children.Add(fu.Flat);
+
+            _pixels = null; _pixelImage = null;
+            _bits = Array.Empty<byte>();
+            _strokeCells = null; _cellSeen.Clear();
+        }
+
+        /// <summary>평탄화 이전으로 되돌린다 — 자식·이력·픽셀 층을 그때 그대로.</summary>
+        private void RestoreFlatten(FlattenUndo fu)
+        {
+            ClearSelection();
+            RemoveCrosshair();
+            DrawCanvas.Children.Clear();
+            foreach (var c in fu.Children) DrawCanvas.Children.Add(c);
+
+            _added.Clear(); _added.AddRange(fu.Added);
+            _pixels = fu.Pixels; _pixelImage = fu.PixelImage; _bits = fu.Bits;
+            _strokeCells = null; _cellSeen.Clear();
         }
 
         private RenderTargetBitmap RenderCanvas(int pxW, int pxH)
@@ -775,6 +1004,7 @@ namespace IJPSystem.Platform.HMI.Print
                 DrawCanvas.Children.Remove(el);
                 _added.Remove(el);
                 _redo.Push(el);
+                _dirty = true;
                 StatusInfo.Text = "Select — 요소 삭제";
                 e.Handled = true;
             }
@@ -838,6 +1068,12 @@ namespace IJPSystem.Platform.HMI.Print
 
         private void UpdateStatus()
             => StatusInfo.Text = $"{_pxW}x{_pxH}  {_dpi:0}DPI  {_widthMm:0.##}x{_lengthMm:0.##}mm  32-bit RGB";
+
+        // 굵기는 이미지 픽셀 수라 정수여야 한다 — 7.5픽셀짜리 붓 같은 것은 없다.
+        private void LineWidthUp_Click(object sender, RoutedEventArgs e)
+            => LineWidthBox.Text = Math.Min(999, (int)Math.Round(LineWidth) + 1).ToString();
+        private void LineWidthDown_Click(object sender, RoutedEventArgs e)
+            => LineWidthBox.Text = Math.Max(1, (int)Math.Round(LineWidth) - 1).ToString();
 
         private void LineWidth_Changed(object sender, TextChangedEventArgs e) => UpdateLineWidthMm();
         private void Boundary_Changed(object sender, TextChangedEventArgs e) => UpdateBoundaryMm();

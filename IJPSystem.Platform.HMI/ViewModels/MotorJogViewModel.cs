@@ -79,7 +79,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // ── 드랍 위치로 이동 ────────────────────────────────────────────
         //
         // 조그로 찾아가지 않고 티칭해 둔 자리(DROP WATCHER)로 한 번에 간다.
-        // 패턴인쇄 화면의 [READY]·[PRINT START] 이동과 같은 경로·같은 안전 조건이다.
+        // 패턴인쇄 화면의 [READY]·[PRINT ORIGIN] 이동과 같은 경로·같은 안전 조건이다.
 
         private bool _isMoving;
         /// <summary>이동 중. 버튼을 잠가 이동 중 재요청을 막는다.</summary>

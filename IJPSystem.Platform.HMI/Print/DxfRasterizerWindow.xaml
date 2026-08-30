@@ -5,13 +5,24 @@
         xmlns:local="clr-namespace:IJPSystem.Platform.HMI.Print"
         Title="DXF Rasterizer" Height="940" Width="980"
         WindowStartupLocation="CenterOwner"
-        Background="#F1F3F5" FontFamily="Segoe UI">
+        Background="#0B0F1A" FontFamily="Segoe UI">
+    <!-- 색은 나머지 화면과 같은 팔레트다(2026-08-28). 이 창만 밝은 회색이라, 인쇄 화면에서
+         띄우면 다른 프로그램이 뜬 것처럼 보였다. 바탕 #0B0F1A · 카드 #111827 · 선 #334155 ·
+         글자 #E2E8F0 / 흐린 글자 #94A3B8 — 글라스뷰·패턴인쇄와 같은 값이다.
+
+         ※ 미리보기 그림과 범례(흰색/검정)만은 그대로 둔다. 저장되는 BMP 가 흰 바탕에 검은
+           잉크라, 화면 색을 바꾸면 화면에서 본 것과 파일이 달라진다. 대신 그림 뒤 여백을
+           어둡게 해서, 흰 사각형이 "파일의 흰 바탕"으로 읽히게 했다. -->
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-        <!-- 진한 파랑 버튼(이미지의 액션 버튼) -->
+
+        <!-- 창 안의 스크롤바도 앱 공용 모양을 쓴다(App.xaml 의 Styles.xaml). -->
+        <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
+
+        <!-- 액션 버튼 -->
         <Style x:Key="NavyBtn" TargetType="Button">
             <Setter Property="Foreground"      Value="White"/>
-            <Setter Property="Background"      Value="#3E4C63"/>
+            <Setter Property="Background"      Value="#1E3A5F"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="FontWeight"      Value="SemiBold"/>
             <Setter Property="FontSize"        Value="14"/>
@@ -24,54 +35,76 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#4D5E7A"/>
+                                <Setter Property="Background" Value="#2A4F7F"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Background" Value="#9AA3B2"/>
+                                <Setter Property="Background" Value="#1E293B"/>
+                                <Setter Property="Foreground" Value="#64748B"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- 읽기 전용 회색 값 박스 -->
+
+        <!-- 값 박스 — 읽기 전용도, 입력칸을 감싸는 용도도 같은 모양이다 -->
         <Style x:Key="ReadBox" TargetType="Border">
-            <Setter Property="Background"      Value="#E2E5E9"/>
-            <Setter Property="BorderBrush"     Value="#B7BEC8"/>
+            <Setter Property="Background"      Value="#0B0F1A"/>
+            <Setter Property="BorderBrush"     Value="#1E293B"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius"    Value="2"/>
             <Setter Property="Padding"         Value="6,3"/>
         </Style>
         <Style x:Key="ReadText" TargetType="TextBlock">
-            <Setter Property="Foreground"     Value="#1F2937"/>
+            <Setter Property="Foreground"     Value="#E2E8F0"/>
             <Setter Property="FontFamily"     Value="Consolas"/>
             <Setter Property="FontSize"       Value="13"/>
             <Setter Property="TextAlignment"  Value="Right"/>
         </Style>
+
+        <!-- 값 박스 안의 입력칸 — 기본 TextBox 는 글자가 검정이라 어두운 바탕에서 안 보인다 -->
+        <Style x:Key="BoxInput" TargetType="TextBox">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="Foreground"      Value="#E2E8F0"/>
+            <Setter Property="CaretBrush"      Value="#E2E8F0"/>
+            <Setter Property="SelectionBrush"  Value="#1E3A5F"/>
+            <Setter Property="FontFamily"      Value="Consolas"/>
+        </Style>
+
         <Style x:Key="SectionLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#374151"/>
+            <Setter Property="Foreground" Value="#94A3B8"/>
             <Setter Property="FontSize"   Value="12"/>
         </Style>
-        <!-- 미리보기 좌측 도구 버튼 (원래 그림만 있던 자리) -->
+
+        <!-- 미리보기 좌측 도구 버튼 -->
         <Style x:Key="ToolBtn" TargetType="Button">
             <Setter Property="FontSize"   Value="12"/>
             <Setter Property="Cursor"     Value="Hand"/>
             <Setter Property="Margin"     Value="0,0,0,-1"/>
-            <Setter Property="Foreground" Value="#374151"/>
+            <Setter Property="Foreground" Value="#CBD5E1"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" Background="#E5E7EB" BorderBrush="#9CA3AF" BorderThickness="1">
+                        <Border x:Name="b" Background="#1E293B" BorderBrush="#334155" BorderThickness="1">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,3"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#CBD5E1"/>
+                                <Setter TargetName="b" Property="Background" Value="#334155"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- 카드 -->
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background"      Value="#111827"/>
+            <Setter Property="BorderBrush"     Value="#334155"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius"    Value="6"/>
         </Style>
     </Window.Resources>
 
@@ -84,14 +117,13 @@
         </Grid.RowDefinitions>
 
         <!-- ════ 헤더 ════ -->
-        <Border Grid.Row="0" Background="#3E4C63" Height="64">
+        <Border Grid.Row="0" Background="#1E293B" Height="64">
             <TextBlock Text="DXF Rasterizer" Foreground="White" FontSize="30" FontWeight="Bold"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
         <!-- ════ 상단: Image Preview | Convert Parameters ════ -->
-        <Border Grid.Row="1" Background="White" Margin="12,12,12,6" CornerRadius="6"
-                BorderBrush="#D1D5DB" BorderThickness="1">
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="12,12,12,6">
             <Grid Margin="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>      <!-- preview -->
@@ -108,22 +140,23 @@
                                     Command="{Binding ZoomToFitCommand}"/>
                             <Button Style="{StaticResource NavyBtn}" Height="32" Width="44" Margin="8,0,0,0" Content="▦"
                                     Command="{Binding ToggleGridCommand}"/>
-                            <TextBlock Text="Image Preview" FontSize="20" FontWeight="Bold" Foreground="#111827"
+                            <TextBlock Text="Image Preview" FontSize="20" FontWeight="Bold" Foreground="#E2E8F0"
                                        VerticalAlignment="Center" Margin="12,0,0,0"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                            <TextBlock Text="Length Measure" VerticalAlignment="Center" Foreground="#374151"/>
+                            <TextBlock Text="Length Measure" VerticalAlignment="Center" Foreground="#94A3B8"/>
                             <CheckBox IsChecked="{Binding LengthMeasureEnabled}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Grid>
 
                     <!-- 범례 — 미리보기 그림과 같은 색이어야 한다. 저장 파일이 흰 바탕·검은 잉크라
-                         화면도 그대로 띄우고, 범례를 파일에 맞췄다. -->
+                         화면도 그대로 띄우고, 범례를 파일에 맞췄다. 창이 어두워져도 이 두 칸은
+                         파일을 가리키므로 바뀌지 않는다. -->
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
-                        <Rectangle Width="34" Height="14" Fill="White" Stroke="#9CA3AF" StrokeThickness="1"/>
-                        <TextBlock Text="Non-Printing Area" Margin="6,0,16,0" VerticalAlignment="Center" Foreground="#374151"/>
-                        <Rectangle Width="34" Height="14" Fill="#111111"/>
-                        <TextBlock Text="Printing Area" Margin="6,0,0,0" VerticalAlignment="Center" Foreground="#374151"/>
+                        <Rectangle Width="34" Height="14" Fill="White" Stroke="#475569" StrokeThickness="1"/>
+                        <TextBlock Text="Non-Printing Area" Margin="6,0,16,0" VerticalAlignment="Center" Foreground="#94A3B8"/>
+                        <Rectangle Width="34" Height="14" Fill="#111111" Stroke="#475569" StrokeThickness="1"/>
+                        <TextBlock Text="Printing Area" Margin="6,0,0,0" VerticalAlignment="Center" Foreground="#94A3B8"/>
                     </StackPanel>
 
                     <!-- 미리보기 캔버스 -->
@@ -143,8 +176,9 @@
                                     Click="ZoomToFit_Click"/>
                         </StackPanel>
 
-                        <!-- 배경 + (Printing Area 목업 또는 불러온 이미지) + 격자 + 길이 측정선 -->
-                        <Border Margin="30,0,0,0" Background="#DDDDDD" BorderBrush="#C7CBD1" BorderThickness="1"
+                        <!-- 배경 + (Printing Area 목업 또는 불러온 이미지) + 격자 + 길이 측정선.
+                             그림 뒤 여백을 어둡게 둔다 — 밝은 회색이면 파일의 흰 바탕과 구분이 안 된다. -->
+                        <Border Margin="30,0,0,0" Background="#0D1117" BorderBrush="#334155" BorderThickness="1"
                                 ClipToBounds="True">
                             <Grid x:Name="PreviewViewport" ClipToBounds="True" Background="Transparent"
                                   SizeChanged="PreviewViewport_SizeChanged"
@@ -201,8 +235,9 @@
 
                                 <!-- 배율·길이 읽음표. 확대해도 글자 크기가 변하면 안 되므로 구석에 고정한다. -->
                                 <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="6"
-                                        Background="#CC1F2937" CornerRadius="3" Padding="6,2" IsHitTestVisible="False">
-                                    <TextBlock x:Name="ZoomBadge" Foreground="#F9FAFB" FontSize="11"
+                                        Background="#CC0B0F1A" BorderBrush="#334155" BorderThickness="1"
+                                        CornerRadius="3" Padding="6,2" IsHitTestVisible="False">
+                                    <TextBlock x:Name="ZoomBadge" Foreground="#E2E8F0" FontSize="11"
                                                FontFamily="Consolas" Text=""/>
                                 </Border>
                             </Grid>
@@ -212,31 +247,29 @@
 
                 <!-- Convert Parameters -->
                 <StackPanel Grid.Column="2">
-                    <TextBlock Text="Convert Parameters" FontSize="14" Foreground="#374151"
+                    <TextBlock Text="Convert Parameters" FontSize="14" Foreground="#94A3B8"
                                HorizontalAlignment="Center" Margin="0,2,0,10"/>
                     <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="Drop per Inch X" VerticalAlignment="Center" Foreground="#374151"/>
-                        <Border Grid.Column="1" Style="{StaticResource ReadBox}" Background="White" Margin="8,0,0,0">
+                        <TextBlock Text="Drop per Inch X" VerticalAlignment="Center" Foreground="#94A3B8"/>
+                        <Border Grid.Column="1" Style="{StaticResource ReadBox}" Margin="8,0,0,0">
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBox Grid.Column="0" BorderThickness="0" Background="Transparent" TextAlignment="Right"
-                                         FontFamily="Consolas" FontSize="13"
+                                <TextBox Grid.Column="0" Style="{StaticResource BoxInput}" TextAlignment="Right" FontSize="13"
                                          Text="{Binding DropPerInchX, StringFormat=F0, UpdateSourceTrigger=LostFocus}"/>
-                                <TextBlock Grid.Column="1" Text=" DPI" Foreground="#6B7280" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text=" DPI" Foreground="#64748B" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
                             </Grid>
                         </Border>
                     </Grid>
                     <Grid Margin="0,0,0,12">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="Drop per Inch Y" VerticalAlignment="Center" Foreground="#374151"/>
-                        <Border Grid.Column="1" Style="{StaticResource ReadBox}" Background="White" Margin="8,0,0,0">
+                        <TextBlock Text="Drop per Inch Y" VerticalAlignment="Center" Foreground="#94A3B8"/>
+                        <Border Grid.Column="1" Style="{StaticResource ReadBox}" Margin="8,0,0,0">
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBox Grid.Column="0" BorderThickness="0" Background="Transparent" TextAlignment="Right"
-                                         FontFamily="Consolas" FontSize="13"
+                                <TextBox Grid.Column="0" Style="{StaticResource BoxInput}" TextAlignment="Right" FontSize="13"
                                          Text="{Binding DropPerInchY, StringFormat=F0, UpdateSourceTrigger=LostFocus}"/>
-                                <TextBlock Grid.Column="1" Text=" DPI" Foreground="#6B7280" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text=" DPI" Foreground="#64748B" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
                             </Grid>
                         </Border>
                     </Grid>
@@ -251,21 +284,21 @@
                     <!-- 결과 값 -->
                     <Grid Margin="0,30,0,0">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="Line count" VerticalAlignment="Center" Foreground="#374151"/>
+                        <TextBlock Text="Line count" VerticalAlignment="Center" Foreground="#94A3B8"/>
                         <Border Grid.Column="1" Style="{StaticResource ReadBox}" Margin="8,0,0,0">
                             <TextBlock Style="{StaticResource ReadText}" Text="{Binding LineCount}"/>
                         </Border>
                     </Grid>
                     <Grid Margin="0,6,0,0">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="Real X Length" VerticalAlignment="Center" Foreground="#374151"/>
+                        <TextBlock Text="Real X Length" VerticalAlignment="Center" Foreground="#94A3B8"/>
                         <Border Grid.Column="1" Style="{StaticResource ReadBox}" Margin="8,0,0,0">
                             <TextBlock Style="{StaticResource ReadText}" Text="{Binding RealXLengthMm, StringFormat={}{0:F4} mm}"/>
                         </Border>
                     </Grid>
                     <Grid Margin="0,6,0,0">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="Real Y Length" VerticalAlignment="Center" Foreground="#374151"/>
+                        <TextBlock Text="Real Y Length" VerticalAlignment="Center" Foreground="#94A3B8"/>
                         <Border Grid.Column="1" Style="{StaticResource ReadBox}" Margin="8,0,0,0">
                             <TextBlock Style="{StaticResource ReadText}" Text="{Binding RealYLengthMm, StringFormat={}{0:F4} mm}"/>
                         </Border>
@@ -275,19 +308,18 @@
         </Border>
 
         <!-- ════ Using Nozzles ════ -->
-        <Border Grid.Row="2" Background="White" Margin="12,0,12,6" CornerRadius="6"
-                BorderBrush="#D1D5DB" BorderThickness="1" Padding="12,8">
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="12,0,12,6" Padding="12,8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                    <Border Style="{StaticResource ReadBox}" Background="#3E4C63" Width="90" Padding="8,4">
+                    <Border Style="{StaticResource ReadBox}" Background="#1E3A5F" Width="90" Padding="8,4">
                         <TextBlock Text="{Binding UsingNozzleCount}" Foreground="White" FontFamily="Consolas"
                                    FontSize="15" FontWeight="Bold" TextAlignment="Center"/>
                     </Border>
-                    <TextBlock Text="Using Nozzles" HorizontalAlignment="Center" Margin="0,3,0,0" Foreground="#374151" FontSize="12"/>
+                    <TextBlock Text="Using Nozzles" HorizontalAlignment="Center" Margin="0,3,0,0" Foreground="#94A3B8" FontSize="12"/>
                 </StackPanel>
                 <!-- 줄 수·한 줄 노즐 수는 헤드 사양(레시피 → 노즐 정보)을 그대로 따른다.
                      노즐 선택 창과 같은 요소를 쓰므로 두 화면이 어긋날 수 없다. 여기서는 표시 전용. -->
@@ -297,8 +329,8 @@
                                 TotalNozzles="{Binding TotalNozzles, Mode=OneTime}"
                                 Rows="{Binding NozzleRows, Mode=OneTime}"
                                 Selected="{Binding UsingNozzleSet}"
-                                OffBrush="#E5E7EB" OnBrush="#22A341"
-                                TextBrush="#6B7280" OutlineBrush="#D1D5DB"/>
+                                OffBrush="#1E293B" OnBrush="#22A341"
+                                TextBrush="#64748B" OutlineBrush="#334155"/>
             </Grid>
         </Border>
 
@@ -311,7 +343,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Layer Select -->
-            <Border Grid.Column="0" Background="White" CornerRadius="6" BorderBrush="#D1D5DB" BorderThickness="1" Padding="12">
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="12">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Text="Layer Select" Style="{StaticResource SectionLabel}" Margin="0,0,0,6"/>
                     <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
@@ -335,11 +367,37 @@
                         <Button Grid.Column="6" Style="{StaticResource NavyBtn}" Height="48" Content="🔎 Preview"
                                 Click="PatternPreview_Click"/>
                     </Grid>
-                    <ListBox ItemsSource="{Binding Layers}" BorderBrush="#CBD5E1" BorderThickness="1" Background="White">
+                    <ListBox ItemsSource="{Binding Layers}" BorderBrush="#334155" BorderThickness="1"
+                             Background="#0B0F1A" Foreground="#E2E8F0">
+                        <ListBox.ItemContainerStyle>
+                            <!-- 기본 ListBoxItem 은 선택·마우스오버가 밝은 하늘색이라 어두운 바탕에서 튄다 -->
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Background"  Value="Transparent"/>
+                                <Setter Property="Padding"     Value="2"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                                    CornerRadius="3" Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="bd" Property="Background" Value="#1E293B"/>
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="bd" Property="Background" Value="#1E3A5F"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <CheckBox IsChecked="{Binding IsSelected}" Content="{Binding Name}"
-                                          Foreground="#1F2937" Margin="2"/>
+                                          Foreground="#E2E8F0" Margin="2"/>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -347,13 +405,13 @@
             </Border>
 
             <!-- Paths -->
-            <Border Grid.Column="2" Background="White" CornerRadius="6" BorderBrush="#D1D5DB" BorderThickness="1" Padding="12">
+            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="12">
                 <StackPanel>
                     <TextBlock Text="DXF Path" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Style="{StaticResource ReadBox}" Background="White">
-                            <TextBox BorderThickness="0" Background="Transparent" FontFamily="Consolas" FontSize="12"
+                        <Border Grid.Column="0" Style="{StaticResource ReadBox}">
+                            <TextBox Style="{StaticResource BoxInput}" FontSize="12"
                                      VerticalContentAlignment="Center"
                                      Text="{Binding DxfPath, UpdateSourceTrigger=PropertyChanged}"/>
                         </Border>
@@ -363,25 +421,25 @@
 
                     <TextBlock Text="BMP Path" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
                     <Border Style="{StaticResource ReadBox}" MinHeight="44" Margin="0,0,0,8">
-                        <TextBlock Text="{Binding BmpPath}" Foreground="#1F2937" FontFamily="Consolas" FontSize="12"
+                        <TextBlock Text="{Binding BmpPath}" Foreground="#E2E8F0" FontFamily="Consolas" FontSize="12"
                                    TextWrapping="Wrap" VerticalAlignment="Center"/>
                     </Border>
 
                     <TextBlock Text="Pattern Path" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
                     <Border Style="{StaticResource ReadBox}" MinHeight="44" Margin="0,0,0,8">
-                        <TextBlock Text="{Binding PatternPath}" Foreground="#1F2937" FontFamily="Consolas" FontSize="12"
+                        <TextBlock Text="{Binding PatternPath}" Foreground="#E2E8F0" FontFamily="Consolas" FontSize="12"
                                    TextWrapping="Wrap" VerticalAlignment="Center"/>
                     </Border>
 
                     <TextBlock Text="Loading Complete" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
-                    <Border Background="#E2E5E9" BorderBrush="#B7BEC8" BorderThickness="1" CornerRadius="2" Height="26" Margin="0,0,0,10">
+                    <Border Background="#0B0F1A" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="2" Height="26" Margin="0,0,0,10">
                         <ProgressBar Minimum="0" Maximum="1" Value="{Binding LoadingProgress}"
                                      Foreground="#22A341" Background="Transparent" BorderThickness="0"/>
                     </Border>
 
                     <Button Style="{StaticResource NavyBtn}" Height="48" Content="💾   Save"
                             Command="{Binding SaveCommand}"/>
-                    <TextBlock Text="{Binding StatusText}" Foreground="#6B7280" FontSize="11"
+                    <TextBlock Text="{Binding StatusText}" Foreground="#64748B" FontSize="11"
                                TextWrapping="Wrap" Margin="2,6,0,0"/>
                 </StackPanel>
             </Border>

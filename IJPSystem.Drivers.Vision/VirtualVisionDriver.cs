@@ -244,7 +244,12 @@ namespace IJPSystem.Drivers.Vision
             status.LastCaptureTime  = image.CaptureTime;
             status.TotalCaptureCount++;
 
-            Debug.WriteLine($"[Virtual Vision] Captured: {cameraId} #{status.TotalCaptureCount}  → {image.FilePath}");
+            // 프레임마다 찍지 않는다. 라이브 뷰가 초당 수십 장을 잡으므로 한 줄씩 남기면
+            // 출력창이 이것만으로 가득 차고(디버깅 중 정작 볼 줄이 밀려 사라진다),
+            // 출력창 쓰기 자체가 느려 가상 모드가 실제보다 굼떠 보인다.
+            // 첫 장과 이후 100장마다만 남긴다 — "돌고 있다"는 확인에는 그것으로 충분하다.
+            if (status.TotalCaptureCount == 1 || status.TotalCaptureCount % 100 == 0)
+                Debug.WriteLine($"[Virtual Vision] Captured: {cameraId} #{status.TotalCaptureCount}  → {image.FilePath}");
             return image;
         }
 

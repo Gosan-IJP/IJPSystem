@@ -26,19 +26,53 @@ namespace IJPSystem.Platform.HMI.Services
                 await ax.ForceServoOnAsync();
         }
 
+        /// <summary>
+        /// 전 축 원점복귀.
+        ///
+        /// <para><b>T 는 Y 가 끝난 뒤에 건다</b>(2026-08-27). 둘을 같이 돌리면 기구가 간섭한다.
+        /// 나머지 축은 그 줄과 나란히 돌므로 전체 시간은 거의 그대로다 — T 를 마지막에 몰아
+        /// 두면 늦게 끝나는 다른 축까지 기다리게 된다.</para>
+        ///
+        /// <para>이 순서가 성립하는 근거: <c>HomeAsync</c> 는 원점복귀가 <b>끝나야</b> 돌아온다
+        /// (실장 드라이버는 WaitForHomeDone, 가상은 시뮬레이션 종료까지 대기). 명령만 던지고
+        /// 돌아오는 함수였다면 이렇게 이어 붙여도 동시에 도는 셈이 된다.</para>
+        /// </summary>
         public async Task HomeAllAsync(CancellationToken ct)
         {
-            var tasks = _mainVM.SharedAxisList.Select(ax => ax.HomeAsync());
-            await Task.WhenAll(tasks);
+            var all   = _mainVM.SharedAxisList.ToList();
+            var yAxis = FindAxis(all, "Y");
+            var tAxis = FindAxis(all, "T");
+
+            var rest = all.Where(ax => ax != yAxis && ax != tAxis).Select(ax => ax.HomeAsync());
+            await Task.WhenAll(rest.Prepend(HomeYThenTAsync(yAxis, tAxis)));
 
             // 최대 50초 대기
             for (int i = 0; i < 500; i++)
             {
                 ct.ThrowIfCancellationRequested();
-                if (_mainVM.SharedAxisList.All(ax => ax.Status?.IsHomeDone == true)) break;
+                if (all.All(ax => ax.Status?.IsHomeDone == true)) break;
                 await Task.Delay(100, ct);
             }
         }
+
+        /// <summary>
+        /// Y 를 끝내고 T 를 건다. 한쪽이 없는 장비(T 가 없는 3축기 등)면 있는 쪽만 돈다.
+        /// Y 가 실패하면 예외가 그대로 올라가 <b>T 는 시작되지 않는다</b> — 간섭을 피하려고
+        /// 나눈 순서이므로, 앞이 끝났는지 모르는 채 뒤를 걸면 안 된다.
+        /// </summary>
+        private async Task HomeYThenTAsync(AxisViewModel? yAxis, AxisViewModel? tAxis)
+        {
+            if (yAxis != null) await yAxis.HomeAsync();
+
+            if (tAxis == null) return;
+            if (yAxis != null)
+                _mainVM.AddLog($"[MOTION] {yAxis.Info.Name} 원점복귀 완료 — 이어서 {tAxis.Info.Name} 시작(간섭 회피)");
+            await tAxis.HomeAsync();
+        }
+
+        private static AxisViewModel? FindAxis(List<AxisViewModel> axes, string axisNo) =>
+            axes.FirstOrDefault(ax => string.Equals(ax.Info?.AxisNo, axisNo,
+                                                    System.StringComparison.OrdinalIgnoreCase));
 
         public async Task MoveToPointAsync(string pointName, CancellationToken ct,
                                            MotionProfileKind profile = MotionProfileKind.Move)

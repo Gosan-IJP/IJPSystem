@@ -256,7 +256,7 @@
     <system:String x:Key="Step_AutoPrint_VacuumOn">V/C チャック真空 ON (ガラス固定)</system:String>
     <system:String x:Key="Step_AutoPrint_VacuumConfirm">V/C チャック真空確認 (チャック真空圧 ON)</system:String>
     <system:String x:Key="Step_AutoPrint_VacuumStabilize">真空安定化待ち (1s)</system:String>
-    <system:String x:Key="Step_AutoPrint_MoveStart">印刷開始位置(PRINT START)へ移動</system:String>
+    <system:String x:Key="Step_AutoPrint_MoveStart">印刷開始位置(PRINT ORIGIN)へ移動</system:String>
     <system:String x:Key="Step_AutoPrint_MoveStartDone">印刷開始位置 InPosition 確認</system:String>
     <system:String x:Key="Step_AutoPrint_Print">印刷中 — スキャン(Y)吐出</system:String>
     <system:String x:Key="Step_AutoPrint_PrintDone">印刷完了 InPosition 確認</system:String>
@@ -305,12 +305,12 @@
     <system:String x:Key="Step_GlassAlign_Mark1Move">マーク1位置（GLASS ALIGN）へ移動</system:String>
     <system:String x:Key="Step_GlassAlign_Mark1MoveDone">マーク1位置 InPosition 確認</system:String>
     <system:String x:Key="Step_GlassAlign_Mark1Find">マーク1を探す</system:String>
-    <system:String x:Key="Step_GlassAlign_Mark2Move">マーク2位置へ移動（フィデューシャル間隔ぶん +Y）</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark2Move">マーク2位置へ移動（フィデューシャル間隔ぶん -Y・X 保持）</system:String>
     <system:String x:Key="Step_GlassAlign_Mark2MoveDone">マーク2位置 InPosition 確認</system:String>
     <system:String x:Key="Step_GlassAlign_Mark2Find">マーク2を探す</system:String>
     <system:String x:Key="Step_GlassAlign_Rotate">回転角の算出・T補正</system:String>
     <system:String x:Key="Step_GlassAlign_RotateDone">T補正 InPosition 確認</system:String>
-    <system:String x:Key="Step_GlassAlign_Mark1Return">マーク1位置へ復帰</system:String>
+    <system:String x:Key="Step_GlassAlign_Mark1Return">マーク1位置へ復帰（X・Y のみ・T 補正保持）</system:String>
     <system:String x:Key="Step_GlassAlign_Mark1ReturnDone">復帰 InPosition 確認</system:String>
     <system:String x:Key="Step_GlassAlign_Shift">マーク1再測定・X/Y補正（許容差まで反復）</system:String>
     <system:String x:Key="Step_GlassAlign_Verify">整列検証（許容差判定）</system:String>
@@ -328,7 +328,7 @@
     <system:String x:Key="Step_PatternPrint_HeadPowerOn">ヘッド電源 ON (SetHeadPower)</system:String>
     <system:String x:Key="Step_PatternPrint_AlignHead">ヘッド整列・Xオフセット (SetHome/UpdateXoffsets)</system:String>
     <system:String x:Key="Step_PatternPrint_DownloadImage">画像ダウンロード (DownloadIMG_ScanMODE → PCC バッファ)</system:String>
-    <system:String x:Key="Step_PatternPrint_MoveStart">印刷開始位置(PRINT START)へ移動</system:String>
+    <system:String x:Key="Step_PatternPrint_MoveStart">印刷開始位置(PRINT ORIGIN)へ移動</system:String>
     <system:String x:Key="Step_PatternPrint_MoveStartDone">印刷開始位置 InPosition 確認</system:String>
     <system:String x:Key="Step_PatternPrint_ArmTrigger">印刷トリガ ARM (SetSignal / PrintGo)</system:String>
     <system:String x:Key="Step_PatternPrint_ScanPrint">スキャン走行印刷 — 終点(PRINT END)まで吐出</system:String>
@@ -355,9 +355,9 @@
     <system:String x:Key="Seq_DropWatcher_Name">DROP WATCHER</system:String>
     <system:String x:Key="Seq_DropWatcher_Desc">ドロップウォッチャー位置へ移動</system:String>
     <system:String x:Key="Seq_AutoPrint_Name">AUTO PRINT</system:String>
-    <system:String x:Key="Seq_AutoPrint_Desc">ガラス検知 → 真空固定 → PRINT START へ移動 → ヘッド DOWN → 印刷中 → ヘッド UP → 真空解除 → 復帰</system:String>
+    <system:String x:Key="Seq_AutoPrint_Desc">ガラス検知 → 真空固定 → PRINT ORIGIN へ移動 → ヘッド DOWN → 印刷中 → ヘッド UP → 真空解除 → 復帰</system:String>
     <system:String x:Key="Seq_PatternPrint_Name">PATTERN PRINT</system:String>
-    <system:String x:Key="Seq_PatternPrint_Desc">プリンタ接続 → 状態確認 → パラメータ/構成送信 → ヘッド電源・整列 → 画像ダウンロード → PRINT START へ移動 → トリガ ARM → スキャン印刷 → 完了待ち → ヘッド OFF/終了 → 復帰 (Meteor PCC)</system:String>
+    <system:String x:Key="Seq_PatternPrint_Desc">プリンタ接続 → 状態確認 → パラメータ/構成送信 → ヘッド電源・整列 → 画像ダウンロード → PRINT ORIGIN へ移動 → トリガ ARM → スキャン印刷 → 完了待ち → ヘッド OFF/終了 → 復帰 (Meteor PCC)</system:String>
     <system:String x:Key="Seq_HeadUp_Name">HEAD UP</system:String>
     <system:String x:Key="Seq_HeadUp_Desc">プリントヘッドを上へ移動 (ガラスから分離)</system:String>
     <system:String x:Key="Seq_HeadDown_Name">HEAD DOWN</system:String>

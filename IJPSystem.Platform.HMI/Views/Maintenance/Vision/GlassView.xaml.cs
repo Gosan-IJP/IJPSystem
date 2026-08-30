@@ -9,6 +9,25 @@ namespace IJPSystem.Platform.HMI.Views
         public GlassView()
         {
             InitializeComponent();
+
+            // 화면에 보일 때만 라이브 — 들어오면 켜고 나가면 끈다(VisualMonitorView 와 같은 규약).
+            Loaded   += (_, __) => (DataContext as GlassViewModel)?.Activate();
+            Unloaded += (_, __) => (DataContext as GlassViewModel)?.Deactivate();
+        }
+
+        /// <summary>
+        /// 노출 입력칸에서 Enter 를 치면 곧바로 적용한다.
+        ///
+        /// <para>바인딩은 기본값(LostFocus)으로 둔다 — PropertyChanged 로 두면 "15" 를 치는 동안
+        /// 1ms → 15ms 로 <b>키를 누를 때마다</b> 카메라에 쓰기가 나간다. 대신 Enter 를 받아 준다:
+        /// 값을 고치고 다른 곳을 눌러야 듣는 칸은, 안 듣는 칸으로 오해받는다.</para>
+        /// </summary>
+        private void ExposureBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter || sender is not TextBox box) return;
+
+            box.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+            e.Handled = true;
         }
 
         // ── 조그 (누르는 동안 이동 / 떼면 정지) ────────────────────────────────

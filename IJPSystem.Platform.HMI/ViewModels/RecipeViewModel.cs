@@ -1030,6 +1030,17 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 try { db.Execute("ALTER TABLE Recipes ADD COLUMN AutoAlign INTEGER DEFAULT 0"); }
                 catch { /* 이미 존재하면 무시 */ }
 
+                // 티칭 포인트 이름 변경: PRINT START → PRINT ORIGIN (2026-08-26).
+                //
+                // 인쇄 원점 창이 저장하는 자리가 바로 이 포인트라, 두 이름이 같은 것을
+                // 가리키는데 화면마다 다르게 불리고 있었다. 이름을 하나로 맞춘다.
+                // ★ 옮기지 않으면 티칭값을 잃는다 — 화면은 PointNames.All 에 없는 행을
+                //   걸러 내므로, 옛 PRINT START 행은 사라지고 0 짜리 PRINT ORIGIN 이
+                //   새로 생긴다. 그 상태로 인쇄하면 원점 0 에서 시작한다.
+                try { db.Execute("UPDATE RecipeDetails_Position SET PointName = @to WHERE PointName = @from",
+                                 new { to = PointNames.PrintOrigin, from = "PRINT START" }); }
+                catch { /* 테이블이 아직 없으면 무시 — 뒤에서 만들어진다 */ }
+
                 // 글라스 정보 컬럼 마이그레이션(2026-08-07). 기본 0 = 미입력.
                 //
                 // 노즐 헤드 사양도 여기 둔다(2026-08-13 변경). 예전에는 장비 설정(MachineSettings)에만

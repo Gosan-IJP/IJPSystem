@@ -71,7 +71,7 @@ namespace IJPSystem.Platform.Application.Sequences
             // ── [인쇄 실행] ─────────────────────────────────────────
             // 10) Move_ABS — 스테이지를 인쇄 시작 위치로 이동
             steps.Add(new SequenceStepDef(++n, "Step_PatternPrint_MoveStart",
-                ct => motion.MoveToPointAsync(PointNames.PrintStart, ct)));
+                ct => motion.MoveToPointAsync(PointNames.PrintOrigin, ct)));
 
             steps.Add(new SequenceStepDef(++n, "Step_PatternPrint_MoveStartDone",
                 ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct)));

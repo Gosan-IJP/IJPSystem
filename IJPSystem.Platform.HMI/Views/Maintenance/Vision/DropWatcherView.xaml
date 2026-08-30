@@ -834,6 +834,24 @@
                                 </TextBlock>
                             </StackPanel>
                         </Button>
+                        <!-- 헤드 모드 뱃지 — Spit 버튼 바로 위. 설정은 Meteor 인데 어댑터 준비가
+                             실패하면 조용히 가상으로 내려가고, 버튼은 멀쩡히 켜진 채 잉크만 안 나온다.
+                             그 사실이 누르기 <b>전에</b> 보여야 한다(2026-08-29). -->
+                        <Border CornerRadius="6" Padding="9,5" Margin="0,0,0,8"
+                                Visibility="{Binding HeadFellBack, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Background="#450A0A" BorderBrush="#B91C1C" BorderThickness="1"
+                                ToolTip="{Binding HeadFallbackReason}">
+                            <StackPanel>
+                                <TextBlock Text="⚠  헤드 = 가상 (Meteor 준비 실패)" Foreground="#FCA5A5"
+                                           FontSize="11" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding HeadFallbackReason}" Foreground="#94A3B8"
+                                           FontSize="9.5" FontFamily="Consolas"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                <TextBlock Text="토출 명령은 받지만 잉크는 나오지 않습니다." Foreground="#F87171"
+                                           FontSize="10" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Border>
+
                         <!-- Spit DW — 선택 노즐을 Frequency 로 연속 토출(토글). 측정의 전제 조건. -->
                         <Button Height="46" Margin="0,0,0,8" Command="{Binding ToggleSpitCommand}"
                                 ToolTip="Nozzle Select 로 지정한 노즐을 Frequency 로 연속 토출합니다. Duration 이 설정돼 있으면 그 시간 뒤 자동 정지합니다.">

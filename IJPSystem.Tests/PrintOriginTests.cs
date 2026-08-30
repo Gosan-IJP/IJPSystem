@@ -1,4 +1,5 @@
 using IJPSystem.Platform.Application.Printing;
+using System.Linq;
 using System;
 using System.IO;
 using Xunit;
@@ -131,7 +132,7 @@ namespace IJPSystem.Tests
     }
 
     /// <summary>
-    /// 인쇄 원점의 주인이 레시피 PRINT START 라는 것.
+    /// 인쇄 원점의 주인이 레시피 PRINT ORIGIN 라는 것.
     ///
     /// <para>값이 두 군데 있으면 언젠가 갈라진다 — 원점 창에는 옛 값이 뜨는데 인쇄는 새 자리에서
     /// 시작한다. 그 갈라짐은 인쇄물이 어긋나야 드러나므로 여기서 막는다.</para>
@@ -145,7 +146,7 @@ namespace IJPSystem.Tests
             public AxisPoint GetCurrentPosition() => P;
         }
 
-        /// <summary>PRINT START 티칭값 흉내 — X·Y·Z 를 들고 있다.</summary>
+        /// <summary>PRINT ORIGIN 티칭값 흉내 — X·Y·Z 를 들고 있다.</summary>
         private sealed class FakePointStore : IPrintOriginStore
         {
             public AxisPoint Point = new(10, 20, 30);
@@ -249,6 +250,36 @@ namespace IJPSystem.Tests
             mgr.ResetToDefault();
 
             Assert.Equal(2, store.Writes);   // 두 번 다 티칭값으로 갔다
+        }
+    }
+}
+
+namespace IJPSystem.Tests
+{
+    /// <summary>
+    /// 티칭 포인트 이름. 인쇄 원점 창이 저장하는 자리와 티칭 화면에 뜨는 이름이 같아야 한다 —
+    /// 다르면 같은 값을 화면마다 다르게 부르게 되고, 그게 예전 상태였다.
+    /// </summary>
+    public class PointNameTests
+    {
+        [Fact]
+        public void 인쇄원점_포인트는_PRINT_ORIGIN_이다()
+            => Assert.Equal("PRINT ORIGIN", Platform.Application.Sequences.PointNames.PrintOrigin);
+
+        [Fact]
+        public void 티칭_목록에_옛_이름은_남아_있지_않다()
+        {
+            // 남아 있으면 화면에 같은 자리가 두 줄로 뜬다.
+            Assert.DoesNotContain("PRINT START", Platform.Application.Sequences.PointNames.All);
+            Assert.Contains("PRINT ORIGIN", Platform.Application.Sequences.PointNames.All);
+        }
+
+        [Fact]
+        public void 인쇄_흐름_순서는_READY_다음이_인쇄원점이다()
+        {
+            var all = Platform.Application.Sequences.PointNames.All;
+            Assert.True(all.ToList().IndexOf("PRINT ORIGIN") < all.ToList().IndexOf("PRINT END"),
+                        "인쇄 원점이 인쇄 끝보다 뒤에 오면 티칭 화면 순서가 흐름과 어긋난다.");
         }
     }
 }

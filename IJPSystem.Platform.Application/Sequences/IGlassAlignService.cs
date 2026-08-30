@@ -34,8 +34,20 @@ namespace IJPSystem.Platform.Application.Sequences
         /// </summary>
         bool IsEnabled { get; }
 
-        /// <summary>마크1 자리(티칭 포인트)로 이동.</summary>
+        /// <summary>마크1 자리(티칭 포인트)로 이동. T 를 포함한 전 축이 티칭 값으로 간다 — 시작 기준을 잡는 자리다.</summary>
         Task<string> MoveToMark1Async(CancellationToken ct);
+
+        /// <summary>
+        /// 회전 보정을 끝낸 뒤 마크1 자리로 <b>돌아온다 — T 는 건드리지 않는다.</b>
+        ///
+        /// <para>GLASS ALIGN 티칭 포인트에는 T 도 들어 있어서, 그냥 절대 이동하면 <b>방금 준
+        /// 회전 보정이 그대로 지워진다</b>. 실장 로그(2026-08-27)에서 T 를 -0.031° 돌린 65ms 뒤에
+        /// 절대 이동이 T 를 티칭 값으로 되돌렸고, 그래서 몇 판을 돌려도 측정 각도가 -0.031° 에서
+        /// 꿈쩍하지 않았다.</para>
+        ///
+        /// <para>그래서 X·Y 만 티칭 값으로 되돌린다. Z 는 정렬 중 움직이지 않으므로 그대로 둔다.</para>
+        /// </summary>
+        Task<string> ReturnToMark1Async(CancellationToken ct);
 
         /// <summary>마크2 자리로 이동 — 레시피의 피듀셜 간격만큼 상대 이동한다.</summary>
         Task<string> MoveToMark2Async(CancellationToken ct);
@@ -74,5 +86,53 @@ namespace IJPSystem.Platform.Application.Sequences
     public static class GlassAlignServices
     {
         public static IGlassAlignService? Current { get; set; }
+
+        // ── 정렬이 도는 중인가 ────────────────────────────────────────────
+        //
+        // 정렬 단계를 도는 자리가 <b>셋</b>이다: 자동 인쇄(MainDashboardViewModel), 글라스 화면의
+        // [Auto Align], 시퀀스 화면의 GLASS ALIGN. 그런데 대시보드 애니메이션은 자기가 돌린
+        // 경우만 알고 있어서, 나머지 둘로 돌리면 글라스가 파킹 자리에 붙어 있었다
+        // (2026-08-28 실장 — "얼라인 동작시 스테이지가 Y방향으로 움직이지 않아요").
+        //
+        // 그래서 "지금 정렬 중"이라는 사실 하나를 여기 한 곳에 둔다. 돌리는 쪽이 <see cref="BeginRun"/>
+        // 로 감싸기만 하면, 보는 쪽(대시보드)은 누가 돌렸는지 몰라도 된다.
+
+        private static int _running;
+
+        /// <summary>정렬 단계가 돌고 있는가. 어느 화면에서 시작했는지와 무관하다.</summary>
+        public static bool IsRunning => System.Threading.Volatile.Read(ref _running) > 0;
+
+        /// <summary><see cref="IsRunning"/> 이 바뀌었다. 구독자는 UI 스레드가 아닐 수 있음에 주의.</summary>
+        public static event Action<bool>? RunningChanged;
+
+        /// <summary>
+        /// 정렬 한 판을 감싼다 — <c>using var _ = GlassAlignServices.BeginRun();</c>
+        ///
+        /// <para>세는 방식인 이유: 자동 인쇄 안에서 돌던 중에 누가 또 시작해도 먼저 끝난 쪽이
+        /// 깃발을 내려 버리지 않는다. 예외로 빠져나가도 <c>using</c> 이 반드시 내린다.</para>
+        /// </summary>
+        public static IDisposable BeginRun() => new RunScope();
+
+        private sealed class RunScope : IDisposable
+        {
+            private int _done;
+
+            public RunScope()
+            {
+                if (System.Threading.Interlocked.Increment(ref _running) == 1) Raise(true);
+            }
+
+            public void Dispose()
+            {
+                if (System.Threading.Interlocked.Exchange(ref _done, 1) != 0) return;   // 두 번 불려도 한 번만
+                if (System.Threading.Interlocked.Decrement(ref _running) == 0) Raise(false);
+            }
+        }
+
+        /// <summary>구독자가 던져도 정렬을 세우지 않는다 — 화면 갱신 실패가 장비를 멈출 이유는 없다.</summary>
+        private static void Raise(bool running)
+        {
+            try { RunningChanged?.Invoke(running); } catch { }
+        }
     }
 }

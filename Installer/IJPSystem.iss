@@ -5,7 +5,9 @@
 ; ============================================================================
 
 #define MyAppName      "IJPSystem HMI"
-#define MyAppVersion   "1.0.28"
+; 담는 것이 달라지면 반드시 올릴 것 — 같은 번호로 다른 내용이 나가면 현장에서 무엇이 깔려
+; 있는지 알 길이 없다. 1.0.29: Meteor 네이티브(PrinterInterface/PrintEngine) 동봉 시작.
+#define MyAppVersion   "1.0.29"
 #define MyAppPublisher "GosanTech"                      ; ← 회사명으로 수정
 #define MyAppExeName   "IJPSystem.Platform.HMI.exe"
 #define PublishDir     "publish"                        ; build-installer.ps1 의 publish 출력

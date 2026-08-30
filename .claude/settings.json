@@ -441,7 +441,8 @@
       "Bash(pwsh -NoProfile -File Tools/Deploy/Build-Hotfix.ps1 -Config TriggerChainConfig.json -SkipPublish)",
       "Bash(cd \"d:/IJP/IJPSystem\" && ls Installer/ | head -20; echo \"=== ISCC 확인 ===\"; ls \"/c/Program Files \\(x86\\)/Inno Setup 6/ISCC.exe\" 2>/dev/null || ls \"/c/Program Files/Inno Setup 6/ISCC.exe\" 2>/dev/null || echo \"Inno Setup 미설치\")",
       "Bash(pwsh -NoProfile -File build-installer.ps1)",
-      "Bash(DOTNET_ROLL_FORWARD=LatestMajor \"/c/Program Files \\(x86\\)/dotnet/dotnet.exe\" trigprobe.dll)"
+      "Bash(DOTNET_ROLL_FORWARD=LatestMajor \"/c/Program Files \\(x86\\)/dotnet/dotnet.exe\" trigprobe.dll)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"Tools\\\\Deploy\\\\Build-Hotfix.ps1\")"
     ],
     "additionalDirectories": [
       "d:\\tmp",

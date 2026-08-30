@@ -4,12 +4,33 @@
         xmlns:local="clr-namespace:IJPSystem.Platform.HMI.Print"
         Title="Drawing Panel" Height="900" Width="1320"
         WindowStartupLocation="CenterOwner"
-        Background="#E5E7EB" FontFamily="Segoe UI">
+        Background="#0B0F1A" FontFamily="Segoe UI">
+    <!-- 색은 나머지 화면과 같은 팔레트다(2026-08-29) — 바탕 #0B0F1A · 카드 #111827 ·
+         선 #334155 · 글자 #E2E8F0 / 흐린 글자 #94A3B8.
+
+         ※ <b>그리는 캔버스와 디더 미리보기는 흰 바탕 그대로</b> 둔다. 저장되는 BMP 가
+           흰 바탕에 검은 잉크라, 여기 색을 바꾸면 화면에서 본 것과 파일이 달라진다.
+           대신 캔버스 뒤 여백을 어둡게 해서 흰 종이가 "파일의 흰 바탕"으로 읽히게 했다. -->
     <Window.Resources>
+        <!-- 창 안의 스크롤바도 앱 공용 모양을 쓴다(App.xaml 의 Styles.xaml). -->
+        <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
+
+        <!-- 어두운 바탕의 입력칸 — 기본 TextBox 는 글자가 검정이라 안 보인다. -->
+        <Style x:Key="DarkBox" TargetType="TextBox">
+            <Setter Property="Background"     Value="#0B0F1A"/>
+            <Setter Property="Foreground"     Value="#E2E8F0"/>
+            <Setter Property="CaretBrush"     Value="#E2E8F0"/>
+            <Setter Property="SelectionBrush" Value="#1E3A5F"/>
+            <Setter Property="BorderBrush"    Value="#334155"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontFamily"     Value="Consolas"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
         <!-- 우측 액션 버튼 -->
         <Style x:Key="ActBtn" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="#3E4C63"/>
+            <Setter Property="Background" Value="#1E3A5F"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="FontSize" Value="15"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -22,57 +43,87 @@
                             <ContentPresenter VerticalAlignment="Center" Margin="16,0"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#4D5E7A"/></Trigger>
-                            <Trigger Property="IsEnabled" Value="False"><Setter Property="Background" Value="#9AA3B2"/></Trigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#2A4F7F"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#1E293B"/>
+                                <Setter Property="Foreground" Value="#64748B"/>
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
         <!-- 좌측 도구(라디오) -->
         <Style x:Key="ToolBtn" TargetType="RadioButton">
             <Setter Property="Width" Value="34"/>
             <Setter Property="Height" Value="34"/>
             <Setter Property="GroupName" Value="tool"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="#CBD5E1"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="bd" Background="#F3F4F6" BorderBrush="#9CA3AF" BorderThickness="1">
+                        <Border x:Name="bd" Background="#1E293B" BorderBrush="#334155" BorderThickness="1">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#BFDBFE"/>
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#2563EB"/>
+                                <Setter TargetName="bd" Property="Background" Value="#1E3A5F"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="#3B82F6"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#E5E7EB"/>
+                                <Setter TargetName="bd" Property="Background" Value="#334155"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
         <!-- 보기 옵션(도구가 아님) — 도구 라디오 그룹에 넣으면 눈금을 켜는 순간
              그리던 도구가 풀린다. 그래서 별도 ToggleButton 이다. -->
         <Style x:Key="ViewToggleBtn" TargetType="ToggleButton">
             <Setter Property="Width" Value="34"/>
             <Setter Property="Height" Value="34"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="#CBD5E1"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="bd" Background="#F3F4F6" BorderBrush="#9CA3AF" BorderThickness="1">
+                        <Border x:Name="bd" Background="#1E293B" BorderBrush="#334155" BorderThickness="1">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#BFDBFE"/>
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#2563EB"/>
+                                <Setter TargetName="bd" Property="Background" Value="#1E3A5F"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="#3B82F6"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#E5E7EB"/>
+                                <Setter TargetName="bd" Property="Background" Value="#334155"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 증감 화살표 -->
+        <Style x:Key="StepArrow" TargetType="RepeatButton">
+            <Setter Property="Width" Value="22"/>
+            <Setter Property="Height" Value="13"/>
+            <Setter Property="FontSize" Value="8"/>
+            <Setter Property="Foreground" Value="#CBD5E1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border x:Name="bd" Background="#1E293B" BorderBrush="#334155" BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#334155"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -89,7 +140,7 @@
         </Grid.RowDefinitions>
 
         <!-- 헤더 -->
-        <Border Grid.Row="0" Background="Black" Height="74">
+        <Border Grid.Row="0" Background="#1E293B" Height="74">
             <TextBlock Text="Edit Panel" Foreground="White" FontSize="34" FontWeight="Bold"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
@@ -103,7 +154,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- 좌측 도구 스트립 -->
-            <StackPanel Grid.Column="0" Background="#D1D5DB" Margin="6,8,0,8">
+            <StackPanel Grid.Column="0" Background="#111827" Margin="6,8,0,8">
                 <RadioButton Style="{StaticResource ToolBtn}" Tag="Zoom"      Content="🔍" ToolTip="Zoom (좌클릭 확대 / 우클릭 축소 / 휠)" Checked="Tool_Checked"/>
                 <RadioButton Style="{StaticResource ToolBtn}" Tag="Select"    Content="➤"  ToolTip="Select (요소 선택·이동, Delete 삭제)"      Checked="Tool_Checked"/>
                 <RadioButton Style="{StaticResource ToolBtn}" Tag="Pan"       Content="✋" ToolTip="Pan (드래그로 화면 이동)"                 Checked="Tool_Checked"/>
@@ -116,19 +167,20 @@
 
                 <!-- 픽셀 눈금 켜기/끄기 -->
                 <ToggleButton x:Name="RulerToggle" Style="{StaticResource ViewToggleBtn}" Content="⊞" Margin="0,8,0,0"
-                              ToolTip="픽셀 눈금 (이미지 픽셀 번호 표시 · 확대하면 1픽셀 격자)"
+                              ToolTip="픽셀 편집 (이미지 픽셀 번호·1픽셀 격자 표시. 켜면 선·도형이 Line Width 만큼의 픽셀로 찍힌다)"
                               Checked="Ruler_Toggled" Unchecked="Ruler_Toggled"/>
             </StackPanel>
 
             <!-- 캔버스 영역.
                  내용을 뷰포트 크기 이상으로 잡고 그 안에서 가운데 정렬한다. 예전에는 캔버스를
-                 왼쪽 위에 붙여 놔서, 확대해 스크롤 막대가 생겨도 그림은 늘 왼쪽 위 구석에 있었다. -->
-            <Border Grid.Column="1" Background="#C7CBD1" Margin="0,8" ClipToBounds="True">
+                 왼쪽 위에 붙여 놔서, 확대해 스크롤 막대가 생겨도 그림은 늘 왼쪽 위 구석에 있었다.
+                 ※ 캔버스 자체는 흰 종이다 — 저장 파일과 같아야 한다. 어둡게 하는 것은 뒤 여백뿐. -->
+            <Border Grid.Column="1" Background="#0D1117" Margin="0,8" ClipToBounds="True">
                 <ScrollViewer x:Name="CanvasScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                               PreviewMouseWheel="CanvasScroller_PreviewMouseWheel">
                     <Grid MinWidth="{Binding ViewportWidth,  ElementName=CanvasScroller}"
                           MinHeight="{Binding ViewportHeight, ElementName=CanvasScroller}">
-                        <Border Background="White" BorderBrush="#9CA3AF" BorderThickness="1"
+                        <Border Background="White" BorderBrush="#334155" BorderThickness="1"
                                 HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
                             <Grid>
                                 <Canvas x:Name="DrawCanvas" Background="White"
@@ -148,13 +200,13 @@
                 <RadioButton GroupName="tool" Tag="Eraser" Checked="Tool_Checked" Cursor="Hand" Margin="0,0,0,4">
                     <RadioButton.Template>
                         <ControlTemplate TargetType="RadioButton">
-                            <Border x:Name="bd" Background="#3E4C63" CornerRadius="3" Height="42">
+                            <Border x:Name="bd" Background="#1E3A5F" CornerRadius="3" Height="42">
                                 <TextBlock Text="⬚   Eraser" Foreground="White" FontSize="15" FontWeight="SemiBold"
                                            VerticalAlignment="Center" Margin="16,0"/>
                             </Border>
                             <ControlTemplate.Triggers>
-                                <Trigger Property="IsChecked" Value="True"><Setter TargetName="bd" Property="Background" Value="#2563EB"/></Trigger>
-                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#4D5E7A"/></Trigger>
+                                <Trigger Property="IsChecked" Value="True"><Setter TargetName="bd" Property="Background" Value="#3B82F6"/></Trigger>
+                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#2A4F7F"/></Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </RadioButton.Template>
@@ -169,12 +221,15 @@
 
                 <Button Style="{StaticResource ActBtn}" Height="42" Margin="0,0,0,12" Content="💾   Save" Click="Save_Click"/>
 
-                <!-- NxN 디더 패턴: 작은 미리보기 + 드롭다운(2x2~5x5) -->
-                <Border Background="White" BorderBrush="#374151" BorderThickness="2" Width="72" Height="72"
+                <!-- NxN 디더 패턴: 작은 미리보기 + 드롭다운(2x2~5x5).
+                     미리보기는 잉크 패턴 그림이라 흰 바탕을 유지한다 — 캔버스와 같은 이유. -->
+                <Border Background="White" BorderBrush="#475569" BorderThickness="2" Width="72" Height="72"
                         HorizontalAlignment="Center" Margin="0,4,0,4">
                     <Canvas x:Name="SizePreview" Width="68" Height="68" ClipToBounds="True"/>
                 </Border>
                 <ComboBox x:Name="GridSizeCombo" Width="130" Height="26" HorizontalAlignment="Center" Margin="0,0,0,12"
+                          Background="#0D1520" Foreground="Black" BorderBrush="#334155"
+                          VerticalContentAlignment="Center"
                           FontFamily="Consolas" FontWeight="Bold" SelectedIndex="0"
                           SelectionChanged="GridSize_Changed">
                     <ComboBoxItem Content="2x2"/>
@@ -183,19 +238,19 @@
                     <ComboBoxItem Content="5x5"/>
                 </ComboBox>
 
-                <TextBlock Text="Boundary Thickness" Foreground="#1E3A5F" FontWeight="Bold" FontSize="13" Margin="0,0,0,3"/>
+                <TextBlock Text="Boundary Thickness" Foreground="#60A5FA" FontWeight="Bold" FontSize="13" Margin="0,0,0,3"/>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
-                    <TextBox x:Name="BoundaryBox" Height="26" Width="94" VerticalContentAlignment="Center"
-                             FontFamily="Consolas" Text="3" TextChanged="Boundary_Changed"/>
+                    <TextBox x:Name="BoundaryBox" Style="{StaticResource DarkBox}" Height="26" Width="94"
+                             Text="3" TextChanged="Boundary_Changed"/>
                     <StackPanel Margin="4,0,0,0">
-                        <RepeatButton Content="▲" Width="22" Height="13" FontSize="8" Click="BoundaryUp_Click"/>
-                        <RepeatButton Content="▼" Width="22" Height="13" FontSize="8" Click="BoundaryDown_Click"/>
+                        <RepeatButton Style="{StaticResource StepArrow}" Content="▲" Click="BoundaryUp_Click"/>
+                        <RepeatButton Style="{StaticResource StepArrow}" Content="▼" Click="BoundaryDown_Click"/>
                     </StackPanel>
                 </StackPanel>
-                <Border Background="#E2E5E9" BorderBrush="#B7BEC8" BorderThickness="1" Width="120" Height="24"
+                <Border Background="#0B0F1A" BorderBrush="#334155" BorderThickness="1" Width="120" Height="24"
                         HorizontalAlignment="Left" Margin="0,3,0,12">
                     <TextBlock x:Name="BoundaryMm" Text="0.0423 mm" FontFamily="Consolas" FontSize="12"
-                               VerticalAlignment="Center" Margin="6,0"/>
+                               Foreground="#E2E8F0" VerticalAlignment="Center" Margin="6,0"/>
                 </Border>
 
                 <Button Style="{StaticResource ActBtn}" Height="50" Content="⤓   Pattern Dittering" Click="PatternDithering_Click"/>
@@ -203,27 +258,34 @@
         </Grid>
 
         <!-- 상태바 -->
-        <Border Grid.Row="2" Background="#D1D5DB" Padding="8,6">
+        <Border Grid.Row="2" Background="#111827" Padding="8,6">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <Border Grid.Column="0" Background="#F9FAFB" BorderBrush="#9CA3AF" BorderThickness="1" Padding="6,2">
-                    <TextBlock x:Name="StatusInfo" FontFamily="Consolas" FontSize="12" Foreground="#1F2937"/>
+                <Border Grid.Column="0" Background="#0B0F1A" BorderBrush="#334155" BorderThickness="1" Padding="6,2">
+                    <TextBlock x:Name="StatusInfo" FontFamily="Consolas" FontSize="12" Foreground="#94A3B8"/>
                 </Border>
+                <!-- 굵기 단위는 <b>이미지 픽셀</b>이다(=방울 수). 옆 칸에 mm 로 환산해 보여 준다.
+                     ▲▼ 를 붙인 이유: 값 칸만 있으면 "고를 수 있는 것"으로 보이지 않는다. -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-                    <TextBlock Text="Line Width" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
-                    <TextBox x:Name="LineWidthBox" Width="60" Height="26" Margin="8,0,0,0"
-                             VerticalContentAlignment="Center" FontFamily="Consolas" Text="7"
-                             TextChanged="LineWidth_Changed"/>
-                    <Border Background="#F9FAFB" BorderBrush="#9CA3AF" BorderThickness="1" Padding="6,2" Margin="8,0,0,0">
-                        <TextBlock x:Name="LineWidthMm" FontFamily="Consolas" FontSize="12" Text="0.2961 mm"/>
+                    <TextBlock Text="Line Width" FontWeight="Bold" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                    <TextBox x:Name="LineWidthBox" Style="{StaticResource DarkBox}" Width="60" Height="26" Margin="8,0,0,0"
+                             Text="7" TextChanged="LineWidth_Changed"
+                             ToolTip="선·도형 굵기 [이미지 픽셀]. 눈금(⊞)을 켜면 이 굵기 그대로 픽셀이 켜진다."/>
+                    <StackPanel Margin="4,0,0,0">
+                        <RepeatButton Style="{StaticResource StepArrow}" Content="▲" Click="LineWidthUp_Click"/>
+                        <RepeatButton Style="{StaticResource StepArrow}" Content="▼" Click="LineWidthDown_Click"/>
+                    </StackPanel>
+                    <Border Background="#0B0F1A" BorderBrush="#334155" BorderThickness="1" Padding="6,2" Margin="8,0,0,0">
+                        <TextBlock x:Name="LineWidthMm" FontFamily="Consolas" FontSize="12"
+                                   Foreground="#E2E8F0" Text="0.2961 mm"/>
                     </Border>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,8,0">
-                    <TextBlock Text="Length Measure" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
+                    <TextBlock Text="Length Measure" FontWeight="Bold" Foreground="#94A3B8" VerticalAlignment="Center"/>
                     <CheckBox x:Name="LengthMeasureChk" Margin="8,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Grid>

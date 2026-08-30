@@ -1,7 +1,7 @@
 namespace IJPSystem.Platform.Application.Sequences
 {
     // 시스템에서 사용되는 모든 티칭 포인트 이름의 단일 진실의 원천(Single Source of Truth).
-    // - 시퀀스 코드는 이 상수만 참조 (`PointNames.PrintStart` 등)
+    // - 시퀀스 코드는 이 상수만 참조 (`PointNames.PrintOrigin` 등)
     // - 신규 레시피 초기 포인트 행 생성 시에도 All을 그대로 사용
     // - 추가/이름변경/삭제 시 이 파일만 수정하면 시퀀스/UI/DB 매핑이 일관됨
     public static class PointNames
@@ -13,7 +13,7 @@ namespace IJPSystem.Platform.Application.Sequences
         public const string Unload         = "UNLOAD";
         public const string Purge          = "PURGE";
         public const string Blotting       = "BLOTTING";
-        public const string PrintStart     = "PRINT START";
+        public const string PrintOrigin    = "PRINT ORIGIN";
         public const string PrintEnd       = "PRINT END";
         public const string Maintenance    = "MT";
         public const string NJI            = "NJI";
@@ -26,7 +26,7 @@ namespace IJPSystem.Platform.Application.Sequences
         public static IReadOnlyList<string> All { get; } = new[]
         {
             Ready, GlassAlign, Purge,
-            PrintStart, PrintEnd, DropWatcher,
+            PrintOrigin, PrintEnd, DropWatcher,
             PrintHeadUp, PrintHeadDown,
         };
     }

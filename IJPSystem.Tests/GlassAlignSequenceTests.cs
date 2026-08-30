@@ -32,6 +32,9 @@ namespace IJPSystem.Tests
             public int VerifyCount { get; private set; }
 
             public Task<string> MoveToMark1Async(CancellationToken ct) => Say("MoveMark1");
+            // 복귀는 이동과 <b>다른 이름</b>으로 적는다 — 둘을 같은 이름으로 적으면 회전 뒤 복귀가
+            // 다시 절대 이동(T 포함)으로 돌아가도 시험이 통과해 버린다.
+            public Task<string> ReturnToMark1Async(CancellationToken ct) => Say("ReturnMark1");
             public Task<string> MoveToMark2Async(CancellationToken ct) => Say("MoveMark2");
             public Task<string> MeasureAsync(int slot, CancellationToken ct) => Say("Measure" + slot);
             public Task<string> CorrectRotationAsync(CancellationToken ct) => Say("Rotate");
@@ -373,6 +376,27 @@ namespace IJPSystem.Tests
             Assert.True(Print(true) > Print(false));
         }
 
+        /// <summary>
+        /// 회전 보정 뒤 복귀는 <b>MoveToMark1 이 아니다</b>.
+        ///
+        /// <para>GLASS ALIGN 티칭 포인트에는 T 가 들어 있어서, 복귀를 절대 이동으로 하면 방금 준
+        /// 회전 보정이 지워진다. 실장에서 T 를 -0.031° 돌린 65ms 뒤에 절대 이동이 T 를 티칭 값으로
+        /// 되돌렸고, 그래서 몇 판을 돌려도 측정 각도가 -0.031° 에서 꿈쩍하지 않았다(2026-08-27).</para>
+        ///
+        /// <para>되돌리기 쉬운 한 줄이라(둘 다 "마크1 자리로 간다"로 읽힌다) 규약을 못으로 박아 둔다.</para>
+        /// </summary>
+        [Fact]
+        public async Task 회전_보정_뒤_복귀는_T를_되돌리지_않는다()
+        {
+            var fake  = new FakeAlign();
+            var steps = Steps(fake);
+
+            await steps.Single(s => s.Name == "Step_GlassAlign_Mark1Return")
+                       .Action(CancellationToken.None);
+
+            Assert.Equal(new[] { "ReturnMark1" }, fake.Calls);
+        }
+
         [Fact]
         public async Task 스테이지가_Y로_움직이는_단계는_넷이다()
         {
@@ -389,11 +413,14 @@ namespace IJPSystem.Tests
                 "Step_GlassAlign_Mark2Recheck",  // +피듀셜 간격(재확인)
             };
 
+            // 마크1 복귀는 이동(MoveMark1)이 아니라 복귀(ReturnMark1)로 부른다 — T 를 빼야 해서다.
+            static bool MovesStage(string call) => call is "MoveMark1" or "MoveMark2" or "ReturnMark1";
+
             foreach (var name in movers)
             {
                 fake.Calls.Clear();
                 await steps.Single(s => s.Name == name).Action(CancellationToken.None);
-                Assert.True(fake.Calls.Count == 1 && fake.Calls[0].StartsWith("MoveMark"),
+                Assert.True(fake.Calls.Count == 1 && MovesStage(fake.Calls[0]),
                             $"{name} 가 스테이지를 움직이지 않는다");
             }
 
@@ -403,7 +430,7 @@ namespace IJPSystem.Tests
             {
                 fake.Calls.Clear();
                 try { await s.Action(CancellationToken.None); } catch { /* 판정 실패는 여기 관심 밖 */ }
-                Assert.DoesNotContain(fake.Calls, c => c.StartsWith("MoveMark"));
+                Assert.DoesNotContain(fake.Calls, MovesStage);
             }
         }
 

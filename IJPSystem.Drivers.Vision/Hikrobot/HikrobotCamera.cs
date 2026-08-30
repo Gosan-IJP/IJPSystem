@@ -29,6 +29,15 @@ namespace IJPSystem.Drivers.Vision.Hikrobot
         private string?  _exposureNode;
         private string?  _gainNode;
 
+        // Mono8 변환 결과를 담는 재사용 버퍼(<see cref="Grab"/> 참고). 해상도가 바뀌면 다시 잡는다.
+        //
+        // 두 장을 번갈아 쓴다. 한 장만 쓰면 <b>돌려주자마자</b> 다음 촬상이 그 위에 덮을 수 있다 —
+        // 화면 두 곳이 같은 카메라를 볼 때(글라스뷰 라이브 / 비주얼 모니터) 실제로 겹친다.
+        // 번갈아 쓰면 덮이려면 촬상이 두 번 지나가야 해서, 받자마자 복사하는 지금 소비자들에게는
+        // 사실상 겹칠 틈이 없다. (장수는 2 로 고정 — 재사용이 목적이므로 프레임 수와 무관하다)
+        private readonly byte[]?[] _monoBuffers = new byte[2][];
+        private int _monoNext;
+
         public string CameraId { get; }
         public bool   IsOpen   { get; private set; }
         public int    Width    { get; private set; }
@@ -172,7 +181,7 @@ namespace IJPSystem.Drivers.Vision.Hikrobot
                     TrySetMono8();
                     ReadFrameSize();
 
-                    Check(_device.StreamGrabber.StartGrabbing(), "StartGrabbing");
+                    StartGrabbingLatest();
 
                     if (cfg.DefaultExposureMs > 0) SetExposureMs(cfg, cfg.DefaultExposureMs);
                     if (cfg.DefaultGain      > 0) SetGain(cfg, cfg.DefaultGain);
@@ -212,6 +221,41 @@ namespace IJPSystem.Drivers.Vision.Hikrobot
             if (rc != 0) throw new InvalidOperationException($"{what} 실패 (rc=0x{rc:X})");
         }
 
+        /// <summary>
+        /// 스트리밍 시작 — <b>항상 최신 프레임</b>을 받도록 취류 전략을 지정한다.
+        ///
+        /// <para><b>왜 전략을 지정해야 하는가</b>: MVS 기본값은 <c>OneByOne</c> 으로,
+        /// 대기열을 <b>오래된 것부터</b> 하나씩 꺼내 준다. 카메라는 자유 실행으로 수십 fps 를
+        /// 쏟아내는데 화면은 그보다 느리게 꺼내 가므로 대기열이 늘 차 있고, 그러면 우리가 보는
+        /// 그림은 항상 <b>몇 프레임 전 과거</b>다. 스테이지를 조그하면 화면이 뒤늦게 따라와
+        /// "라이브 같지 않다"고 느껴지는 원인이 이것이다(실장 2026-08-27).</para>
+        ///
+        /// <para><c>LatestImageOnly</c> 는 대기열에서 가장 최신 한 장만 주고 나머지를 버린다 —
+        /// 프레임을 몇 장 흘리더라도 <b>지금 보이는 것이 지금</b>인 편이 라이브 화면에 맞다.</para>
+        ///
+        /// <para>구형 펌웨어가 전략 지정을 거부할 수 있으므로 실패하면 기본 방식으로 되돌린다 —
+        /// 화면이 조금 늦는 것과 아예 안 나오는 것은 다른 문제다.</para>
+        /// </summary>
+        private void StartGrabbingLatest()
+        {
+            try
+            {
+                int rc = _device!.StreamGrabber.StartGrabbing(StreamGrabStrategy.LatestImageOnly);
+                if (rc == 0) return;
+
+                LoggerService.WriteToFile("WARN",
+                    $"[Hikrobot Vision] {CameraId} 최신프레임 전략 거부(rc=0x{rc:X}) — 기본 방식으로 시작합니다" +
+                    " (화면이 실제보다 몇 프레임 늦을 수 있습니다).");
+            }
+            catch (Exception ex)
+            {
+                LoggerService.WriteToFile("WARN",
+                    $"[Hikrobot Vision] {CameraId} 최신프레임 전략 예외({ex.Message}) — 기본 방식으로 시작합니다.");
+            }
+
+            Check(_device!.StreamGrabber.StartGrabbing(), "StartGrabbing");
+        }
+
         // ── 획득 ────────────────────────────────────────────────────────────
         /// <summary>
         /// 다음 프레임을 받아 Mono8 버퍼로 변환한다. 실패(타임아웃 등)면 null —
@@ -239,21 +283,44 @@ namespace IJPSystem.Drivers.Vision.Hikrobot
                     if (src == null || src.Length == 0) return null;
 
                     int pixels = w * h;
-                    var mono = new byte[pixels];
+
+                    // 프레임마다 새로 잡지 않고 같은 버퍼에 덮어쓴다.
+                    //
+                    // 1280×1024 한 장이 1.31MB 라 85KB 를 넘어 대형 객체 힙으로 간다. 15fps 로
+                    // 20초만 돌아도 400MB 를 새로 잡았다 버리는 셈이고, 32비트 프로세스에서는
+                    // 그 압박이 그대로 주소공간에 쌓인다(2026-08-27 0x80070008).
+                    //
+                    // ★ 돌려준 버퍼는 <b>다음 Grab 이 덮어쓴다</b>. 그래서 받는 쪽은 즉시 복사해야 한다:
+                    //     · 라이브 — WriteableBitmap.WritePixels 로 그 자리에서 복사(LiveFrameBuffer)
+                    //     · 정렬   — GlassAlignService.CaptureGrayAsync 가 Clone 해서 들고 간다
+                    //   붙잡아 두는 소비자를 새로 만들려면 여기부터 다시 봐야 한다.
+                    int slot = _monoNext;
+                    _monoNext = 1 - _monoNext;
+                    if (_monoBuffers[slot] == null || _monoBuffers[slot]!.Length != pixels)
+                        _monoBuffers[slot] = new byte[pixels];
+                    var mono = _monoBuffers[slot]!;
 
                     // 포맷 열거값에 의존하지 않고 실제 바이트/픽셀로 판단한다
                     // (기종·펌웨어마다 PixelType 이름이 달라 분기가 쉽게 어긋난다).
                     int bytesPerPixel = src.Length / Math.Max(1, pixels);
+                    int filled;
                     if (bytesPerPixel <= 1)
                     {
-                        Array.Copy(src, mono, Math.Min(src.Length, pixels));
+                        filled = Math.Min(src.Length, pixels);
+                        Array.Copy(src, mono, filled);
                     }
                     else
                     {
                         // Mono10/12/16 → 상위 8비트만 취해 Mono8 로 낮춘다(분석은 Mono8 기준).
-                        for (int i = 0; i < pixels && (i * 2 + 1) < src.Length; i++)
-                            mono[i] = src[i * 2 + 1];
+                        filled = Math.Min(pixels, src.Length / 2);
+                        for (int i = 0; i < filled; i++) mono[i] = src[i * 2 + 1];
                     }
+
+                    // 못 채운 뒤쪽은 지운다 — 새 배열이던 시절엔 0 이었지만 재사용 버퍼에는
+                    // <b>앞 프레임</b>이 남아 있다. 짧은 프레임이 한 번 오면 화면 아래쪽에
+                    // 지난 그림이 붙어 나오고, 패턴 매칭은 그것도 무늬로 본다.
+                    if (filled < pixels) Array.Clear(mono, filled, pixels - filled);
+
                     return mono;
                 }
                 catch (Exception ex)
@@ -367,7 +434,11 @@ namespace IJPSystem.Drivers.Vision.Hikrobot
 
         private void WriteNumeric(string node, double value)
         {
-            if (_device!.Parameters.SetFloatValue(node, (float)value) == 0) return;
+            // ResolveNode 는 노드 이름을 캐시한다 — 한 번 붙었다 끊기면 _device 는 null 인데
+            // 이름은 남아 있어 여기까지 온다. 화면에서 노출을 고치는 순간 UI 스레드가 죽는다.
+            if (_device == null) return;
+
+            if (_device.Parameters.SetFloatValue(node, (float)value) == 0) return;
             if (_device.Parameters.SetIntValue(node, (long)Math.Round(value)) == 0) return;
             LoggerService.WriteToFile("WARN", $"[Hikrobot Vision] {CameraId} {node} 쓰기 실패(값={value:F1})");
         }

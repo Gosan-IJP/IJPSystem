@@ -3,6 +3,7 @@ using IJPSystem.Platform.HMI.Common;
 using IJPSystem.Platform.Infrastructure.Vision;
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -90,7 +91,7 @@ namespace IJPSystem.Platform.HMI.Vision
             }
         }
 
-        public string RegisterButtonText => IsRegistering ? "등록 취소" : "패턴등록시작";
+        public string RegisterButtonText => IsRegistering ? "Cancel" : "Register Pattern";
 
         private double _roiX, _roiY, _roiW, _roiH;
         public double RoiX { get => _roiX; set { if (SetProperty(ref _roiX, value)) RoiChanged(); } }
@@ -128,15 +129,15 @@ namespace IJPSystem.Platform.HMI.Vision
             get
             {
                 var f = _frame();
-                if (f == null || RoiW <= 0 || RoiH <= 0) return "영역 없음";
+                if (f == null || RoiW <= 0 || RoiH <= 0) return "No region";
                 return $"{RoiW * f.PixelWidth:F0} × {RoiH * f.PixelHeight:F0} px";
             }
         }
 
         public string HintText =>
-            IsRegistering ? "이미지 위에서 마크를 감싸도록 드래그하세요."
-            : !HasPattern ? "등록된 패턴이 없습니다."
-            : "찾기를 누르면 지금 화면에서 패턴을 찾습니다.";
+            IsRegistering ? "Drag on the image to enclose the mark."
+            : !HasPattern ? "No pattern registered."
+            : "Find searches the current frame for this pattern.";
 
         // ── 등록/불러온 패턴 ─────────────────────────────────────────────
         private GrayImage? _template;
@@ -152,12 +153,23 @@ namespace IJPSystem.Platform.HMI.Vision
             private set => SetProperty(ref _preview, value);
         }
 
-        private string _patternName = "GlassMark";
+        private string _patternName = DefaultPatternName;
+
+        /// <summary>
+        /// 파일로 저장될 이름. <b>화면에는 없다</b> — 패턴을 한 개만 관리하기로 한 뒤로는
+        /// 고를 것도 구분할 것도 없어서, 입력칸이 "뭔가 정해야 하나"라는 인상만 남겼다.
+        ///
+        /// <para>속성은 남겨 둔다. 옛 이름으로 저장된 패턴을 읽어 오면 그 이름을 그대로 이어
+        /// 쓰므로(<see cref="Load"/>), 장비에 이미 있는 파일이 이름만 바뀌어 두 벌이 되지 않는다.</para>
+        /// </summary>
         public string PatternName
         {
             get => _patternName;
             set => SetProperty(ref _patternName, value);
         }
+
+        /// <summary>화면에서 이름을 받지 않으므로 새로 등록하는 패턴은 늘 이 이름이다.</summary>
+        public const string DefaultPatternName = "GlassMark";
 
         private double _minScore = 0.70;
         /// <summary>
@@ -255,9 +267,22 @@ namespace IJPSystem.Platform.HMI.Vision
             var templ = scene.Crop(x, y, w, h);
 
             string name = PatternRepository.SanitizeName(PatternName);
-            if (_repo.Load(name) != null &&
-                Dialogs.Show($"[{name}] 패턴이 이미 있습니다. 덮어쓸까요?", "덮어쓰기",
-                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+
+            // 정렬 패턴은 <b>한 개만</b> 둔다. 여러 개가 있으면 시퀀스가 "어느 것으로 찾을지"를
+            // 되물어야 하는데, 그 물음은 실장에서 곧바로 정렬 실패로 나온다
+            // (2026-08-27 "정렬 패턴이 여러 개입니다 — 글라스 화면에서 쓸 패턴을 고르세요").
+            // 그래서 이름이 같든 다르든 저장하면 앞의 것은 사라진다 — 지우기 전에 확인한다.
+            var existing = _repo.List();
+            if (existing.Count > 0)
+            {
+                bool sameName = existing.Any(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase));
+                string ask = sameName
+                    ? $"[{name}] 패턴을 덮어씁니다."
+                    : $"등록된 패턴 [{string.Join(", ", existing)}] 을(를) 지우고 [{name}] 로 새로 등록합니다.";
+
+                if (Dialogs.Show(ask + "\n계속할까요?", "패턴 저장",
+                        MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+            }
 
             var def = new PatternDefinition
             {
@@ -274,6 +299,15 @@ namespace IJPSystem.Platform.HMI.Vision
             try
             {
                 _repo.Save(def, templ);
+
+                // 방금 저장한 것만 남긴다. 지우기는 저장이 성공한 <b>뒤에</b> 한다 —
+                // 먼저 지우고 저장이 실패하면 쓸 수 있는 패턴이 하나도 없이 남는다.
+                foreach (string old in existing)
+                    if (!string.Equals(old, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _repo.Remove(old);
+                        _log($"[PATTERN] 이전 패턴 삭제: {old}", LogLevel.Info);
+                    }
             }
             catch (Exception ex)
             {
@@ -288,14 +322,30 @@ namespace IJPSystem.Platform.HMI.Vision
             PatternName = name;
             IsRegistering = false;
 
+            // 저장이 끝나면 드래그 영역을 지운다(2026-08-28). 파란 상자가 화면에 남고
+            // [Save Pattern] 도 그대로 눌리면, 방금 저장이 된 것인지 아직 안 된 것인지
+            // 화면만 보고는 알 수 없다 — 한 번 더 눌러 덮어쓰기 확인창을 보고서야 안다.
+            // 여기서부터 "무엇이 등록돼 있나"의 근거는 오른쪽 미리보기 한 곳이다.
+            Preview = ToBitmap(templ);
+            RoiW = RoiH = 0;
+
             RefreshList();
             _selectedPattern = name;
             OnPropertyChanged(nameof(SelectedPattern));
             OnPropertyChanged(nameof(HasPattern));
             OnPropertyChanged(nameof(HintText));
+
+            // 템플릿 크기·기준 좌표가 방금 바뀌었다. 안 알리면 머리말이 앞 패턴 값을
+            // 그대로 달고 있어, 등록한 것과 다른 숫자를 보며 정렬을 맞추게 된다.
+            OnPropertyChanged(nameof(ReferenceText));
             RefreshButtons();
 
             _log($"[PATTERN] 저장: {name} ({w}×{h}px, 기준 {def.ReferenceX:F0},{def.ReferenceY:F0})", LogLevel.Success);
+
+            Dialogs.Show($"패턴을 등록했습니다.\n\n" +
+                         $"크기 : {w} × {h} px\n" +
+                         $"기준 : {def.ReferenceX:F0}, {def.ReferenceY:F0} px",
+                         "패턴 등록", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void Load(string? name)
@@ -331,7 +381,7 @@ namespace IJPSystem.Platform.HMI.Vision
 
         public string ReferenceText => _template == null
             ? "-"
-            : $"{_definition.TemplateWidth}×{_definition.TemplateHeight}px · 기준 " +
+            : $"{_definition.TemplateWidth}×{_definition.TemplateHeight}px · ref " +
               $"{_definition.ReferenceX:F0}, {_definition.ReferenceY:F0}";
 
         /// <summary>지금 화면에서 한 번 찾는다.</summary>

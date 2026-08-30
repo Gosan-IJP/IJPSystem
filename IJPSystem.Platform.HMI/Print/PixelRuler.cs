@@ -73,10 +73,15 @@ namespace IJPSystem.Platform.HMI.Print
 
             double majX = NiceStep(80 / Math.Max(1e-9, sx));
             double majY = NiceStep(80 / Math.Max(1e-9, sy));
-            double minX = majX / 5, minY = majY / 5;
 
-            if (minX * sx >= 6) for (double i = 0; i <= nx; i += minX) VLine(dc, MinorPen, i * sx, h);
-            if (minY * sy >= 6) for (double j = 0; j <= ny; j += minY) HLine(dc, MinorPen, j * sy, w);
+            // 보조 눈금은 <b>픽셀보다 잘게 나누지 않는다</b>. 예전에는 그냥 majX/5 라서, 크게
+            // 확대해 큰 눈금이 1픽셀까지 내려가면 0.2픽셀 자리에 선이 그어졌다 — 한 픽셀이
+            // 다섯 칸으로 보이는데, 그런 자리에는 방울을 찍을 수 없다. 최소 칸은 늘 1픽셀이다.
+            double minX = Math.Max(1, majX / 5);
+            double minY = Math.Max(1, majY / 5);
+
+            if (minX < majX && minX * sx >= 6) for (double i = 0; i <= nx; i += minX) VLine(dc, MinorPen, i * sx, h);
+            if (minY < majY && minY * sy >= 6) for (double j = 0; j <= ny; j += minY) HLine(dc, MinorPen, j * sy, w);
 
             for (double i = 0; i <= nx; i += majX)
             {

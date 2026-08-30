@@ -49,6 +49,29 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         /// <summary>실물 헤드 어댑터인가(= DriverMode.Head 가 Meteor).</summary>
         public static bool IsRealHead => Current is MeteorSpit;
 
+        // ── 가상으로 내려간 사실을 숨기지 않는다 ──────────────────────────
+        //
+        // 설정은 Meteor 인데 어댑터 준비가 실패하면 <see cref="Create"/> 가 예외를 잡아 가상으로
+        // 내려간다. 그러면 화면의 Spit 버튼은 멀쩡히 켜지고 로그도 정상처럼 흐르는데 <b>잉크만
+        // 안 나온다.</b> 실장 브링업에서 제일 오래 헤맬 자리라, 사유를 들고 있다가 화면이 띄우게 한다.
+        // (로그 한 줄로 두면 다른 줄에 묻힌다 — 헤드가 안 붙은 것은 한 줄짜리 사실이 아니다)
+
+        private static string? _fallbackReason;
+
+        /// <summary>설정은 Meteor 였는데 가상으로 내려간 이유. 정상이거나 애초에 가상 설정이면 null.</summary>
+        public static string? FallbackReason
+        {
+            get { _ = Current; return _fallbackReason; }   // 아직 안 만들었으면 여기서 만들며 채워진다
+        }
+
+        /// <summary>가상으로 <b>떨어졌는가</b>. 설정부터 가상인 경우는 false — 그건 정상이다.</summary>
+        public static bool DidFallBack => FallbackReason != null;
+
+        /// <summary>화면 뱃지에 그대로 쓰는 한 줄.</summary>
+        public static string HeadModeText =>
+            DidFallBack ? "가상 — Meteor 준비 실패"
+                        : IsRealHead ? "Meteor" : "가상";
+
         public static bool IsSpitting => Current.IsSpitting;
 
         /// <summary>
@@ -116,7 +139,7 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         public static void Reset()
         {
             ISpit? old;
-            lock (_sync) { old = _spit; _spit = null; }
+            lock (_sync) { old = _spit; _spit = null; _fallbackReason = null; }
             try { old?.Dispose(); } catch { /* 정리 실패는 무시 — 어차피 버릴 객체다 */ }
             StateChanged?.Invoke();
         }
@@ -148,8 +171,14 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
                 }
                 catch (Exception ex)
                 {
-                    // 헤드가 안 붙었다고 화면이 죽으면 안 된다 — 가상으로 내려가고 이유를 남긴다.
-                    Log?.Invoke($"Meteor 헤드 준비 실패({ex.Message}) — 가상 토출로 내려갑니다.");
+                    // 헤드가 안 붙었다고 화면이 죽으면 안 된다 — 가상으로 내려가되,
+                    // 사유를 들고 있다가 화면이 뱃지로 띄운다(FallbackReason).
+                    //
+                    // DLL 을 못 찾는 경우가 잦아 예외 종류까지 남긴다 — FileNotFoundException 이면
+                    // PrinterInterfaceCLS/MeteorCLS 가 없거나(설치 파일로 배포하지 않았다),
+                    // DllNotFoundException 이면 네이티브 PrinterInterface.dll 을 못 찾은 것이다.
+                    _fallbackReason = $"{ex.GetType().Name}: {ex.Message}";
+                    Log?.Invoke($"Meteor 헤드 준비 실패 — 가상 토출로 내려갑니다. ({_fallbackReason})");
                 }
             }
 

@@ -428,25 +428,44 @@ namespace IJPSystem.Platform.HMI.Views
             }
             else if (_vm?.IsAligning == true)
             {
-                double home = _vm.GlassAlignScanMm;
+                // 정렬 구간은 두 토막이다 — 파킹에서 마크1 자리로 들어오는 반입, 그리고 마크1↔마크2 왕복.
+                //
+                // ★ 어느 토막인지를 <b>Y 의 대소</b>로 가르면 안 된다. 예전에는 마크2 가 마크1 보다
+                //   Y 가 크다고 보고 liveScanMm > home 일 때만 왕복을 그렸는데, 이 장비는 마크2 가
+                //   -Y 쪽(266.7 → 116.7mm)이라 그 가지에 영영 못 들어갔다. 반입 가지의 진행률은
+                //   [0,1] 로 잘리므로 -150mm 를 가는 내내 값이 한쪽 끝에 박혀, 정렬 구간 전체에서
+                //   글라스가 제자리에 붙어 있었다(2026-08-28 실장).
+                //
+                //   그래서 <b>마크2 방향</b>을 기준으로 판단한다. t2 는 마크1 에서 0, 마크2 에서 1 이라
+                //   +Y 장비든 -Y 장비든 같은 식이 그대로 돈다.
+                double home  = _vm.GlassAlignScanMm;
+                double mark2 = _vm.GlassAlignMark2ScanMm;
                 double x;
 
                 if (double.IsNaN(home) || !hasReadyMap)
                 {
                     x = GlassParkedR;                                    // 티칭이 없으면 파킹 그대로
                 }
-                else if (liveScanMm < home)
-                {
-                    // 파킹 → 정렬 자리 반입. 양 끝이 파킹·정렬자리와 정확히 맞아 이어진다.
-                    double denom = home - _vm!.ReadyScanMm;
-                    double p = Math.Abs(denom) < 1e-6 ? 1.0
-                             : Math.Clamp((liveScanMm - _vm.ReadyScanMm) / denom, 0.0, 1.0);
-                    x = Lerp(GlassParkedR, AlignHomeX, p);
-                }
                 else
                 {
-                    // 마크1 ↔ 마크2 왕복 — 압축 축척으로 그린다.
-                    x = AlignHomeX - (liveScanMm - home) * AlignPxPerMm;
+                    double span = double.IsNaN(mark2) ? 0.0 : mark2 - home;
+                    double t2   = Math.Abs(span) < 1e-6 ? 0.0 : (liveScanMm - home) / span;
+
+                    if (t2 > 0)
+                    {
+                        // 마크1 ↔ 마크2 왕복 — 압축 축척으로 그린다.
+                        // 화면에서는 늘 왼쪽이 마크2 다(기계가 +Y 로 가든 -Y 로 가든).
+                        double mark2X = Math.Max(AlignMinX, AlignHomeX - Math.Abs(span) * AlignPxPerMm);
+                        x = Lerp(AlignHomeX, mark2X, Math.Min(t2, 1.0));
+                    }
+                    else
+                    {
+                        // 파킹 → 정렬 자리 반입. 양 끝이 파킹·정렬자리와 정확히 맞아 이어진다.
+                        double denom = home - _vm.ReadyScanMm;
+                        double p = Math.Abs(denom) < 1e-6 ? 1.0
+                                 : Math.Clamp((liveScanMm - _vm.ReadyScanMm) / denom, 0.0, 1.0);
+                        x = Lerp(GlassParkedR, AlignHomeX, p);
+                    }
                 }
 
                 glassX = Math.Clamp(x, AlignMinX, GlassParkedR);
