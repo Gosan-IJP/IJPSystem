@@ -252,12 +252,23 @@
                     <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                         <TextBlock Text="Drop per Inch X" VerticalAlignment="Center" Foreground="#94A3B8"/>
+                        <!-- 입력칸은 숫자 폭만 쓰고, 남는 자리에 mm 환산(=방울 간격)을 적는다.
+                             DPI 만 보면 크기가 안 잡힌다 — 600DPI 가 0.0423mm 라는 것을 여기서 읽는다. -->
                         <Border Grid.Column="1" Style="{StaticResource ReadBox}" Margin="8,0,0,0">
+                            <!-- 양옆을 같은 * 로 두어 "600 DPI" 가 칸 가운데에 오고,
+                                 mm 환산은 오른쪽 끝에 붙는다. -->
                             <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBox Grid.Column="0" Style="{StaticResource BoxInput}" TextAlignment="Right" FontSize="13"
-                                         Text="{Binding DropPerInchX, StringFormat=F0, UpdateSourceTrigger=LostFocus}"/>
-                                <TextBlock Grid.Column="1" Text=" DPI" Foreground="#64748B" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <TextBox Style="{StaticResource BoxInput}" TextAlignment="Right" FontSize="13" Width="34"
+                                             Text="{Binding DropPerInchX, StringFormat=F0, UpdateSourceTrigger=LostFocus}"/>
+                                    <TextBlock Text=" DPI" Foreground="#64748B" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding DropPitchXText}" Foreground="#64748B" FontFamily="Consolas"
+                                           FontSize="12" TextAlignment="Right" VerticalAlignment="Center"
+                                           ToolTip="방울 하나의 간격 = 25.4 ÷ DPI"/>
                             </Grid>
                         </Border>
                     </Grid>
@@ -266,10 +277,17 @@
                         <TextBlock Text="Drop per Inch Y" VerticalAlignment="Center" Foreground="#94A3B8"/>
                         <Border Grid.Column="1" Style="{StaticResource ReadBox}" Margin="8,0,0,0">
                             <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBox Grid.Column="0" Style="{StaticResource BoxInput}" TextAlignment="Right" FontSize="13"
-                                         Text="{Binding DropPerInchY, StringFormat=F0, UpdateSourceTrigger=LostFocus}"/>
-                                <TextBlock Grid.Column="1" Text=" DPI" Foreground="#64748B" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <TextBox Style="{StaticResource BoxInput}" TextAlignment="Right" FontSize="13" Width="34"
+                                             Text="{Binding DropPerInchY, StringFormat=F0, UpdateSourceTrigger=LostFocus}"/>
+                                    <TextBlock Text=" DPI" Foreground="#64748B" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding DropPitchYText}" Foreground="#64748B" FontFamily="Consolas"
+                                           FontSize="12" TextAlignment="Right" VerticalAlignment="Center"
+                                           ToolTip="방울 하나의 간격 = 25.4 ÷ DPI"/>
                             </Grid>
                         </Border>
                     </Grid>

@@ -1,4 +1,4 @@
-using IJPSystem.Platform.Common.Constants;
+﻿using IJPSystem.Platform.Common.Constants;
 using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.HMI.Common;
@@ -165,7 +165,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public Print.WaveformEditorViewModel Editor { get; } = new();
 
         public ICommand LoadCommand          { get; }
-        public ICommand ApplyToRecipeCommand { get; }
         public ICommand ImportCommand        { get; }
         public ICommand RemoveCommand        { get; }
         public ICommand RenameCommand        { get; }
@@ -191,7 +190,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ComBSeries = new List<WaveformSeries> { SeriesComB, SeriesVst };
 
             LoadCommand          = new RelayCommand(_ => ExecuteLoad());
-            ApplyToRecipeCommand = new RelayCommand(_ => ExecuteApplyToRecipe(), _ => !string.IsNullOrEmpty(_loadedBase));
             ImportCommand        = new RelayCommand(_ => ExecuteImport());
             RemoveCommand        = new RelayCommand(_ => ExecuteRemove(),      _ => SelectedWaveform != null);
             RenameCommand        = new RelayCommand(_ => ExecuteRename(),      _ => SelectedWaveform != null);
@@ -212,7 +210,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             Editor.Edited += () => IsDirty = true;
 
             RefreshWaveformList();
-            AutoLoadForActiveRecipe();
+            AutoLoadDefault();
             SelectLoadedInList();
         }
 
@@ -233,19 +231,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
 
         // ── 자동 로드 (화면 진입 시) ──────────────────────────────────────
-        private void AutoLoadForActiveRecipe()
+        /// <summary>
+        /// 진입 시 <b>기본</b> 파형을 연다.
+        ///
+        /// <para>예전에는 적용 중인 레시피에 적힌 경로를 열었다. 그런데 그 경로를 적는 곳도
+        /// 읽는 곳도 이 화면뿐이라(닫힌 고리), "레시피의 파형"이라는 말이 사실이 아니었다 —
+        /// 헤드는 Meteor cfg 의 <c>WaveformFileIdx</c> 로 고른다. 레시피 링크를 걷어내고
+        /// 목록의 기본 파형을 연다.</para>
+        /// </summary>
+        private void AutoLoadDefault()
         {
-            string recipeName = _mainVM.RecipeVM.ActiveRecipeName;
-            if (string.IsNullOrEmpty(recipeName)) return;
-
-            string? fullBasePath = _mainVM.RecipeVM.GetWaveformPath(recipeName);
-            if (string.IsNullOrEmpty(fullBasePath)) return;
-
-            string dir      = Path.GetDirectoryName(fullBasePath) ?? "";
-            string baseName = Path.GetFileName(fullBasePath);
-            if (!Directory.Exists(dir)) return;
-
-            LoadWaveformFiles(dir, baseName, auto: true);
+            var def = _repo.GetDefault();
+            if (def == null) return;
+            LoadWaveformFiles(_repo.RootDirectory, def.Name, auto: true);
         }
 
         // ── 파일 로드 ─────────────────────────────────────────────────────
@@ -294,10 +292,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 LoadedBaseName = baseName;
                 IsDirty        = false;      // 방금 읽은 그대로다
                 RefreshChart();
-                RaiseSaveCanExecute();
                 RaiseEditCanExecute();
                 string logMsg = auto
-                    ? $"[WAVEFORM] 레시피 웨이브폼 자동 로드: {baseName}"
+                    ? $"[WAVEFORM] 기본 웨이브폼 자동 로드: {baseName}"
                     : $"[WAVEFORM] 로드: {baseName}";
                 _mainVM.AddLog(logMsg, LogLevel.Success);
             }
@@ -323,26 +320,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 _mainVM.AlarmVM.RaiseAlarm("LOG-WAVEFORM-LOAD-FAIL");
                 return null;
             }
-        }
-
-        // ── 레시피에 적용 — 파형 파일을 쓰는 게 아니라, 적용 중인 레시피가
-        // 이 파형을 쓰도록 경로만 기록한다.
-        private void ExecuteApplyToRecipe()
-        {
-            if (string.IsNullOrEmpty(_loadedBase)) return;
-
-            string recipeName = _mainVM.RecipeVM.ActiveRecipeName;
-            if (string.IsNullOrEmpty(recipeName))
-            {
-                Dialogs.Show("적용 중인 레시피가 없습니다.\n레시피를 먼저 적용해 주세요.",
-                    "저장 실패", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            string fullBasePath = Path.Combine(_loadedDir, _loadedBase);
-            _mainVM.RecipeVM.SetWaveformPath(recipeName, fullBasePath);
-            Dialogs.Show($"[{recipeName}] 레시피에 웨이브폼이 저장되었습니다.", "저장 완료",
-                MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         // ── 편집 명령 (New / Save / Save As / Insert · Delete Pulse) ──────
@@ -428,7 +405,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 doc.HadAsymmetricRowMasks = false;   // 방금 우리가 맞춰 썼다
 
                 RefreshWaveformList(name);
-                RaiseSaveCanExecute();
 
                 _mainVM.AddLog($"[WAVEFORM] 저장: {string.Join(" · ", written.Select(Path.GetFileName))}",
                     LogLevel.Success);
@@ -593,9 +569,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             var e = SelectedWaveform;
             if (e == null) return;
 
-            // 적용 중인 레시피가 가리키는 파형을 지우면 그 레시피는 파형 없이 남는다.
-            string extra = IsInActiveRecipe(e)
-                ? $"\n\n※ 적용 중인 레시피 [{_mainVM.RecipeVM.ActiveRecipeName}] 가 이 파형을 쓰고 있습니다."
+            // 헤드가 쓰는 기본 파형을 지우면 다음 인쇄가 파형 없이 남는다.
+            string extra = e.IsDefault
+                ? "\n\n※ 이 파형이 [기본]입니다 — 지우면 기본 파형이 없어집니다."
                 : "";
 
             var ask = Dialogs.Show($"[{e.Name}] 파형 파일을 삭제할까요?{extra}", "파형 삭제",
@@ -625,18 +601,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 $"[{e.Name}]의 새 이름을 입력하세요.", "파형 이름 변경", e.Name);
             if (string.IsNullOrWhiteSpace(newName) || newName == e.Name) return;
 
-            bool wasInRecipe = IsInActiveRecipe(e);
             try
             {
+                // 기본 표시는 저장소가 알아서 새 이름으로 옮긴다(WaveformRepository.Rename).
                 var renamed = _repo.Rename(e, newName);
-
-                // 레시피는 파형을 경로로 붙잡고 있다 — 이름만 바꾸면 링크가 끊긴다.
-                if (wasInRecipe)
-                {
-                    _mainVM.RecipeVM.SetWaveformPath(_mainVM.RecipeVM.ActiveRecipeName, renamed.BasePath);
-                    _mainVM.AddLog($"[WAVEFORM] 레시피 [{_mainVM.RecipeVM.ActiveRecipeName}] 의 파형 경로도 함께 변경",
-                        LogLevel.Info);
-                }
 
                 RefreshWaveformList(renamed.Name);
                 if (string.Equals(LoadedBaseName, e.Name, StringComparison.OrdinalIgnoreCase))
@@ -662,23 +630,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _mainVM.AddLog($"[WAVEFORM] 기본 파형: {e.Name}", LogLevel.Info);
         }
 
-        /// <summary>적용 중인 레시피가 기록해 둔 그 파형인가.</summary>
-        private bool IsInActiveRecipe(WaveformEntry e)
-        {
-            string recipe = _mainVM.RecipeVM.ActiveRecipeName;
-            if (string.IsNullOrEmpty(recipe)) return false;
-
-            string? path = _mainVM.RecipeVM.GetWaveformPath(recipe);
-            if (string.IsNullOrEmpty(path)) return false;
-
-            try
-            {
-                return string.Equals(Path.GetFullPath(path), Path.GetFullPath(e.BasePath),
-                                     StringComparison.OrdinalIgnoreCase);
-            }
-            catch { return false; }
-        }
-
         private void RaiseFileCanExecute()
         {
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
@@ -687,12 +638,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 ((RelayCommand)RenameCommand).RaiseCanExecuteChanged();
                 ((RelayCommand)MakeDefaultCommand).RaiseCanExecuteChanged();
             });
-        }
-
-        private void RaiseSaveCanExecute()
-        {
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-                ((RelayCommand)ApplyToRecipeCommand).RaiseCanExecuteChanged());
         }
 
         private void RefreshChart() => ChartDataChanged?.Invoke();

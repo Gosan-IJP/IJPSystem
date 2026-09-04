@@ -442,7 +442,11 @@
       "Bash(cd \"d:/IJP/IJPSystem\" && ls Installer/ | head -20; echo \"=== ISCC 확인 ===\"; ls \"/c/Program Files \\(x86\\)/Inno Setup 6/ISCC.exe\" 2>/dev/null || ls \"/c/Program Files/Inno Setup 6/ISCC.exe\" 2>/dev/null || echo \"Inno Setup 미설치\")",
       "Bash(pwsh -NoProfile -File build-installer.ps1)",
       "Bash(DOTNET_ROLL_FORWARD=LatestMajor \"/c/Program Files \\(x86\\)/dotnet/dotnet.exe\" trigprobe.dll)",
-      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"Tools\\\\Deploy\\\\Build-Hotfix.ps1\")"
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"Tools\\\\Deploy\\\\Build-Hotfix.ps1\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -c Release -v q --nologo 2>&1\")",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -c Release -v q --nologo 2>&1\" > /tmp/b.txt 2>&1; grep -E \": error\" /tmp/b.txt | sort -u | head; tail -3 /tmp/b.txt)",
+      "Bash(powershell.exe -NoProfile -Command \"dotnet test IJPSystem.Tests/IJPSystem.Tests.csproj -v q --nologo 2>&1\")",
+      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\\\IJP\\\\IJPSystem\\\\Tools\\\\Deploy\\\\Build-Hotfix.ps1\")"
     ],
     "additionalDirectories": [
       "d:\\tmp",

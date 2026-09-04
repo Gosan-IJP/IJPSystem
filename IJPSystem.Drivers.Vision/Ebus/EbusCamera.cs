@@ -180,8 +180,10 @@ namespace IJPSystem.Drivers.Vision.Ebus
                     bool inUse = ex.Message.IndexOf("Access denied", StringComparison.OrdinalIgnoreCase) >= 0
                               || ex.Message.IndexOf("already in use", StringComparison.OrdinalIgnoreCase) >= 0;
                     string hint = inUse
-                        ? " — 다른 프로그램이 카메라를 점유 중입니다. eBUS Player 를 닫거나 Disconnect 하세요" +
-                          "(비정상 종료 직후라면 카메라 하트비트가 끊길 때까지 최대 30초 기다렸다 재시도)."
+                        // MVS 도 같이 적는다 — 이 PC 의 MVS 는 Hikrobot 뿐 아니라 JAI(DWC)까지
+                        // 목록에 띄우고 열 수 있다(2026-09-03 11호기 확인). GVC 용 도구라 방심하기 쉽다.
+                        ? " — 다른 프로그램이 카메라를 점유 중입니다. eBUS Player 나 MVS 클라이언트를 닫거나 " +
+                          "Disconnect 하세요(비정상 종료 직후라면 카메라 하트비트가 끊길 때까지 최대 30초 기다렸다 재시도)."
                         : "";
                     LoggerService.WriteToFile("ERROR",
                         $"[eBUS Vision] {CameraId} 연결 실패: {ex.GetType().Name}: {ex.Message}{hint}");

@@ -44,6 +44,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             RefreshCommand          = new RelayCommand(_ => Refresh());
             OpenConfigFolderCommand = new RelayCommand(_ => OpenConfigFolder(), _ => ConfigExists);
+            StartEngineCommand      = _startEngine = new RelayCommand(_ => StartEngine(), _ => CanStartEngine);
             SelectTabCommand        = new RelayCommand(p => SelectedTab = p as string ?? "STATUS");
 
             ReloadLogCommand      = new RelayCommand(_ => ReloadLog());
@@ -67,8 +68,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             foreach (string p in new[] { nameof(HasHeadStatus), nameof(PccAttachText),
                                          nameof(PrinterStateText), nameof(HeadPowerText),
-                                         nameof(HeadDetailText) })
+                                         nameof(HeadDetailText), nameof(CanStartEngine) })
                 OnPropertyChanged(p);
+
+            // 엔진이 붙으면 버튼이 스스로 꺼져야 한다 — 붙은 뒤에도 눌리면 다시 띄우려 든다.
+            _startEngine.RaiseCanExecuteChanged();
 
             RefreshStatusTables();
         }
@@ -78,6 +82,43 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         public ICommand RefreshCommand { get; }
         public ICommand OpenConfigFolderCommand { get; }
+
+        // ── 엔진 시작 ────────────────────────────────────────────────────
+        //
+        // 상태 모니터는 <b>이미 도는</b> 엔진에 붙기만 한다(PiOpenPrinter). 엔진 자체를 띄우는
+        // 곳은 스핏 경로 하나뿐이라, 아무도 스핏을 누르지 않으면 화면은 영영 "엔진 미실행"이다.
+        // 그때마다 Meteor 도구를 따로 띄우게 하는 대신 여기서 시작할 수 있게 한다.
+        //
+        // 노즐을 쏘는 명령이 아니다 — 엔진 프로세스를 올리고 cfg 를 읽힐 뿐이다.
+        private readonly RelayCommand _startEngine;
+        public ICommand StartEngineCommand { get; }
+
+        /// <summary>이미 붙어 있으면 누를 필요가 없다 — 실물 헤드이고 아직 못 읽을 때만 켠다.</summary>
+        public bool CanStartEngine =>
+            _mainVM.HeadSource is Infrastructure.Devices.DropWatcher.MeteorStatusMonitor
+            && ConfigExists
+            && _mainVM.LastHeadStatus?.Reachable != true;
+
+        private string _startEngineResult = "";
+        /// <summary>직전 [엔진 시작] 결과. 로그에도 남지만 화면에서 바로 보여야 한다.</summary>
+        public string StartEngineResult
+        {
+            get => _startEngineResult;
+            private set => SetProperty(ref _startEngineResult, value);
+        }
+
+        private void StartEngine()
+        {
+            var src = _mainVM.HeadSource;
+            if (src == null) { StartEngineResult = "헤드가 구성되지 않았습니다(DriverMode.Head)."; return; }
+
+            var (ok, msg) = src.StartEngine(ConfigPath);
+            StartEngineResult = msg;
+            _mainVM.AddLog("[HEAD] 엔진 시작 — " + msg, ok ? LogLevel.Success : LogLevel.Warning);
+
+            // 결과는 다음 폴링에서 올라온다(OnMainChanged) — 여기서 다시 열지 않는다.
+            _startEngine.RaiseCanExecuteChanged();
+        }
 
         // ── 설정 파일 ────────────────────────────────────────────────────
         private MeteorConfigFile _cfg = MeteorConfigFile.Load("");

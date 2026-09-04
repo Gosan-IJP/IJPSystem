@@ -31,9 +31,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// <summary>레시피의 피듀셜 마크 간격 Y[mm] — 마크2 자리를 계산하는 데 쓴다.</summary>
         private readonly Func<double>? _getFiducialPitchYMm;
         private readonly Func<bool>? _hasActiveAlarm;
-        // 활성 레시피의 프린팅수(Swath) / 헤드길이 — 오토프린트 시퀀스 생성용
+        // 활성 레시피의 프린팅수(Swath) / 스와스 간격 — 오토프린트 시퀀스 생성용
         private readonly Func<int>? _getSwathCount;
-        private readonly Func<double>? _getHeadLength;
+        private readonly Func<double>? _getSwathPitchMm;
         private readonly Func<int>? _getPrintDirection;   // 0=단방향, 1=양방향
 
         // 실장 구조 — 헤드: X(갠트리, 크로스스캔) + Z(승강) / 스테이지: Y(스캔 이송) + T(정렬 회전).
@@ -101,11 +101,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                      && Math.Abs(HeadDownLiftMm - HeadUpLiftMm) > 0.001;
 
         // ── 스와스 스텝오버(X) 매핑 ────────────────────────────────────────
-        // X 는 절대 티칭 좌표가 없고 패스 사이 상대이동(MoveAxisRelative headLength)이라,
+        // X 는 절대 티칭 좌표가 없고 패스 사이 상대이동(MoveAxisRelative swathPitch)이라,
         // 시퀀스 시작 시점의 X 를 원점으로 잡아 (현재X − 시작X) / 전체이동량 으로 진행률을 만든다.
-        //   전체이동량 = headLength × (swath − 1)
-        // ※ headLength 는 지금 레시피 화면에서 수동 입력. 향후 노즐/헤드 정보로 산출하게 되면
-        //   StepSpanMm 계산 한 곳만 바꾸면 된다.
+        //   전체이동량 = 스와스간격 × (swath − 1)
+        // ※ 스와스간격 = 노즐 피치 × 총 노즐 수 (2026-09-03). 예전에는 레시피의 [헤드 길이]를
+        //   그대로 썼는데, 그건 사양서 치수라 노즐이 실제로 덮은 폭과 달랐다.
         public double StepOriginMm { get; private set; } = double.NaN;
         public double StepSpanMm   { get; private set; } = double.NaN;
         public bool   HasStepMapping => !double.IsNaN(StepOriginMm)
@@ -187,11 +187,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
             OnPropertyChanged(nameof(HeadDownLiftMm));
             OnPropertyChanged(nameof(HasLiftMapping));
 
-            // 스와스 스텝오버(X) — 현재 X 를 원점으로, 전체 이동량은 headLength × (swath−1).
+            // 스와스 스텝오버(X) — 현재 X 를 원점으로, 전체 이동량은 스와스간격 × (swath−1).
             int    swath  = Math.Max(1, _getSwathCount?.Invoke() ?? 1);
-            double headLen = _getHeadLength?.Invoke() ?? 0.0;
+            double swathPitch = _getSwathPitchMm?.Invoke() ?? 0.0;
             StepOriginMm = _machine.Motion != null ? GetLiveAxisPos(StepAxis) : double.NaN;
-            StepSpanMm   = (swath > 1 && headLen > 0) ? headLen * (swath - 1) : double.NaN;
+            StepSpanMm   = (swath > 1 && swathPitch > 0) ? swathPitch * (swath - 1) : double.NaN;
             OnPropertyChanged(nameof(StepOriginMm));
             OnPropertyChanged(nameof(StepSpanMm));
             OnPropertyChanged(nameof(HasStepMapping));
@@ -468,7 +468,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             Func<string, string, double?>? getPointAxisMm = null,
             Func<bool>? hasActiveAlarm = null,
             Func<int>? getSwathCount = null,
-            Func<double>? getHeadLength = null,
+            Func<double>? getSwathPitchMm = null,
             Func<int>? getPrintDirection = null,
             Func<double>? getFiducialPitchYMm = null)
         {
@@ -479,10 +479,15 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _getPointAxisMm  = getPointAxisMm;
             _hasActiveAlarm  = hasActiveAlarm;
             _getSwathCount   = getSwathCount;
-            _getHeadLength   = getHeadLength;
+            _getSwathPitchMm = getSwathPitchMm;
             _getPrintDirection = getPrintDirection;
             _machine = machine;
             _motion = motion;
+
+            // 메모리 회수(압축 GC)는 모든 스레드를 세운다 — 운전 중에는 못 하게 막는다.
+            // 정렬은 오토런 밖(글라스 화면)에서도 도니 둘 다 본다.
+            Common.MemoryWatchdog.IsMachineBusy =
+                () => IsRunning || IJPSystem.Platform.Application.Sequences.GlassAlignServices.IsRunning;
 
             ActiveRecipeName = initialActiveRecipe;
 
@@ -586,13 +591,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             Steps.Clear();
             int swath = _getSwathCount?.Invoke() ?? 1;
-            double headLen = _getHeadLength?.Invoke() ?? 0;
+            double swathPitch = _getSwathPitchMm?.Invoke() ?? 0;
             bool bidi = (_getPrintDirection?.Invoke() ?? 1) == 1;   // 1=양방향, 0=단방향
             // 애니메이션(OnFrameTick)이 참조하는 SwathCount/IsBidirectional 을 시퀀스 생성 시 1회 확정.
             // (센서 100ms 폴링으로 매번 읽지 않음 — 값은 사이클 시작 때만 바뀌므로 폴링 불필요)
             SwathCount = swath;
             IsBidirectional = bidi;
-            foreach (var def in AutoPrintSequence.Build(_machine, _motion, swath, headLen, bidi))
+            foreach (var def in AutoPrintSequence.Build(_machine, _motion, swath, swathPitch, bidi))
             {
                 Steps.Add(new SequenceStep
                 {
@@ -611,7 +616,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             var dm = AppSettingsService.Current?.DriverMode;
             _logAction(
                 $"[SEQ] AutoPrint 사이클 {cycle} 시작 — 레시피 '{ActiveRecipeName}', " +
-                $"프린팅수 {SwathCount}, 헤드길이 {(_getHeadLength?.Invoke() ?? 0):F1}mm, " +
+                $"프린팅수 {SwathCount}, 스와스간격 {(_getSwathPitchMm?.Invoke() ?? 0):F3}mm, " +
                 $"{(IsBidirectional ? "양방향" : "단방향")}, 연속운전 {(IsContinuousMode ? "ON" : "OFF")}, " +
                 $"스텝 {totalSteps}개, 드라이버 IO={dm?.IO}/Motion={dm?.Motion}/Vision={dm?.Vision}",
                 LogLevel.Info);

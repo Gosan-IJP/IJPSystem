@@ -126,9 +126,49 @@
                                 </TextBlock.RenderTransform>
                             </TextBlock>
 
-                            <!-- 글라스 정렬 카메라(GVC) — 고정. 그림은 Common/Controls/AlignCamera.xaml 에 있다.
-                                 헤드와 달리 움직이지 않는다 — 글라스가 그 밑을 지나간다. -->
-                            <ctl:AlignCamera Canvas.Left="272" Canvas.Top="124"/>
+            <!-- 글라스 정렬 카메라(GVC). 그림은 Common/Controls/AlignCamera.xaml 에 있다.
+
+                                 헤드 바로 옆에 붙인다(헤드 몸체 좌단 365, 카메라 폭 34 → 323..357).
+                                 실장에서도 정렬 카메라와 헤드는 <b>같은 플레이트</b>에 붙어 있다 —
+                                 멀리 떼어 놓으면 정렬 자리와 인쇄 자리가 전혀 다른 곳처럼 보인다.
+
+                                 같은 플레이트라 Z(승강)도 같이 움직인다. 카메라만 가만히 있으면
+                                 헤드가 내려갈 때 둘이 따로 노는 그림이 되어 구조를 잘못 알려 준다.
+                                 스캔축(Y)은 글라스가 그 밑을 지나가므로 카메라는 좌우로 움직이지 않는다. -->
+            <!-- 변환은 감싸는 Canvas 에 건다 — AlignCamera 는 UserControl 이라 자기 이름 범위를
+                                 갖고 있어서, 그 안에 x:Name 을 두면 이 화면에서 찾을 수 없다(MC3093). -->
+                            <Canvas Canvas.Left="323" Canvas.Top="124">
+                                <Canvas.RenderTransform>
+                                    <TranslateTransform x:Name="CamZTransform"/>
+                                </Canvas.RenderTransform>
+
+                                <!-- 시야 광추 — 정렬 구간에만 은은하게 맥동한다. 글라스가 왜 이 밑을
+                                     오가는지를 그림이 말해 준다. 찍는 순간에는 아래 발광과 함께 밝아진다. -->
+                                <Polygon x:Name="CamCone" Points="12,78 22,78 31,134 3,134" Opacity="0">
+                                    <Polygon.Fill>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop x:Name="CamConeTop"    Color="#38BDF8" Offset="0"/>
+                                            <GradientStop x:Name="CamConeBottom" Color="#0038BDF8" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Polygon.Fill>
+                                </Polygon>
+
+                                <ctl:AlignCamera/>
+
+                                <!-- 렌즈 발광 — 정렬이 <b>실제로 셔터를 누르는</b> 순간에만 번쩍인다.
+                                     타이머가 아니라 GlassAlignServices.MarkMeasured 가 켠다. -->
+                                <Ellipse x:Name="CamLensGlow" Canvas.Left="4" Canvas.Top="66" Width="26" Height="18" Opacity="0">
+                                    <Ellipse.Fill>
+                                        <RadialGradientBrush>
+                                            <GradientStop x:Name="CamGlowIn"  Color="#38BDF8" Offset="0"/>
+                                            <GradientStop x:Name="CamGlowOut" Color="#0038BDF8" Offset="1"/>
+                                        </RadialGradientBrush>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+
+                                <!-- 상태점 — 회색=대기 / 파랑 맥동=정렬 중 / 초록·노랑·빨강=직전 측정 결과 -->
+                                <Ellipse x:Name="CamDot" Canvas.Left="14" Canvas.Top="56" Width="6" Height="6" Fill="#334155"/>
+                            </Canvas>
 
                             <!-- ── 스테이지 이송 레일 (Y 스캔축) ───────────────── -->
                             <Rectangle Canvas.Left="40" Canvas.Top="462" Width="720" Height="7"
@@ -298,6 +338,15 @@
                 </Grid>
             </Border>
 
+            <!-- GVC 라이브 창이 앉을 자리표. 그림은 없다 — 창의 위치·크기 기준점일 뿐이다.
+                 화면 좌표를 코드에 박지 않는 이유: 제어 PC 와 개발 PC 의 해상도·배율이 다르고,
+                 창을 옮기거나 최대화하면 이 자리가 통째로 움직인다. 자리표를 따라가면 언제나 맞는다.
+                 시각화 캔버스 위에 겹쳐 놓지만 클릭은 통과시킨다(IsHitTestVisible=False). -->
+            <Border x:Name="GvcLiveSlot" Grid.Row="0" Grid.RowSpan="2"
+                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,0,22,0" Width="285" Height="220"
+                    Background="Transparent" IsHitTestVisible="False"/>
+
             <Grid Grid.Row="2" Margin="0,15,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -336,18 +385,38 @@
                         <StackPanel Grid.Column="1"/>
                     </Grid>
                 </Border>
-                <!-- 연속 운전 — 모드 토글 스위치(액션 아님). 상단 상태 띠로 이동. -->
+                <!-- 운전 — 연속 운전 토글(모드)과 START/STOP(액션)을 한 상자에 둔다.
+                     START 를 누르기 전에 연속 운전 여부를 정하는데, 예전에는 그 토글이 여기
+                     있고 버튼은 오른쪽 단계 목록 아래에 있어 눈이 화면을 가로질러야 했다.
+                     "무엇으로 돌릴지"와 "돌려라"는 같은 자리에 있어야 한다. -->
                 <Border Grid.Column="1" Background="#1E293B" CornerRadius="12" Padding="14,8" BorderBrush="#334155" BorderThickness="1">
                     <Grid>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="{DynamicResource Lbl_ContinuousMode}"
-                                       Foreground="#E2E8F0" FontSize="14" FontWeight="Bold"/>
-                            <TextBlock Text="{DynamicResource Lbl_ContinuousModeHint}"
-                                       Foreground="#64748B" FontSize="10" Margin="0,2,0,0"/>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Grid Grid.Column="0">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Lbl_ContinuousMode}"
+                                           Foreground="#E2E8F0" FontSize="14" FontWeight="Bold"/>
+                                <TextBlock Text="{DynamicResource Lbl_ContinuousModeHint}"
+                                           Foreground="#64748B" FontSize="10" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <ToggleButton HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          Margin="0,0,16,0"
+                                          IsChecked="{Binding IsContinuousMode}"
+                                          Style="{StaticResource SwitchToggleStyle}"/>
+                        </Grid>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="{DynamicResource Btn_Start}" Command="{Binding StartCommand}"
+                                    Style="{StaticResource MainDashboardButtonStyle}" Background="#059669"
+                                    Width="104" Height="46" FontSize="16"/>
+                            <Button Content="{DynamicResource Btn_Stop}" Command="{Binding StopCommand}"
+                                    Style="{StaticResource MainDashboardButtonStyle}" Background="#DC2626"
+                                    Width="104" Height="46" FontSize="16" Margin="10,0,0,0"/>
                         </StackPanel>
-                        <ToggleButton HorizontalAlignment="Right" VerticalAlignment="Center"
-                                      IsChecked="{Binding IsContinuousMode}"
-                                      Style="{StaticResource SwitchToggleStyle}"/>
                     </Grid>
                 </Border>
 
@@ -434,21 +503,9 @@
 
                 <!-- 연속 운전 토글은 상단 상태 띠로 이동 -->
 
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-
-                    <Button Grid.Column="0" Content="{DynamicResource Btn_Start}" Command="{Binding StartCommand}"
-                            Style="{StaticResource MainDashboardButtonStyle}" Background="#059669"
-                            Height="52" FontSize="18" Margin="0,0,8,0"/>
-
-                    <Button Grid.Column="1" Content="{DynamicResource Btn_Stop}" Command="{Binding StopCommand}"
-                            Style="{StaticResource MainDashboardButtonStyle}" Background="#DC2626"
-                            Height="52" FontSize="18" Margin="8,0,0,0"/>
-                </Grid>
-
+                <!-- START / STOP 은 왼쪽 아래 '연속 운전' 상자로 옮겼다(2026-09-02) —
+                     운전 모드와 운전 명령을 한자리에 모은다. EMERGENCY RESET 은 여기 남는다:
+                     평소에는 숨어 있다가 오류가 났을 때만 나타나는, 성격이 다른 버튼이다. -->
                 <Button Content="{DynamicResource Btn_EmergencyReset}" Command="{Binding ResetCommand}"
                         Background="#EF4444" Margin="0,15,0,0" Height="50" FontWeight="Bold">
                     <Button.Style>

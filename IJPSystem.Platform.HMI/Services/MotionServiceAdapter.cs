@@ -1,4 +1,5 @@
 using Dapper;
+using IJPSystem.Platform.Application.Sequences;   // PointNames — 포인트별 이동 규칙
 using IJPSystem.Platform.Domain.Interfaces;
 using IJPSystem.Platform.Domain.Models.Motion;
 using IJPSystem.Platform.HMI.ViewModels;
@@ -11,6 +12,23 @@ using System.Threading.Tasks;
 namespace IJPSystem.Platform.HMI.Services
 {
     /// <summary>
+    /// 서보 ON 명령을 보냈는데 정해진 시간 안에 켜지지 않은 축이 있다.
+    ///
+    /// <para>일반 예외와 나누는 이유: 이 경우의 조치가 다르다. 다른 실패는 "로그 확인 후 재시작"
+    /// 이지만, 서보가 안 켜지는 것은 <b>드라이버 쪽</b>(전원·EMO·드라이버 알람) 문제라 프로그램을
+    /// 다시 띄우기 전에 장비를 봐야 한다. 알람 코드도 그래서 따로 둔다.</para>
+    /// </summary>
+    internal sealed class ServoOnFailedException : System.Exception
+    {
+        public ServoOnFailedException(string axisNames)
+            : base($"서보 ON 실패 — 켜지지 않은 축: {axisNames}. 드라이버 확인 후 프로그램 재실행 해주세요.")
+            => AxisNames = axisNames;
+
+        /// <summary>안 켜진 축 이름 목록(쉼표 구분) — 알람 메시지의 {0} 에 들어간다.</summary>
+        public string AxisNames { get; }
+    }
+
+    /// <summary>
     /// IMotionService를 HMI의 SharedAxisList 기반으로 구현한다.
     /// Application 레이어 시퀀스에 주입되는 구현체.
     /// </summary>
@@ -20,10 +38,43 @@ namespace IJPSystem.Platform.HMI.Services
 
         public MotionServiceAdapter(MainViewModel mainVM) => _mainVM = mainVM;
 
+        /// <summary>서보 ON 명령 뒤 실제로 켜지기를 기다리는 한계 [ms].</summary>
+        private const int ServoOnWaitMs = 5_000;
+        private const int ServoOnPollMs = 100;
+
+        /// <summary>
+        /// 전 축 서보 ON — <b>명령만 하지 않고 켜졌는지 확인한다</b>.
+        ///
+        /// <para>예전에는 명령을 보내고 곧바로 다음 단계(원점복귀)로 넘어갔다. 드라이버가 꺼져
+        /// 있거나 EMO 가 걸려 있으면 그 축만 조용히 안 켜진 채 원점복귀로 들어가고, 증상은
+        /// 한참 뒤 "원점복귀가 안 끝난다"로 나타난다 — 원인에서 먼 자리에서 터진다.</para>
+        ///
+        /// <para>확인은 <b>드라이버에 직접</b> 묻는다. <c>Status.IsServoOn</c> 은 명령 직후
+        /// 낙관적으로 true 가 되므로(AxisViewModel.ForceServoOnAsync) 캐시로는 못 가린다.</para>
+        /// </summary>
+        /// <exception cref="ServoOnFailedException">5초 안에 켜지지 않은 축이 하나라도 있으면.</exception>
         public async Task ServoOnAllAsync()
         {
-            foreach (var ax in _mainVM.SharedAxisList)
+            var all = _mainVM.SharedAxisList.ToList();
+
+            foreach (var ax in all)
                 await ax.ForceServoOnAsync();
+
+            // 드라이버가 실제로 여자되기까지 시간이 걸린다 — 그 사이 상태 폴링(100ms)이 돈다.
+            List<AxisViewModel> off = new();
+            for (int i = 0; i < ServoOnWaitMs / ServoOnPollMs; i++)
+            {
+                off = all.Where(ax => !ax.IsDriverServoOn()).ToList();
+                if (off.Count == 0) return;
+                await Task.Delay(ServoOnPollMs);
+            }
+
+            string names = string.Join(", ", off.Select(ax => ax.Info.Name));
+            _mainVM.AddLog(
+                $"[MOTION] 서보 ON 실패 — {ServoOnWaitMs / 1000}초 안에 켜지지 않은 축: {names}",
+                LogLevel.Error);
+
+            throw new ServoOnFailedException(names);
         }
 
         /// <summary>
@@ -74,6 +125,23 @@ namespace IJPSystem.Platform.HMI.Services
             axes.FirstOrDefault(ax => string.Equals(ax.Info?.AxisNo, axisNo,
                                                     System.StringComparison.OrdinalIgnoreCase));
 
+        /// <summary>
+        /// Z 를 나머지 축이 <b>다 선 뒤에</b> 움직이는 포인트.
+        ///
+        /// <para>GLASS ALIGN 은 글라스를 카메라 밑으로 넣는 자리다. 여기서 Z(헤드 승강)를 X·Y·T 와
+        /// 같이 돌리면, 스테이지가 아직 흐르는 중에 헤드가 내려온다 — 지나가는 글라스 위로
+        /// 내려오는 셈이라 간섭 여지가 있고, 실장에서 그렇게 보였다(2026-09-02).</para>
+        ///
+        /// <para>원점복귀의 Y→T 순서와 같은 성격의 규칙이다(<see cref="HomeAllAsync"/>). 다른
+        /// 포인트까지 넓히지 않은 이유: 인쇄 사이클의 헤드 승강은 전용 포인트(PRINT HEAD UP/DOWN)로
+        /// 따로 돌아 Z 하나뿐이라, 여기서 순서를 바꿔도 얻는 것 없이 사이클만 늘어난다.</para>
+        /// </summary>
+        private static bool MovesZLast(string pointName)
+            => string.Equals(pointName, PointNames.GlassAlign, System.StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsZAxis(AxisViewModel ax)
+            => string.Equals(ax.Info?.AxisNo, "Z", System.StringComparison.OrdinalIgnoreCase);
+
         public async Task MoveToPointAsync(string pointName, CancellationToken ct,
                                            MotionProfileKind profile = MotionProfileKind.Move)
         {
@@ -90,10 +158,8 @@ namespace IJPSystem.Platform.HMI.Services
                     $"[MOTION] {pointName} 이동 → " + string.Join(", ", usedAxes.Select(kv => $"{kv.Key}={kv.Value:F1}")),
                     LogLevel.Info);
 
-            var tasks = _mainVM.SharedAxisList
-                .Where(ax => usedAxes.ContainsKey(ax.Info.Name))
-                .Select(async ax =>
-                {
+            async Task<(string Axis, double Target, double Actual, bool InPos)> MoveOneAsync(AxisViewModel ax)
+            {
                     try
                     {
                         ax.IsAbsMode = true;
@@ -132,14 +198,35 @@ namespace IJPSystem.Platform.HMI.Services
                         Debug.WriteLine($"에러 발생: {ax.Info.Name} - {ex.Message}");
                         throw;
                     }
-                }).ToList(); // 중요: 여기서 바로 실행 예약됨
+            }
+
+            var moving = _mainVM.SharedAxisList
+                .Where(ax => usedAxes.ContainsKey(ax.Info.Name))
+                .ToList();
+
+            // Z 를 뒤로 미루는 포인트면 두 묶음으로 나눈다. 아니면 전부 한 묶음이라 예전 그대로다.
+            var zAxes  = MovesZLast(pointName) ? moving.Where(IsZAxis).ToList() : new List<AxisViewModel>();
+            var others = moving.Where(ax => !zAxes.Contains(ax)).ToList();
 
             // 3. 전체 완료 대기 (이곳에 브레이크를 걸어 전체 종료를 확인하세요)
             var sw = Stopwatch.StartNew();
-            var results = await Task.WhenAll(tasks);
+
+            // Select 는 지연 실행이라 ToList 로 <b>여기서</b> 시작시킨다 — 안 그러면 WhenAll 이
+            // 열거하는 시점에야 돌기 시작해, 나누는 의미는 있어도 앞 묶음이 늦게 출발한다.
+            var results = (await Task.WhenAll(others.Select(MoveOneAsync).ToList())).ToList();
+
+            if (zAxes.Count > 0)
+            {
+                // 앞 축이 <b>다 선 뒤에</b> Z 를 건다. MoveOneAsync 는 InPosition 까지 기다렸다
+                // 돌아오므로, 여기서 이어 붙이면 실제로 순서가 지켜진다(HomeAllAsync 의 Y→T 와 같은 근거).
+                _mainVM.AddLog(
+                    $"[MOTION] {pointName} — X·Y·T 정지 확인, 이어서 Z 이동(간섭 회피)", LogLevel.Info);
+                results.AddRange(await Task.WhenAll(zAxes.Select(MoveOneAsync).ToList()));
+            }
+
             sw.Stop();
 
-            if (results.Length > 0)
+            if (results.Count > 0)
             {
                 bool allInPos = results.All(r => r.InPos);
                 string detail = string.Join(", ", results.Select(r =>

@@ -202,7 +202,8 @@ namespace IJPSystem.Drivers.Vision.Ebus
             _statusMap.Values.OrderBy(s => s.CameraId).ToList();
 
         // ── 3. 촬영 ─────────────────────────────────────────────────────────
-        public async Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true)
+        /// <param name="timeoutMs">이 드라이버는 무시한다 — eBUS 쪽 대기 한계는 카메라 세션이 정한다.</param>
+        public async Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true, int timeoutMs = 0)
         {
             var cam = Cam(cameraId);
             if (cam == null || !_configMap.TryGetValue(cameraId, out var cfg))

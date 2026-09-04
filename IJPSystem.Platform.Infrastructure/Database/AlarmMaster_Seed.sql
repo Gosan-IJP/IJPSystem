@@ -2,7 +2,7 @@
 -- AlarmMaster_Seed.sql
 -- 대상 DB: AlarmSystemDb (AppConstants.AlarmSystemDb 경로)
 -- 갱신일: 2026-04-30
--- 행수  : 82
+-- 행수  : 83
 -- 카테고리: 1.Sequence  2.AddLog  3.MessageBox  4.Sensor
 --          5.Motor     6.IO     7.Exception   8.Recipe
 -- 심각도 : Fatal / Error / Warning / Info
@@ -49,7 +49,7 @@ CREATE INDEX IF NOT EXISTS IX_AlarmMaster_Severity ON AlarmMaster(Severity);
 -- ALTER TABLE AlarmMaster ADD COLUMN UpdatedAt        DATETIME DEFAULT CURRENT_TIMESTAMP;
 
 -- ─────────────────────────────────────────────
--- 2. Seed Data (82 rows)
+-- 2. Seed Data (83 rows)
 --    INSERT OR IGNORE: 기존 코드 보존, 신규만 추가
 --    (마스터 메시지 강제 갱신 필요 시 OR IGNORE → OR REPLACE 변경)
 -- ─────────────────────────────────────────────
@@ -130,6 +130,7 @@ VALUES
     ('MOT-AXIS-ALM',              5, 'Motor',      'Error',   '축 {0} 하드웨어 알람',                                '드라이버 알람 코드 확인 후 리셋',                'GetStatus().IsAlarm==true',                                        1, NULL, 'AxisViewModel.cs:330'),
     ('MOT-NOT-SERVO',             5, 'Motor',      'Error',   '가동 전 서보 OFF 축 존재',                            'All Servo ON 후 재시도',                         '하나 이상의 축이 IsServoOn==false',                                1, NULL, 'MainDashboardViewModel.cs:562'),
     ('MOT-NOT-HOMED',             5, 'Motor',      'Error',   '가동 전 원점복귀 미수행 축 존재',                     'INITIALIZE 수행',                                '하나 이상의 축이 IsHomeDone==false',                               1, NULL, 'MainDashboardViewModel.cs:550'),
+    ('MOT-SERVO-ON-FAIL',         5, 'Motor',      'Error',   '서보 ON 실패 — {0}',                                  '드라이버 확인 후 프로그램 재실행 해주세요',      'INITIALIZE 서보 ON 후 5초 안에 켜지지 않은 축이 있음',            1, NULL, 'MotionServiceAdapter.cs:ServoOnAllAsync'),
     ('MOT-UPPER-LIMIT',          5, 'Motor',      'Warning', '상한 리미트 스위치 활성',                             '축을 하한 방향으로 후퇴 후 알람 리셋',          'UpperLimit==true',                                                 1, NULL, 'AxisViewModel.cs:121'),
     ('MOT-LOWER-LIMIT',          5, 'Motor',      'Warning', '하한 리미트 스위치 활성',                             '축을 상한 방향으로 후퇴 후 알람 리셋',          'LowerLimit==true',                                                 1, NULL, 'AxisViewModel.cs:128'),
     ('MOT-INPOS-TIMEOUT',         5, 'Motor',      'Error',   'InPosition 미달성 (타임아웃)',                        '위치 결정 게인/감속 파라미터 확인',              'WaitHelper IsInPosition timeoutMs 초과',                           1, NULL, 'WaitHelper.cs:84'),

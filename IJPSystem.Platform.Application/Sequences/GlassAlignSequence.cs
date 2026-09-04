@@ -36,12 +36,25 @@ namespace IJPSystem.Platform.Application.Sequences
         public static IReadOnlyList<SequenceStepDef> Build(IMachine machine, IMotionService motion)
             => Build(machine, motion, GlassAlignServices.Current);
 
+        /// <summary>
+        /// 글라스 화면의 [Auto Align] 용 — <b>마크1 로 가는 이동을 내지 않는다</b>.
+        ///
+        /// <para>이 버튼을 누르는 사람은 이미 렌즈로 마크를 보고 있다. 옆의 [Move Mark1]
+        /// 이나 조그로 자리를 잡아 놓고 누르는데, 그때 다시 GLASS ALIGN 절대 이동을 내면
+        /// <b>방금 맞춰 놓은 자리를 티칭값으로 덮어쓴다</b>. 티칭이 실제 마크 자리와 조금
+        /// 어긋나 있으면 그 어긋남이 그대로 초기 오차가 되고, 회전 보정으로 딸려 나간 몫과
+        /// 합쳐져 12단계의 어긋남 한계를 넘긴다(실장 2026-08-31 14:52 — 0.50mm / 한계 0.4mm).</para>
+        ///
+        /// <para>인쇄 시퀀스(<see cref="Embedded"/>)는 그대로 둔다 — 거기서는 사람이
+        /// 자리를 잡아 주지 않으므로 이동을 스스로 내야 한다.</para>
+        /// </summary>
         public static IReadOnlyList<SequenceStepDef> Build(
-            IMachine machine, IMotionService motion, IGlassAlignService? align)
+            IMachine machine, IMotionService motion, IGlassAlignService? align,
+            bool moveToMark1First = false)
         {
             var steps = new List<SequenceStepDef>();
             int n = 0;
-            foreach (var (name, action) in Definitions(machine, align))
+            foreach (var (name, action) in Definitions(machine, align, moveToMark1First))
                 steps.Add(new SequenceStepDef(++n, name, action));
             return steps;
         }
@@ -63,14 +76,18 @@ namespace IJPSystem.Platform.Application.Sequences
 
             var steps = new List<SequenceStepDef>();
             int n = startNumber - 1;
-            foreach (var (name, action) in Definitions(machine, align))
+            foreach (var (name, action) in Definitions(machine, align, moveToMark1First: true))
                 steps.Add(new SequenceStepDef(++n, name, action));
             return steps;
         }
 
         /// <summary>단계의 알맹이 — 번호만 빼고 여기 한 벌만 둔다.</summary>
+        /// <param name="moveToMark1First">
+        /// 시작할 때 마크1 자리로 가는가. 인쇄 시퀀스는 true(사람이 없다),
+        /// 글라스 화면 버튼은 false(사람이 이미 자리를 잡아 놓았다).
+        /// </param>
         private static IEnumerable<(string Name, Func<CancellationToken, Task> Action)> Definitions(
-            IMachine machine, IGlassAlignService? align)
+            IMachine machine, IGlassAlignService? align, bool moveToMark1First)
         {
             // 시작 전에 갖춰졌는지 먼저 본다. 반쯤 움직인 뒤 멈추면 글라스를 다시 놔야 한다.
             yield return ("Step_GlassAlign_Ready",
@@ -79,13 +96,17 @@ namespace IJPSystem.Platform.Application.Sequences
                     var a = Require(align);
                     string? why = a.NotReadyReason;
                     if (why != null) throw new InvalidOperationException(why);
+                    a.BeginRun();      // 앞 판의 오차와 견주지 않는다
                 }, ct));
 
-            yield return ("Step_GlassAlign_Mark1Move",
-                ct => Require(align).MoveToMark1Async(ct));
+            if (moveToMark1First)
+            {
+                yield return ("Step_GlassAlign_Mark1Move",
+                    ct => Require(align).MoveToMark1Async(ct));
 
-            yield return ("Step_GlassAlign_Mark1MoveDone",
-                ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct));
+                yield return ("Step_GlassAlign_Mark1MoveDone",
+                    ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct));
+            }
 
             yield return ("Step_GlassAlign_Mark1Find",
                 ct => Require(align).MeasureAsync(1, ct));

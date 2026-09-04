@@ -433,6 +433,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public bool IsDriverInPosition()
             => _driver?.GetStatus(Info.AxisNo)?.IsInPosition == true;
 
+        // driver 의 실시간 IsServoOn.
+        //
+        // ForceServoOnAsync 는 명령을 보낸 뒤 Status.IsServoOn 을 <b>낙관적으로</b> true 로 놓는다
+        // (화면이 곧바로 반응해야 하므로). 그래서 "정말 켜졌는가"를 묻는 자리에서는 캐시가 아니라
+        // 드라이버에 직접 물어야 한다 — 안 그러면 안 켜진 축도 켜진 것으로 보인다.
+        public bool IsDriverServoOn()
+            => _driver?.GetStatus(Info.AxisNo)?.IsServoOn == true;
+
         public void UpdateMotorStatus()
         {
             try

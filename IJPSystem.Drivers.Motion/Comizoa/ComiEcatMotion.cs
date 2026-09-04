@@ -145,13 +145,49 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 string[] files = System.IO.Directory.GetFiles(comizoaDir);
                 for (int i = 0; i < files.Length; i++) files[i] = System.IO.Path.GetFileName(files[i]);
                 LoggerService.WriteToFile("INFO", $"[ComiEcat] '{comizoaDir}' 구성파일: [{string.Join(", ", files)}]");
+
+                // .cec 가 없으면 마스터가 슬레이브 구성을 모른다 — 여기서 못 넘어간다.
+                // 파일 목록만 찍어 두면 "한 개뿐이네"를 사람이 알아채야 하는데,
+                // 2026-09-03 11호기 신규 PC 에서 아무도 못 알아챘다. 이름을 대고 말해 준다.
+                // ★ 이 파일은 Comizoa 설정 유틸리티가 만든다 — 앱이 만들 수 없다.
+                if (System.IO.Directory.GetFiles(comizoaDir, "CEcatNetCfg_*.cec").Length == 0)
+                    LoggerService.WriteToFile("ERROR",
+                        $"[ComiEcat] EtherCAT 네트워크 구성(CEcatNetCfg_*.cec)이 '{comizoaDir}' 에 없습니다 — " +
+                        "슬레이브 구성을 알 수 없어 초기화가 실패합니다. " +
+                        "Comizoa 설정 유틸리티로 생성하거나, 동일 장비(10호기)의 폴더 내용을 복사하세요.");
             }
             catch (Exception ex)
             {
                 LoggerService.WriteToFile("WARN", $"[ComiEcat] '{comizoaDir}' 준비 경고: {ex.Message}");
             }
 
-            bool loaded = ecGn_LoadDevice(out int errLoad);
+            // ── LoadDevice 는 되돌아오지 않을 수 있다 ────────────────────────────
+            // EmbeddedMode 에서 이 호출은 데몬(LOCAL_IP:포트)과 마스터(MASTER_IP)로 TCP 를 건다.
+            // PC 의 모터쪽 NIC 에 LOCAL_IP 가 안 잡혀 있거나 컨트롤러가 꺼져 있으면
+            // COMM_RETRY_NUM(기본 10) × RX_TIMEOUT 만큼 붙잡고 있다 — 화면은 스플래시에서
+            // 멈춘 채 <b>로그가 한 줄도 안 남는다</b>. 2026-09-03 11호기 신규 PC 셋업에서
+            // 정확히 이 모습이었고, 어디서 멈췄는지 알아내는 데 로그가 아무 도움도 못 됐다.
+            // 그래서 ① 무엇을 향해 거는지 미리 남기고 ② 막혀 있는 동안 심장박동을 남긴다.
+            LoggerService.WriteToFile("INFO",
+                $"[ComiEcat] LoadDevice 호출 — Embedded={cfg.EmbeddedMode}, 로컬={cfg.LocalIp}, " +
+                $"데몬={cfg.DaemonIp}:{cfg.DaemonPortL}/{cfg.DaemonPortM}, 마스터={cfg.MasterIp}, " +
+                $"재시도={cfg.CommRetryNum}회");
+
+            WarnIfLocalIpMissing(cfg);
+
+            bool loaded;
+            int errLoad;
+            var loadSw = Stopwatch.StartNew();
+            using (var beat = new Timer(_ => LoggerService.WriteToFile("WARN",
+                       $"[ComiEcat] LoadDevice 응답 없음 {loadSw.Elapsed.TotalSeconds:F0}초 — " +
+                       $"모터 NIC 의 IP({cfg.LocalIp})와 컨트롤러({cfg.MasterIp}) 전원·케이블을 확인하세요."),
+                   null, 5000, 5000))
+            {
+                loaded = ecGn_LoadDevice(out errLoad);
+            }
+            if (loadSw.ElapsedMilliseconds > 3000)
+                LoggerService.WriteToFile("INFO", $"[ComiEcat] LoadDevice 반환까지 {loadSw.ElapsedMilliseconds}ms");
+
             int numDev = ecGn_GetNumDevices(out _);
             int numNet = ecGn_GetNumNetworks(out _);
             LoggerService.WriteToFile("INFO",
@@ -190,6 +226,50 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 $"[ComiEcat] SetAlState(OP) 성공 — 마스터 운전 상태 (도달 {sw.ElapsedMilliseconds}ms)");
 
             _init = true;
+        }
+
+        /// <summary>
+        /// <c>LOCAL_IP</c> 가 이 PC 의 어느 NIC 에도 없으면 크게 남긴다.
+        ///
+        /// <para>새 PC 를 셋업할 때 가장 먼저 빠지는 것이 모터쪽 NIC 의 고정 IP 다. 그 상태로
+        /// LoadDevice 를 부르면 붙을 곳이 없어 재시도만 하다가 스플래시가 멈춘 것처럼 보인다.
+        /// 이건 10초 만에 확인되는 것이라 <b>기다리기 전에</b> 알려 준다.</para>
+        ///
+        /// <para><b>막지는 않는다</b> — 예외를 던지면 우리가 예상 못한 정상 구성(원격 데몬 등)을
+        /// 끊어 버릴 수 있다. 이미 도는 장비를 세우는 쪽이 더 나쁘다. 판단은 로그를 보고 사람이 한다.</para>
+        /// </summary>
+        private static void WarnIfLocalIpMissing(ComiEcatConfig cfg)
+        {
+            if (!cfg.EmbeddedMode || string.IsNullOrWhiteSpace(cfg.LocalIp)) return;
+
+            try
+            {
+                bool found = false;
+                var mine = new System.Collections.Generic.List<string>();
+
+                foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                    foreach (var ua in nic.GetIPProperties().UnicastAddresses)
+                    {
+                        if (ua.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
+                        string ip = ua.Address.ToString();
+                        mine.Add($"{nic.Name}={ip}");
+                        if (string.Equals(ip, cfg.LocalIp, StringComparison.Ordinal)) found = true;
+                    }
+                }
+
+                if (found) return;
+
+                LoggerService.WriteToFile("ERROR",
+                    $"[ComiEcat] 이 PC 에 LOCAL_IP({cfg.LocalIp}) 가 없습니다 — EtherCAT 데몬에 붙을 수 없습니다. " +
+                    $"모터쪽 NIC 를 {cfg.LocalIp}/255.255.255.0 으로 고정하세요. " +
+                    $"현재 IP: [{string.Join(", ", mine)}]");
+            }
+            catch (Exception ex)
+            {
+                LoggerService.WriteToFile("WARN", $"[ComiEcat] NIC 조회 실패(진단 생략): {ex.Message}");
+            }
         }
 
         public void Unload()

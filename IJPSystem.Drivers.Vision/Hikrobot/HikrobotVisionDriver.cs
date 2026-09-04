@@ -183,11 +183,17 @@ namespace IJPSystem.Drivers.Vision.Hikrobot
             _statusMap.Values.OrderBy(s => s.CameraId).ToList();
 
         // ── 3. 촬영 ─────────────────────────────────────────────────────────
-        public async Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true)
+        /// <param name="timeoutMs">
+        /// 프레임 한 장을 기다리는 한계 [ms]. 0 = <see cref="GrabTimeoutMs"/>(1초).
+        /// 라이브는 짧게 넘긴다 — 한 번 놓쳤다고 1초를 붙잡으면 화면이 멈춰 보인다.
+        /// </param>
+        public async Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true, int timeoutMs = 0)
         {
             var cam = Cam(cameraId);
             if (cam == null || !_configMap.TryGetValue(cameraId, out var cfg))
                 return VisionImage.Invalid(cameraId);
+
+            uint waitMs = timeoutMs > 0 ? (uint)timeoutMs : GrabTimeoutMs;
 
             var status = _statusMap[cameraId];
             status.IsCapturing = true;
@@ -196,7 +202,9 @@ namespace IJPSystem.Drivers.Vision.Hikrobot
                 var now = DateTime.Now;
                 var (mono, w, h) = await Task.Run(() =>
                 {
-                    var buf = cam.Grab(GrabTimeoutMs);
+                    // 대기열에 밀린 과거 프레임을 버리고 최신 한 장만 쓴다 — 라이브가 뒤늦게
+                    // 따라오며 "스테이지가 멈출 때 늘어져 보이는" 증상의 원인이 이 밀림이다.
+                    var buf = cam.GrabLatest(waitMs);
                     return (buf, cam.Width, cam.Height);
                 }).ConfigureAwait(false);
 

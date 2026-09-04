@@ -163,7 +163,7 @@ namespace IJPSystem.Drivers.Vision
         /// <para>기다리는 한도는 <see cref="TriggerGrabTimeoutMs"/> — 실장 드라이버의
         /// 그랩 타임아웃(1초)과 같은 값이고, 넘기면 실장과 똑같이 Invalid 를 돌려준다.</para>
         /// </summary>
-        public async Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true)
+        public async Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true, int timeoutMs = 0)
         {
             if (!_statusMap.ContainsKey(cameraId))
                 return VisionImage.Invalid(cameraId);

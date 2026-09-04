@@ -38,6 +38,7 @@ namespace IJPSystem.Platform.HMI.Vision
             FindCommand  = _find = new RelayCommand(_ => Find(),  _ => HasPattern);
             ClearCommand = new RelayCommand(_ => Clear());
             LoadCommand  = new RelayCommand(p => Load(p as string ?? SelectedPattern));
+            SetReferenceHereCommand = _setRef = new RelayCommand(_ => SetReferenceHere(), _ => HasPattern);
 
             RefreshList();
             if (Patterns.Count > 0) Load(Patterns[0]);
@@ -61,13 +62,14 @@ namespace IJPSystem.Platform.HMI.Vision
 
         // 버튼이 다시 켜지려면 이 둘을 직접 흔들어 줘야 한다 — 여기 RelayCommand 는
         // CommandManager 를 쓰지 않는 쪽이라 InvalidateRequerySuggested 로는 꿈쩍도 안 한다.
-        private readonly RelayCommand _save, _find;
+        private readonly RelayCommand _save, _find, _setRef;
 
         /// <summary>ROI/패턴이 바뀌었으니 [패턴저장]/[패턴 찾기] 를 다시 판정하게 한다.</summary>
         private void RefreshButtons()
         {
             _save.RaiseCanExecuteChanged();
             _find.RaiseCanExecuteChanged();
+            _setRef.RaiseCanExecuteChanged();
         }
 
         public ICommand StartRegisterCommand { get; }
@@ -76,6 +78,9 @@ namespace IJPSystem.Platform.HMI.Vision
         public ICommand FindCommand { get; }
         public ICommand ClearCommand { get; }
         public ICommand LoadCommand { get; }
+
+        /// <summary>지금 마크가 있는 자리를 이 패턴의 <b>기준</b>으로 다시 잡는다(템플릿은 그대로).</summary>
+        public ICommand SetReferenceHereCommand { get; }
 
         // ── 등록(ROI) ────────────────────────────────────────────────────
         private bool _isRegistering;
@@ -342,10 +347,106 @@ namespace IJPSystem.Platform.HMI.Vision
 
             _log($"[PATTERN] 저장: {name} ({w}×{h}px, 기준 {def.ReferenceX:F0},{def.ReferenceY:F0})", LogLevel.Success);
 
+            // 기준 자리가 곧 정렬이 <b>되돌아갈 목표</b>다. 가장자리에 등록하면 그쪽으로는
+            // 고칠 여유가 거의 없다 — 화면 밖으로는 마크를 못 따라간다.
+            // 예: 1280×1024 에서 (1082,326) 에 등록하면 오른쪽 여유가 198px(0.2mm)뿐이라,
+            //     정렬이 시작하자마자 "0.5mm 벗어났습니다"로 걸린다(실장 2026-09-01).
+            string? edge = EdgeWarning(def.ReferenceX, def.ReferenceY, scene.Width, scene.Height);
+
             Dialogs.Show($"패턴을 등록했습니다.\n\n" +
                          $"크기 : {w} × {h} px\n" +
-                         $"기준 : {def.ReferenceX:F0}, {def.ReferenceY:F0} px",
-                         "패턴 등록", MessageBoxButton.OK, MessageBoxImage.Information);
+                         $"기준 : {def.ReferenceX:F0}, {def.ReferenceY:F0} px" +
+                         (edge == null ? "" : "\n\n⚠ " + edge),
+                         "패턴 등록", MessageBoxButton.OK,
+                         edge == null ? MessageBoxImage.Information : MessageBoxImage.Warning);
+
+            if (edge != null) _log("[PATTERN] " + edge, LogLevel.Warning);
+        }
+
+        /// <summary>
+        /// 지금 마크가 잡히는 자리를 <b>기준</b>으로 다시 잡는다. 템플릿(무늬)은 건드리지 않는다.
+        ///
+        /// <para><b>왜 따로 필요한가</b>: 기준은 "정렬이 마크를 되돌려 놓을 목표 픽셀"이다.
+        /// 무늬가 잘 맞는데도(점수 0.78·0.99) 정렬이 "0.62mm 벗어났습니다"로 서는 일이 생기는데,
+        /// 그건 마크가 화면 밖이어서가 아니라 <b>목표가 옛 자리</b>이기 때문이다
+        /// (실장 2026-09-01: 마크는 463,338 에 잘 있는데 기준이 1082,326 이었다).</para>
+        ///
+        /// <para>그럴 때 [패턴 등록]을 다시 하면 ROI 를 손으로 다시 그려야 하고, 새로 자른 무늬가
+        /// 전보다 나쁠 수도 있다. 여기서는 <b>좌표만</b> 고쳐 그 위험을 없앤다.</para>
+        /// </summary>
+        private void SetReferenceHere()
+        {
+            var frame = _frame();
+            if (frame == null || _template == null) return;
+
+            var scene = ToGray(frame);
+            if (scene == null) return;
+
+            // 기준을 옮기려는 참이니 옛 기준 둘레만 보면 안 된다 — 화면 전체에서 찾는다.
+            var m = PatternMatcher.Find(scene, _template, new PatternSearchOptions { MinScore = MinScore });
+            if (!m.Found)
+            {
+                Dialogs.Show($"지금 화면에서 마크를 찾지 못했습니다 — 최고 점수 {m.Score:F3} (합격 {MinScore:F2}).\n" +
+                             "마크가 화면에 보이는지 확인하고 다시 누르세요.",
+                             "기준 자리 갱신", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            double oldX = _definition.ReferenceX, oldY = _definition.ReferenceY;
+            string? edge = EdgeWarning(m.CenterX, m.CenterY, scene.Width, scene.Height);
+
+            if (Dialogs.Show($"이 패턴의 기준 자리를 지금 마크 위치로 바꿉니다.\n\n" +
+                             $"현재 기준 : {oldX:F0}, {oldY:F0} px\n" +
+                             $"새 기준   : {m.CenterX:F0}, {m.CenterY:F0} px   (점수 {m.Score:F3})\n" +
+                             $"이동량    : {m.CenterX - oldX:+0;-0;0}, {m.CenterY - oldY:+0;-0;0} px\n\n" +
+                             "무늬(템플릿)는 그대로 두고 좌표만 바꿉니다." +
+                             (edge == null ? "" : "\n\n⚠ " + edge),
+                             "기준 자리 갱신", MessageBoxButton.YesNo,
+                             edge == null ? MessageBoxImage.Question : MessageBoxImage.Warning)
+                != MessageBoxResult.Yes) return;
+
+            _definition.ReferenceX  = m.CenterX;
+            _definition.ReferenceY  = m.CenterY;
+            _definition.SceneWidth  = scene.Width;
+            _definition.SceneHeight = scene.Height;
+            _definition.SavedAt     = DateTime.Now;
+
+            try { _repo.Save(_definition, _template); }
+            catch (Exception ex)
+            {
+                _log($"[PATTERN] 기준 저장 실패: {ex.Message}", LogLevel.Error);
+                Dialogs.Show("기준을 저장하지 못했습니다.\n\n" + ex.Message,
+                             "기준 자리 갱신", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            OnPropertyChanged(nameof(ReferenceText));
+            ShowResult(m, scene);
+
+            _log($"[PATTERN] 기준 갱신: {_definition.Name} · {oldX:F0},{oldY:F0} → " +
+                 $"{m.CenterX:F0},{m.CenterY:F0} px (점수 {m.Score:F3})", LogLevel.Success);
+            if (edge != null) _log("[PATTERN] " + edge, LogLevel.Warning);
+        }
+
+        /// <summary>
+        /// 기준 자리가 화면 가운데에서 얼마나 치우쳤는지 — 치우친 쪽으로는 정렬이 못 고친다.
+        /// 가운데에서 반폭의 40% 를 넘으면 알린다(그 너머는 남는 여유가 반의 반도 안 된다).
+        /// </summary>
+        private static string? EdgeWarning(double refX, double refY, int sceneW, int sceneH)
+        {
+            if (sceneW <= 0 || sceneH <= 0) return null;
+
+            double offX = Math.Abs(refX - sceneW / 2.0);
+            double offY = Math.Abs(refY - sceneH / 2.0);
+            if (offX <= sceneW * 0.20 && offY <= sceneH * 0.20) return null;
+
+            // 남는 여유 = 가장 가까운 가장자리까지. 이 값이 정렬이 쓸 수 있는 전부다.
+            double room = Math.Min(Math.Min(refX, sceneW - refX), Math.Min(refY, sceneH - refY));
+
+            return $"기준이 화면 가운데({sceneW / 2}, {sceneH / 2})에서 많이 치우쳤습니다 — " +
+                   $"가장 가까운 가장자리까지 {room:F0}px 뿐입니다. 정렬은 마크를 이 기준으로 되돌리는데, " +
+                   "치우친 쪽으로는 고칠 여유가 없어 시작하자마자 \"너무 많이 벗어났습니다\"로 걸립니다. " +
+                   "마크를 화면 한가운데 두고 다시 등록하세요.";
         }
 
         private void Load(string? name)

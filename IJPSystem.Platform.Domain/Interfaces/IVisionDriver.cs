@@ -23,7 +23,17 @@ namespace IJPSystem.Platform.Domain.Interfaces
         /// 라이브 미리보기처럼 초당 수 장씩 반복 캡처하는 경로는 반드시 false — true 로 두면
         /// 프레임마다 BMP 가 쌓여 디스크가 순식간에 찬다(5fps × 656KB ≈ 12GB/시간).
         /// </param>
-        Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true);
+        /// <param name="timeoutMs">
+        /// 프레임 한 장을 기다리는 한계 [ms]. 0 = 드라이버 기본값.
+        ///
+        /// <para><b>라이브는 짧게, 재는 촬상은 길게</b> 잡아야 한다. 기본값(1초)으로 라이브를
+        /// 돌리면 프레임을 한 번 놓칠 때마다 화면이 1초 멈춰 "끊긴다"고 느껴진다 — 라이브는
+        /// 한 장 건너뛰는 편이 낫다. 반대로 정렬 촬상은 그 한 장이 없으면 판이 실패하므로
+        /// 넉넉히 기다려야 한다.</para>
+        ///
+        /// <para>기다림이 없는 드라이버(가상·파일 기반)는 무시한다.</para>
+        /// </param>
+        Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true, int timeoutMs = 0);
         Task<VisionImage> WaitForHardwareTriggerAsync(string cameraId, CancellationToken ct);
 
         /// <summary>

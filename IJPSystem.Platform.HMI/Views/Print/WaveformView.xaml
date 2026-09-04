@@ -249,15 +249,12 @@
                             <TextBlock Text="{DynamicResource Btn_Load}" FontSize="12" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Command="{Binding ApplyToRecipeCommand}"
-                            Width="132" Height="32"
-                            Style="{StaticResource MutedActionButtonStyle}"
-                            Background="#1E293B">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="■" FontSize="11" Margin="0,0,7,0" VerticalAlignment="Center" Foreground="#3B82F6"/>
-                            <TextBlock Text="{DynamicResource Btn_ApplyToRecipe}" FontSize="12" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
+                    <!-- [레시피에 적용] 은 뺐다(2026-09-04 사용자 결정).
+                         레시피 DB 에 파형 경로를 적었지만 그 값을 읽는 곳은 이 화면 자신뿐이었다
+                         (진입 시 자동 로드·목록 별표). 헤드는 Meteor cfg 의 WaveformFileIdx 로
+                         파형을 고르므로 저 버튼은 인쇄에 아무 영향이 없었는데, 누르면
+                         "레시피에 저장되었습니다" 가 떠서 헤드가 그 파형을 쓴다고 읽혔다.
+                         파형을 헤드에 물리는 곳은 [PCC-E] 화면 하나뿐이다. -->
                 </StackPanel>
 
                 <!-- 시리즈 가시성 토글 -->

@@ -126,6 +126,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         //
         // 66ms(≈15fps)로 내린다. 더 내리지 않는 이유는 프레임 하나가 1280×1024 = 1.31MB 라
         // 32비트 프로세스에서 초당 넘기는 양이 그대로 부담이 되기 때문이다(2026-08-27 0x80070008).
+        //
+        // ※ 이 값은 <b>목표 주기</b>이지 고정 주기가 아니다. 촬상이 늦어지면 그만큼 늦게
+        //   다음 판을 걸 뿐, 틱을 통째로 버리지 않는다(LiveTickAsync 참고).
         private int _liveIntervalMs = 66;
         public int LiveIntervalMs
         {
@@ -554,6 +557,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _align = new Services.GlassAlignService(_mainVM, () => Align.SelectedPattern, HoldLiveForCapture);
             Application.Sequences.GlassAlignServices.Current = _align;
 
+            // 정렬이 잰 사진을 화면에도 띄운다 — 라이브가 비켜 서 있는 동안 이동 중 얼룩이
+            // 남아 있지 않도록, 그리고 매칭이 무엇을 봤는지 눈으로 확인할 수 있도록.
+            Application.Sequences.GlassAlignServices.FrameMeasured += OnMeasuredFrame;
+
             // 자동 정렬 — 도는 동안에는 다시 누르지 못하게 하고, 세울 버튼을 따로 둔다.
             AutoAlignCommand = _autoAlign = new RelayCommand(async _ => await RunAutoAlignAsync(),
                                                     _ => AutoAlignEnabled && !IsAutoAligning && !IsBusy);
@@ -770,10 +777,49 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// <para>재는 데 실패해도(패턴 미등록·카메라 오류) <b>이동은 실패로 만들지 않는다</b> —
         /// 마크를 눈으로 보러 가는 길이 사진 한 장 때문에 막히면 안 된다.</para>
         /// </summary>
+        /// <summary>
+        /// [Go to Mark2] 를 누를 때 이 Y 아래면 되묻는다 [mm].
+        ///
+        /// <para>마크2 는 <b>지금 자리에서 -Y 로만</b> 간다 — 서 있던 자리가 곧 출발점이다.
+        /// 그래서 마크1 이 아닌 곳(예: 이미 마크2 자리)에서 누르면 거기서 또 150mm 를 내려가
+        /// 마크가 없는 자리로 간다. 되돌리려면 다시 마크1 으로 올려야 한다.</para>
+        ///
+        /// <para>200mm 인 이유: 이 장비의 마크1(266.7)과 마크2(116.7) 사이다. 티칭이 바뀌면
+        /// 이 값도 같이 봐야 한다 — 판정선이지 계산값이 아니다.</para>
+        /// </summary>
+        private const double Mark1ExpectedMinY = 200.0;
+
+        /// <summary>
+        /// 마크1 자리로 보이지 않으면 되묻는다. 진행하겠다고 하면 그대로 간다 —
+        /// 티칭이 다른 장비나 조그로 맞춰 둔 자리를 막을 이유는 없다.
+        /// </summary>
+        private bool ConfirmMark2FromHere()
+        {
+            var motion = _mainVM.GetController()?.GetMachine()?.Motion;
+            if (motion == null) return true;               // 위치를 모르면 막지 않는다
+
+            double y = motion.GetActualPosition("Y");
+            if (double.IsNaN(y) || y >= Mark1ExpectedMinY) return true;
+
+            return Dialogs.Show(
+                $"현재 Y 위치가 {y:F3} mm 입니다 (마크1 예상 {Mark1ExpectedMinY:F0} mm 이상).\n" +
+                "마크1 위치가 아닐 수 있습니다. 그래도 진행하시겠습니까?\n\n" +
+                $"Current Y is {y:F3} mm (Mark1 expected at {Mark1ExpectedMinY:F0} mm or above).\n" +
+                "This may not be the Mark1 position. Continue anyway?",
+                "Go to Mark2", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+        }
+
         private async Task MoveToMarkAsync(int slot)
         {
             var align = Application.Sequences.GlassAlignServices.Current;
             if (align == null) { AutoAlignStatus = "정렬 서비스가 연결되지 않았습니다."; return; }
+
+            // 마크2 는 상대 이동이라 출발점이 틀리면 도착점도 틀린다 — 누르기 전에 한 번 확인한다.
+            if (slot == 2 && !ConfirmMark2FromHere())
+            {
+                AutoAlignStatus = "마크2 이동 취소 — 마크1 자리가 아닙니다";
+                return;
+            }
 
             // 라이브는 켜 둔다 — 마크 자리로 가는 동안을 보라고 만든 버튼이다.
             // 재는 순간만 CaptureGrayAsync 가 잠깐 비키게 한다(HoldLiveForCapture).
@@ -959,6 +1005,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             _liveCts = new CancellationTokenSource();
             IsLiveMode = true;
+            // 주기를 목표값으로 되돌려 시작한다 — 지난 판이 느려 1ms 로 줄어 있을 수 있다.
+            _liveTimer.Interval = TimeSpan.FromMilliseconds(_liveIntervalMs);
             _liveTimer.Start();
             RaiseAllCanExecute();
             _mainVM.AddLog("[VISION] Glass: 라이브 모드 시작", LogLevel.Info);
@@ -1018,16 +1066,36 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
+        /// <summary>
+        /// 라이브가 프레임 한 장을 기다리는 한계 [ms].
+        ///
+        /// <para>드라이버 기본값은 1초인데, 그 값으로 라이브를 돌리면 프레임을 <b>한 번</b>
+        /// 놓칠 때마다 화면이 1초 멈춘다 — "끊긴다"고 느껴지는 큰 몫이 이것이다.
+        /// 라이브는 한 장 건너뛰는 편이 낫다. 재는 촬상은 그 한 장이 없으면 판이 실패하므로
+        /// 기본값(길게)을 그대로 쓴다.</para>
+        /// </summary>
+        private const int LiveGrabTimeoutMs = 250;
+
         private async Task LiveTickAsync()
         {
             // 단발 캡쳐(IsBusy) 중에도, 정렬이 재는 중(_liveHold)에도 건너뛴다.
-            if (_liveTicking || IsBusy || Volatile.Read(ref _liveHold) > 0) return;
+            if (_liveTicking || IsBusy || Volatile.Read(ref _liveHold) > 0)
+            {
+                // 비켜 주는 동안은 목표 주기로 되돌린다 — 직전 판이 느려 주기가 1ms 까지
+                // 줄어 있으면, 잠금이 풀릴 때까지 헛틱만 돈다.
+                RearmLiveTimer(_liveIntervalMs);
+                return;
+            }
+
             _liveTicking = true;
+            _liveTimer.Stop();          // 이 판이 끝날 때까지 다음 틱을 걸지 않는다
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 // saveToDisk:false — 라이브는 연속 캡쳐라 파일로 남기면 디스크가 순식간에 찬다.
                 // 픽셀 버퍼를 그대로 화면에 그린다(파일이 없으므로 CurrentImagePath 는 건드리지 않음).
-                var image = await _vision.CaptureAsync(CamId, saveToDisk: false);
+                var image = await _vision.CaptureAsync(CamId, saveToDisk: false, LiveGrabTimeoutMs);
                 if (image.IsValid)
                 {
                     // 같은 버퍼에 덮어쓴다 — 프레임마다 새 비트맵을 만들면 대형 객체 힙이 불어나
@@ -1042,7 +1110,48 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 // 라이브 중 오류는 화면 로그 노출 없이 파일에만 기록
                 LoggerService.WriteToFile("DEBUG", $"[GLASS_LIVE] capture failed: {ex.Message}");
             }
-            finally { _liveTicking = false; }
+            finally
+            {
+                _liveTicking = false;
+
+                // ── 다음 판을 <b>여기서</b> 건다 ────────────────────────────────
+                //
+                // 예전에는 타이머가 66ms 마다 고정으로 울리고, 앞 판이 아직 돌고 있으면
+                // 그 틱을 <b>버렸다</b>. 카메라와 타이머는 서로 동기가 아니라서 촬상 시간이
+                // 매 판 달라지는데, 한 번이 66ms 를 넘는 순간 다음 틱이 통째로 사라져
+                // 15 → 7.5 → 15fps 로 튄다. 느린 게 아니라 <b>불규칙한 것</b>이 끊겨 보이는
+                // 정체였다(실장 2026-09-02).
+                //
+                // 촬상에 쓴 시간을 빼고 남은 만큼만 기다리면, 늦어도 그만큼만 늦을 뿐
+                // 판을 잃지 않는다 — 화면 주기가 카메라를 따라간다.
+                if (IsLiveMode) RearmLiveTimer(_liveIntervalMs - sw.Elapsed.TotalMilliseconds);
+            }
+        }
+
+        /// <summary>
+        /// 정렬이 잰 사진이 도착했다 — 화면에 그대로 띄운다.
+        ///
+        /// <para>넘어온 배열은 정렬이 매칭 끝까지 들고 있는 복사본이라, 여기서 비트맵으로
+        /// 옮겨 담는 동안 내용이 바뀌지 않는다(읽는 쪽만 둘이다).</para>
+        /// </summary>
+        private void OnMeasuredFrame(VisionImage img)
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null) return;
+
+            dispatcher.BeginInvoke(new Action(() =>
+            {
+                var frame = _liveBuffer.Write(img);
+                if (frame != null) CurrentFrame = frame;
+            }));
+        }
+
+        /// <summary>다음 라이브 틱을 <paramref name="afterMs"/> 뒤로 건다. 이미 늦었으면 곧바로.</summary>
+        private void RearmLiveTimer(double afterMs)
+        {
+            var next = TimeSpan.FromMilliseconds(Math.Max(1.0, afterMs));
+            if (_liveTimer.Interval != next) _liveTimer.Interval = next;
+            if (!_liveTimer.IsEnabled) _liveTimer.Start();
         }
 
         // ── 단일 캡쳐 ──────────────────────────────────────────────────────────
@@ -1186,6 +1295,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _liveCts?.Cancel();
             _liveCts?.Dispose();
             _liveCts = null;
+
+            // 정적 이벤트라 떼지 않으면 이 VM 과 라이브 버퍼가 수거되지 않는다.
+            Application.Sequences.GlassAlignServices.FrameMeasured -= OnMeasuredFrame;
 
             // 레시피 구독을 떼야 이 VM 과 라이브 버퍼가 수거된다(BindMinScoreToRecipe 참고).
             if (_recipeForMinScore != null && _minScoreHandler != null)

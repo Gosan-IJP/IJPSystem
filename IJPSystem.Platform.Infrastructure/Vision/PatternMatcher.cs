@@ -62,7 +62,7 @@ namespace IJPSystem.Platform.Infrastructure.Vision
 
     /// <summary>찾기 결과. 좌표는 <b>장면 이미지의 픽셀</b>이며 패턴의 중심이다.</summary>
     public readonly record struct PatternMatch(
-        bool Found, double Score, double CenterX, double CenterY)
+        bool Found, double Score, double CenterX, double CenterY, bool AtSearchEdge = false)
     {
         public static PatternMatch Fail(double score = 0) => new(false, score, 0, 0);
     }
@@ -154,7 +154,8 @@ namespace IJPSystem.Platform.Infrastructure.Vision
             using var window = new Mat(sceneMat, new Rect(rx, ry, rw, rh));
             var peak = PeakOf(window, templMat, out double score, out double subX, out double subY);
 
-            return Build(score, rx + peak.X + subX, ry + peak.Y + subY, offX, offY, template, opt);
+            return Build(score, rx + peak.X + subX, ry + peak.Y + subY, offX, offY, template, opt,
+                         sceneMat.Width, sceneMat.Height);
         }
 
         // ── 내부 ─────────────────────────────────────────────────────────
@@ -163,16 +164,32 @@ namespace IJPSystem.Platform.Infrastructure.Vision
                                                int offX, int offY, GrayImage template)
         {
             var peak = PeakOf(sceneMat, templMat, out double score, out double subX, out double subY);
-            return Build(score, peak.X + subX, peak.Y + subY, offX, offY, template, opt);
+            return Build(score, peak.X + subX, peak.Y + subY, offX, offY, template, opt,
+                         sceneMat.Width, sceneMat.Height);
         }
 
+        /// <summary>찾은 자리가 탐색창 가장자리에서 이 안쪽이면 "붙었다"고 본다 [px].</summary>
+        private const double EdgeTolPx = 1.5;
+
         private static PatternMatch Build(double score, double left, double top,
-                                          int offX, int offY, GrayImage template, PatternSearchOptions opt)
+                                          int offX, int offY, GrayImage template, PatternSearchOptions opt,
+                                          int areaW, int areaH)
         {
             double cx = offX + left + (template.Width  - 1) / 2.0;
             double cy = offY + top  + (template.Height - 1) / 2.0;
 
-            return new PatternMatch(score >= opt.MinScore, score, cx, cy);
+            // 찾은 자리가 탐색창 <b>가장자리에 붙어</b> 있으면 그것은 봉우리가 아니라 <b>잘린 끝</b>이다.
+            // 진짜 봉우리는 창 밖에 있고, 우리는 창 안에서 제일 나은 곳을 받은 것뿐이다.
+            //
+            // 그대로 쓰면 값이 조용히 틀린다 — 마크2 는 X 편차가 그대로 글라스 기울기가 되므로
+            // (기선 150mm 에서 1px = 0.00038°), 잘린 끝 하나가 각도를 통째로 지어낸다.
+            // 부르는 쪽이 이 사실을 알아야 "왜 이 각이 나왔는지"를 물을 수 있다.
+            double maxLeft = Math.Max(0, areaW - template.Width);
+            double maxTop  = Math.Max(0, areaH - template.Height);
+            bool atEdge = maxLeft > 0 && (left <= EdgeTolPx || left >= maxLeft - EdgeTolPx)
+                       || maxTop  > 0 && (top  <= EdgeTolPx || top  >= maxTop  - EdgeTolPx);
+
+            return new PatternMatch(score >= opt.MinScore, score, cx, cy, atEdge);
         }
 
         /// <summary>패턴이 너무 작아지지 않는 선까지만 축소한다.</summary>

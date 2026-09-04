@@ -114,10 +114,37 @@ namespace IJPSystem.Platform.Domain.Models.Vision
         /// T 축의 + 가 어느 쪽인지는 모터 배선이 정하므로 그 둘이 반대일 수 있고, 그러면
         /// 보정이 기울기를 <b>두 배로</b> 만든다.</para>
         ///
-        /// <para><b>확인법</b>: T 를 + 로 조금 조그하고 글라스가 화면에서 어느 쪽으로 도는지 본다.
-        /// 10호기는 시계방향이다(2026-08-26 도면 확인).</para>
+        /// <para><b>확인법</b>: 글라스 화면의 [Calibrate T] 가 실제로 재 준다 — T 를 조금 돌려
+        /// 두 마크로 잰 각이 어느 쪽으로 움직이는지 본다. 눈으로 조그해 보는 것보다 확실하다.</para>
+        ///
+        /// <para><b>10호기는 CCW(반시계)다</b> — 2026-09-01 실측(시험 회전 +0.050° 에 잰 각
+        /// −0.015° → +0.035°, 눈금비 1.006, 회전반경 140mm). 도면을 보고 CW 로 적어 두었던 것이
+        /// 실제와 반대였다. <b>도면보다 실측을 믿을 것</b> — 이 값이 반대면 회전 보정이 기울기를
+        /// 줄이는 대신 두 배로 만든다.</para>
         /// </summary>
         public string TAxisPositiveDir { get; set; } = string.Empty;
+        /// <summary>
+        /// 촬상 전 정착 대기 [ms]. 스테이지가 선 뒤 기구 진동이 잦아들 때까지 기다린다.
+        ///
+        /// <para>드라이브가 "안 움직인다"고 말하는 순간에도 기구는 아직 서고 있다. 그 사이에
+        /// 찍으면 흔들린 사진이 나오고, 그 사진으로 낸 보정은 오차를 <b>키운다</b>.
+        /// 현장에서 흔들림이 남으면 이 값을 올린다(설치 폴더 Config/VisionConfig.json).</para>
+        /// </summary>
+        public int SettleBeforeCaptureMs { get; set; } = 500;
+
+        /// <summary>
+        /// 촬상 직전에 <b>버릴</b> 프레임 수. 잔상(이동 중에 찍힌 옛 그림)을 없앤다.
+        ///
+        /// <para>카메라는 자유 실행으로 계속 찍어 대기열에 쌓는다. MVS 기본 전략은 오래된
+        /// 것부터 꺼내 주므로, 이동이 끝난 직후에 한 장을 받으면 <b>이동 중에 찍힌 과거</b>가
+        /// 나올 수 있다(<c>LatestImageOnly</c> 를 거부하는 펌웨어에서 특히). 몇 장을 버리고
+        /// 찍으면 받은 그림이 정지 후의 것임이 보장된다. 0 = 버리지 않음.</para>
+        ///
+        /// <para>드라이버가 이미 대기열을 비우고 최신 한 장만 준다(<c>GrabLatest</c>). 그래도
+        /// 남으면 — 카메라가 이동 중 프레임을 "최신"으로 들고 있는 경우 — 이 값을 올린다.</para>
+        /// </summary>
+        public int FlushFramesBeforeCapture { get; set; } = 1;
+
         public double DefaultExposureMs { get; set; } = 10.0;
         public double DefaultGain { get; set; } = 1.0;
         public int LightChannel { get; set; } = 0;

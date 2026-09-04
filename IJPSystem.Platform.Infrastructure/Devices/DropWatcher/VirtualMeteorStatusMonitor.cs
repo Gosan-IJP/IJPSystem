@@ -43,6 +43,13 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
             }
         }
 
+        /// <summary>
+        /// 가상에는 띄울 엔진이 없다. <b>성공했다고 답하지 않는다</b> — 가상에서 눌렀는데
+        /// "시작됨"이 뜨면, 실물에서도 됐다고 믿게 된다.
+        /// </summary>
+        public (bool Ok, string Message) StartEngine(string configPath)
+            => (false, "가상 헤드입니다 — 띄울 PrintEngine 이 없습니다.");
+
         public MeteorHeadStatus Poll()
         {
             string scenario;

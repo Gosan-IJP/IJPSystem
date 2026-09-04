@@ -261,6 +261,35 @@ namespace IJPSystem.Drivers.Vision.Hikrobot
         /// 다음 프레임을 받아 Mono8 버퍼로 변환한다. 실패(타임아웃 등)면 null —
         /// 라이브 폴링에서 매 프레임 예외가 나면 안 된다.
         /// </summary>
+        /// <summary>
+        /// 대기열을 <b>비우고</b> 가장 최신 프레임을 돌려준다.
+        ///
+        /// <para><b>왜 필요한가</b>: 카메라는 자유 실행으로 수십 fps 를 쏟아내는데 화면·정렬은
+        /// 그보다 느리게 꺼내 간다. 대기열이 늘 차 있으면 우리가 보는 그림은 항상 몇 프레임
+        /// 전 과거다 — 스테이지를 세워도 화면은 밀린 프레임을 마저 재생하느라 계속 흘러가고,
+        /// 그 뒤늦은 이동이 <b>늘어져 보인다</b>(실장 2026-08-31).</para>
+        ///
+        /// <para><see cref="StartGrabbingLatest"/> 의 <c>LatestImageOnly</c> 가 먹으면 대기열이
+        /// 애초에 한 장이라 이 고리는 한 번에 끝난다. <b>거부하는 펌웨어에서도</b> 같은 결과를
+        /// 내려고 여기서 직접 비운다 — 전략이 먹었는지에 결과가 달라지면 안 된다.</para>
+        ///
+        /// <para>비우는 장수를 제한한다: 카메라가 우리보다 빠르면 고리가 영영 안 끝난다.</para>
+        /// </summary>
+        public byte[]? GrabLatest(uint timeoutMs, int maxDrain = 8)
+        {
+            var latest = Grab(timeoutMs);
+            if (latest == null) return null;
+
+            for (int i = 0; i < maxDrain; i++)
+            {
+                // 1ms — 대기열이 비었으면 곧바로 null 이 돌아온다(0 은 기종마다 뜻이 갈린다).
+                var next = Grab(1);
+                if (next == null) break;
+                latest = next;
+            }
+            return latest;
+        }
+
         public byte[]? Grab(uint timeoutMs)
         {
             lock (_sync)

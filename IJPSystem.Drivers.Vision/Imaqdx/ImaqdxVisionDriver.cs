@@ -199,7 +199,8 @@ namespace IJPSystem.Drivers.Vision.Imaqdx
             _statusMap.Values.OrderBy(s => s.CameraId).ToList();
 
         // ── 3. 촬영 ─────────────────────────────────────────────────
-        public async Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true)
+        /// <param name="timeoutMs">이 드라이버는 무시한다 — IMAQdx 는 세션 속성으로 대기 한계를 정한다.</param>
+        public async Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true, int timeoutMs = 0)
         {
             if (!_sessions.TryGetValue(cameraId, out uint session) ||
                 !_configMap.TryGetValue(cameraId, out var cfg))

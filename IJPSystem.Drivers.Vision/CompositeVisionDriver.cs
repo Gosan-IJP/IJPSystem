@@ -160,8 +160,8 @@ namespace IJPSystem.Drivers.Vision
             !string.IsNullOrEmpty(cameraId) && _byCamera.TryGetValue(cameraId, out var d) ? d : null;
 
         // ── 3. 촬영 ─────────────────────────────────────────────────────────
-        public Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true) =>
-            Route(cameraId)?.CaptureAsync(cameraId, saveToDisk)
+        public Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true, int timeoutMs = 0) =>
+            Route(cameraId)?.CaptureAsync(cameraId, saveToDisk, timeoutMs)
             ?? Task.FromResult(VisionImage.Invalid(cameraId));
 
         public Task<VisionImage> WaitForHardwareTriggerAsync(string cameraId, CancellationToken ct) =>

@@ -292,12 +292,28 @@ namespace IJPSystem.Platform.Infrastructure.Vision
             var lim = new AlignLimits();
             if (micronPerPx <= 0 || widthPx <= 0 || heightPx <= 0) return lim;
 
-            double halfMm = Math.Min(widthPx, heightPx) * micronPerPx / 2000.0;
-            double reach  = halfMm * 0.75;                // 가장자리 25% 는 버린다 — 템플릿이 잘린다
+            // 각도용 — 짧은 변으로 잡는다. 회전을 고치면 마크1 이 딸려 나가는데, 그때도
+            // 매칭이 되어야 하므로 가장자리 25% 는 버린다(템플릿이 잘린다).
+            double halfShortMm = Math.Min(widthPx, heightPx) * micronPerPx / 2000.0;
+            double reach       = halfShortMm * 0.75;
 
-            lim.MaxShiftMm = reach;
             if (baselineMm > 1.0)
                 lim.MaxAngleDeg = Math.Asin(Math.Min(1.0, reach / baselineMm)) * 180.0 / Math.PI;
+
+            // 어긋남용 — <b>화면 전체</b>를 쓴다. 이 한계는 마크를 <b>이미 찾은 뒤</b>에 걸린다.
+            //
+            // 찾았다는 것은 화면 안에 있다는 뜻이고, 그 자리를 기준으로 되돌리는 것은 마크를
+            // 시야 <b>안쪽으로</b> 끌어오는 이동이라 언제나 안전하다. 잃어버릴 수가 없다.
+            // 그런데 예전에는 각도와 같은 75% 를 써서, 화면에 멀쩡히 보이는 마크를 두고
+            // "0.62mm 로 너무 많이 벗어났습니다 — 글라스를 다시 놓으세요"로 세웠다
+            // (실장 2026-09-01). 볼 수 있으면 고칠 수 있다.
+            //
+            // 긴 변으로 잡는 이유: 이 검사는 반지름(√(dx²+dy²))으로 하는데, 가로로 0.6mm
+            // 벗어난 것은 실제로 화면 안에 있다. 짧은 변으로 자르면 그것을 거절한다.
+            //
+            // 그래도 한계를 남겨 두는 이유는 <b>교정이 엉터리일 때</b>다 — µm/px 가 10배로
+            // 잘못 잡히면 몇 픽셀 어긋남이 몇 mm 로 둔갑해 스테이지가 크게 나간다.
+            lim.MaxShiftMm = Math.Max(widthPx, heightPx) * micronPerPx / 2000.0;
 
             return lim;
         }

@@ -71,7 +71,7 @@
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="🔭" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
                             <!-- ID 를 박아두면 config 와 어긋났을 때 화면이 거짓말을 한다 →
-                                 실제로 붙잡은 카메라의 ID 를 그대로 보여준다(CAM_GV / 옛 CAM_02). -->
+                                 실제로 붙잡은 카메라의 ID 를 그대로 보여준다(CAM_GV). -->
                             <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"
                                        Text="{Binding CamStatus.CameraId, StringFormat=GLASS VIEW  —  {0}, FallbackValue=GLASS VIEW}"/>
 
@@ -564,6 +564,18 @@
                                         FontSize="12" FontWeight="Bold"/>
                             </Grid>
 
+                            <!-- 기준(=정렬이 마크를 되돌릴 목표 픽셀)만 지금 자리로 옮긴다.
+                                 무늬는 멀쩡한데 목표가 옛 자리라 "너무 많이 벗어났습니다"로
+                                 서는 경우가 있다 — 그때 ROI 를 다시 그리지 않아도 되게. -->
+                            <Button Command="{Binding SetReferenceHereCommand}"
+                                    Content="현재 위치를 기준으로" Height="34" Margin="0,0,0,12"
+                                    ToolTip="지금 마크가 잡히는 자리를 이 패턴의 기준으로 다시 잡습니다(무늬는 그대로)."
+                                    IsEnabled="{Binding DataContext.AutoAlignEnabled,
+                                                RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Style="{StaticResource MutedActionButtonStyle}"
+                                    Background="#1E293B" Foreground="#CBD5E1"
+                                    FontSize="12" FontWeight="Bold"/>
+
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="66"/>
@@ -750,7 +762,7 @@
                                  티칭 화면까지 가서 포인트를 고르고 [현재값 적용] → [저장] 하는 길이
                                  이미 있지만, 정렬을 맞추는 동안에는 눈이 이 화면에 붙어 있다. -->
                             <Button Command="{Binding SaveCurrentAsMark1Command}"
-                                    Content="Teach Mark1 Here"
+                                    Content="(Save)Teach Mark1 Here"
                                     Height="34" Margin="0,8,0,0"
                                     Style="{StaticResource MutedActionButtonStyle}"
                                     Background="#1E3A5F" Foreground="White"

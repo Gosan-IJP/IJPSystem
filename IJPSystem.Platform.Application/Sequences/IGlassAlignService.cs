@@ -1,5 +1,7 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
+using IJPSystem.Platform.Domain.Models.Vision;   // VisionImage — 잰 사진을 화면으로 흘려 줄 때
 
 namespace IJPSystem.Platform.Application.Sequences
 {
@@ -35,6 +37,16 @@ namespace IJPSystem.Platform.Application.Sequences
         bool IsEnabled { get; }
 
         /// <summary>마크1 자리(티칭 포인트)로 이동. T 를 포함한 전 축이 티칭 값으로 간다 — 시작 기준을 잡는 자리다.</summary>
+        /// <summary>
+        /// 새 판을 시작한다 — 앞 판의 오차 기록을 지운다.
+        ///
+        /// <para>정렬은 "보정 뒤 오차가 줄었는가"로 교정 부호가 맞는지 판정한다. 앞 판의
+        /// 오차가 남아 있으면 새 글라스의 첫 측정을 남의 값과 견주게 된다. 예전에는
+        /// <see cref="MoveToMark1Async"/> 가 이 일을 겸했는데, 그 이동을 내지 않는 경로가
+        /// 생기면서(글라스 화면 [Auto Align]) 지우는 자리를 따로 뒀다.</para>
+        /// </summary>
+        void BeginRun();
+
         Task<string> MoveToMark1Async(CancellationToken ct);
 
         /// <summary>
@@ -133,6 +145,85 @@ namespace IJPSystem.Platform.Application.Sequences
         private static void Raise(bool running)
         {
             try { RunningChanged?.Invoke(running); } catch { }
+        }
+
+        // ── 지금 재고 있는가 ──────────────────────────────────────────────
+        //
+        // 정렬이 마크를 <b>재는 순간</b>에는 그 카메라를 보는 다른 화면이 비켜야 한다.
+        // 소비자가 하나뿐이어야 "그 사진이 라이브와 겹친 것 아니냐"를 나중에 따질 일이 없다.
+        //
+        // 글라스 화면은 자기 안에서 잠금(HoldLiveForCapture)을 걸어 해결했지만, 같은 카메라를
+        // 보는 창이 <b>화면 밖에도</b> 생겼다(대시보드 GVC 팝업). 그쪽은 GlassViewModel 을
+        // 들고 있지 않으므로, 정렬이 재는 중이라는 사실을 여기 한 곳에서 알려야 한다.
+        //
+        // <see cref="IsRunning"/> 과 나누는 이유: 한 판은 20초가 넘는데 그동안 라이브를 세우면
+        // 마크가 시야로 들어오는지 볼 수가 없다. 비켜 주는 것은 <b>찍는 순간</b>뿐이다.
+
+        private static int _capturing;
+
+        /// <summary>정렬이 지금 사진을 찍고 있는가. 같은 카메라를 보는 라이브는 이 동안 건너뛴다.</summary>
+        public static bool Capturing => System.Threading.Volatile.Read(ref _capturing) > 0;
+
+        /// <summary>찍는 동안을 감싼다 — <c>using var _ = GlassAlignServices.BeginCapture();</c></summary>
+        public static IDisposable BeginCapture() => new CaptureScope();
+
+        private sealed class CaptureScope : IDisposable
+        {
+            private int _done;
+
+            public CaptureScope() => System.Threading.Interlocked.Increment(ref _capturing);
+
+            public void Dispose()
+            {
+                if (System.Threading.Interlocked.Exchange(ref _done, 1) == 0)
+                    System.Threading.Interlocked.Decrement(ref _capturing);
+            }
+        }
+
+        // ── 잰 사진을 화면으로 ────────────────────────────────────────────
+        //
+        // 정렬이 재는 동안 라이브는 비켜 서 있다. 그 사이 화면에 남는 것은 <b>직전에 받은</b>
+        // 프레임인데, 이동 직후라면 그것이 이동 중에 찍힌 얼룩진 그림이다(노출 15ms 에
+        // 순항속도면 한 장이 화면 높이 전체를 훑는다). 정지했는데 화면은 아직 흐른다.
+        //
+        // 그래서 정렬이 <b>실제로 쓴 그 사진</b>을 그대로 흘려 준다. 화면은 잠금이 풀리기 전에
+        // 정지 후의 그림으로 바뀌고, 덤으로 "매칭이 무엇을 보고 그 점수를 냈는지"가 남는다.
+        //
+        // 구독자는 UI 스레드가 아닐 수 있다. 그리고 <b>즉시</b> 자기 것으로 복사해야 한다.
+
+        /// <summary>정렬이 마크를 잰 사진. 8비트 그레이.</summary>
+        public static event Action<VisionImage>? FrameMeasured;
+
+        /// <summary>구독자가 던져도 정렬을 세우지 않는다 — 화면 갱신 실패가 장비를 멈출 이유는 없다.</summary>
+        public static void PublishMeasuredFrame(VisionImage img)
+        {
+            try { FrameMeasured?.Invoke(img); } catch { }
+        }
+
+        // ── 한 번 재고 난 결과 ────────────────────────────────────────────
+        //
+        // 대시보드 시각화가 정렬 카메라를 <b>실제 사건</b>에 맞춰 그리기 위한 신호다.
+        // 타이머로 깜빡이면 그림이 거짓말을 한다 — 몇 번 찍었는지, 그 판이 잘 잡혔는지를
+        // 화면이 말해 줘야 로그를 안 열고도 상태를 안다.
+
+        /// <summary>한 번 잰 결과. 색으로 구분할 만큼만 나눈다.</summary>
+        public enum MarkVerdict
+        {
+            /// <summary>찾았고 점수도 무난하다.</summary>
+            Good,
+            /// <summary>찾긴 했는데 마크1 보다 점수가 크게 낮다 — 이 판의 각도는 그만큼만 믿는다.</summary>
+            Weak,
+            /// <summary>못 찾았거나 위치를 믿을 수 없다.</summary>
+            NotFound,
+        }
+
+        /// <summary>마크를 한 번 쟀다. 구독자는 UI 스레드가 아닐 수 있다.</summary>
+        public static event Action<MarkVerdict>? MarkMeasured;
+
+        /// <summary>구독자가 던져도 정렬을 세우지 않는다.</summary>
+        public static void PublishMarkMeasured(MarkVerdict verdict)
+        {
+            try { MarkMeasured?.Invoke(verdict); } catch { }
         }
     }
 }

@@ -42,7 +42,7 @@ namespace IJPSystem.Tests
             public List<CameraStatus> GetAllStatus() =>
                 Assigned.Select(GetStatus).ToList();
 
-            public Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true)
+            public Task<VisionImage> CaptureAsync(string cameraId, bool saveToDisk = true, int timeoutMs = 0)
             {
                 Captured.Add(cameraId);
                 // FilePath 에 드라이버 키를 실어 어느 드라이버가 처리했는지 확인한다.

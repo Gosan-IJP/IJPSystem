@@ -40,5 +40,30 @@
     <Resource Include="Images\logo.png" />
   </ItemGroup>
 
+  <!-- ── x86 apphost 에 LARGE_ADDRESS_AWARE 를 세운다 ────────────────────────────
+       이 앱은 win-x86 로 나간다(ComiEcatSdk.dll 이 32비트). 그런데 .NET SDK 의 x86
+       apphost 는 이 플래그를 켜 주지 않아서, 64비트 Windows 위에서도 주소공간이
+       2GB 로 잘린다. 켜면 4GB 다.
+
+       2026-09-03 실장에서 오토런 도중 WPF 네이티브 할당이 실패해(0x80070008 in
+       GlyphTypeface.GlyphMetrics) 렌더 스레드가 죽었다. 관리 힙이 부족했다면
+       OutOfMemoryException 이 났을 것이다 — 네이티브가 못 잡았다는 건 주소공간이
+       없다는 뜻이었고, 원인이 이 2GB 천장이었다.
+
+       MSBuild 에 이걸 켜는 속성이 없어 발행 후 PE 헤더를 직접 고치는 수밖에 없다.
+       손으로 하면 반드시 잊으므로 빌드에 붙여 둔다. 실패하면 빌드를 세운다 —
+       조용히 넘어가면 다시 2GB 짜리가 실장에 나간다. -->
+  <Target Name="SetLargeAddressAware" AfterTargets="Build;Publish"
+          Condition="'$(OS)' == 'Windows_NT'">
+    <ItemGroup>
+      <!-- $(TargetFileName) 은 .dll 이다(.NET Core). 주소공간 천장을 정하는 것은
+           <b>apphost 실행 파일</b>이므로 .exe 를 집어야 한다. IL 어셈블리(.dll)도
+           Machine=0x014C 라 스크립트의 32비트 판정만으로는 걸러지지 않는다. -->
+      <_LaaTarget Include="$(TargetDir)$(AssemblyName).exe" Condition="Exists('$(TargetDir)$(AssemblyName).exe')" />
+      <_LaaTarget Include="$(PublishDir)$(AssemblyName).exe" Condition="'$(PublishDir)' != '' And Exists('$(PublishDir)$(AssemblyName).exe')" />
+    </ItemGroup>
+    <Exec Command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\Tools\Build\Set-LargeAddressAware.ps1&quot; -Path &quot;%(_LaaTarget.FullPath)&quot;"
+          Condition="'@(_LaaTarget)' != ''" />
+  </Target>
 
 </Project>

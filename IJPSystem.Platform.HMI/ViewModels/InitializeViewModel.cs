@@ -224,6 +224,18 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 AddExecLog("⏹ 중단됨");
                 _mainVM.AddLog("[SEQ] Initialize — 중단", LogLevel.Warning);
             }
+            catch (Services.ServoOnFailedException ex)
+            {
+                // 서보가 안 켜진 것은 프로그램이 아니라 드라이버 쪽 문제다 — 조치가 다르므로
+                // 일반 실패(SEQ-INIT-FAIL, "로그 확인 후 재시작")와 나눠서 알린다.
+                MarkRunningStepAs(StepStatus.Failed);
+                IsError = true;
+                CurrentStepName = "SERVO ON FAIL";
+                _machine.SetSystemStatus(MachineState.Alarm);
+                AddExecLog($"❌ {ex.Message}");
+                _mainVM.AddLog($"[SEQ] Initialize — {ex.Message}", LogLevel.Error);
+                _mainVM.AlarmVM.RaiseAlarm("MOT-SERVO-ON-FAIL", ex.AxisNames);
+            }
             catch (TimeoutException ex)
             {
                 MarkRunningStepAs(StepStatus.Failed);

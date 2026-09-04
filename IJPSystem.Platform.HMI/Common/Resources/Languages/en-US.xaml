@@ -41,7 +41,6 @@
     <!-- Buttons — Waveform -->
     <system:String x:Key="Btn_Load">Load</system:String>
     <system:String x:Key="Btn_Save">Save</system:String>
-    <system:String x:Key="Btn_ApplyToRecipe">Apply to Recipe</system:String>
 
     <!-- Buttons — I/O Monitor -->
     <system:String x:Key="Btn_Set">SET</system:String>

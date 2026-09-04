@@ -68,7 +68,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // ActiveSwath 는 하단 네비게이터 표시에 바인딩되므로 값 변경 시 알림(반응형).
         private int _activeSwath = 1;
         public int ActiveSwath { get => _activeSwath; private set => SetProperty(ref _activeSwath, value); }
-        public double ActiveHeadLength { get; private set; } = 0;
+        /// <summary>
+        /// 활성 레시피의 스와스 간격[mm] = 노즐 피치 × 열당 노즐 수 × 칩 수.
+        ///
+        /// <para><b>Recipes.HeadLength 가 아니다</b>(2026-09-03 사용자 결정). 건너뛰는 거리는
+        /// 노즐이 실제로 덮은 폭이어야 하는데, [헤드 길이]는 사양서 치수라 헤드를 바꾸면
+        /// 둘이 어긋난다. 화면의 [총 노즐 수] 옆에 같은 값이 떠 있다 — 두 곳이 같은 식을 쓴다.</para>
+        /// </summary>
+        public double ActiveSwathPitchMm { get; private set; } = 0;
 
         // 활성 레시피의 프린팅 방향(0=단방향, 1=양방향). 하단 상태바 표기 + 오토프린트 시퀀스 생성에 사용.
         private int _activePrintDirection = 1;   // 기본 양방향(현행 동작)
@@ -113,7 +120,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _activePointsSnapshot.Clear();
             _activeMotionConfigSnapshot.Clear();
             ActiveSwath = 1;
-            ActiveHeadLength = 0;
+            ActiveSwathPitchMm = 0;
             ActivePrintDirection = 1;
             ActiveAutoAlign = 0;
             OnPropertyChanged(nameof(ActivePrintDirectionText));
@@ -125,11 +132,21 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 using var db = new SqliteConnection(_dbPath);
                 db.Open();
 
-                // 프린팅수(Swath) / 헤드길이 — 활성 레시피 기준
+                // 프린팅수(Swath) / 스와스 간격 — 활성 레시피 기준.
+                // 간격은 저장된 HeadLength 가 아니라 노즐 피치 × 총 노즐 수로 계산한다
+                // (SwathPitchMm 과 같은 식 — 화면과 시퀀스가 갈리면 안 된다).
                 ActiveSwath = db.QueryFirstOrDefault<int?>(
                     "SELECT Swath FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 1;
-                ActiveHeadLength = db.QueryFirstOrDefault<double?>(
-                    "SELECT HeadLength FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 0;
+
+                var head = db.QueryFirstOrDefault(
+                    "SELECT NozzlePitchUm, HeadNozzlesPerRow, HeadChipCount FROM Recipes WHERE Name=@recipe",
+                    new { recipe = _activeRecipeName });
+                double pitchUm = head?.NozzlePitchUm      is null ? 0 : Convert.ToDouble(head.NozzlePitchUm);
+                int    perRow  = head?.HeadNozzlesPerRow  is null ? 0 : Convert.ToInt32(head.HeadNozzlesPerRow);
+                int    chips   = head?.HeadChipCount      is null ? 1 : Convert.ToInt32(head.HeadChipCount);
+                ActiveSwathPitchMm = pitchUm > 0 && perRow > 0
+                    ? pitchUm * perRow * Math.Max(1, chips) / 1000.0
+                    : 0;
                 ActivePrintDirection = db.QueryFirstOrDefault<int?>(
                     "SELECT PrintDirection FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 1;
                 ActiveAutoAlign = db.QueryFirstOrDefault<int?>(
@@ -406,7 +423,18 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public double NozzlePitchUm
         {
             get => _nozzlePitchUm;
-            set { if (SetProperty(ref _nozzlePitchUm, Math.Max(0, value)) && !_isLoading) IsDirty = true; }
+            set
+            {
+                if (SetProperty(ref _nozzlePitchUm, Math.Max(0, value)) && !_isLoading) IsDirty = true;
+                RaiseSwathChanged();
+            }
+        }
+
+        /// <summary>스와스 간격을 이루는 값(피치·열당 노즐 수·칩 수) 중 하나가 바뀌면 부른다.</summary>
+        private void RaiseSwathChanged()
+        {
+            OnPropertyChanged(nameof(SwathPitchMm));
+            OnPropertyChanged(nameof(SwathHint));
         }
 
         public int[] NozzleRowOptions { get; } = { 1, 2, 3, 4 };
@@ -447,6 +475,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 if (SetProperty(ref _nozzlesPerRow, Math.Max(0, value)) && !_isLoading) IsDirty = true;
                 OnPropertyChanged(nameof(NozzleCountHint));
+                RaiseSwathChanged();
             }
         }
 
@@ -465,6 +494,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 if (SetProperty(ref _chipCount, Math.Clamp(value, 1, 4)) && !_isLoading) IsDirty = true;
                 OnPropertyChanged(nameof(NozzleCountHint));
+                RaiseSwathChanged();
             }
         }
 
@@ -511,135 +541,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
-        // ── 웨이브폼 정보 (표시 전용) ────────────────────────────────────
-        // [웨이브폼] 화면에서 [레시피에 적용]을 누르면 파형 파일 경로가 이 레시피에 적힌다.
-        // 여기서는 그 결과만 보여 준다 — 고칠 수 있게 하면 같은 파형을 두 화면에서 고치게 되고,
-        // 어느 쪽이 헤드로 내려간 값인지 알 수 없어진다.
-
-        private string _waveformFileName = "";
-        /// <summary>레시피에 적용된 파형 파일의 베이스명(확장자 없음). 지정 전이면 빈 문자열.</summary>
-        public string WaveformFileName
-        {
-            get => _waveformFileName;
-            private set
-            {
-                if (SetProperty(ref _waveformFileName, value))
-                    OnPropertyChanged(nameof(HasWaveformFile));
-            }
-        }
-
-        /// <summary>파형이 지정되어 있나. 아니면 안내문을 대신 띄운다.</summary>
-        public bool HasWaveformFile => !string.IsNullOrEmpty(_waveformFileName);
-
-        private string _waveformFullPath = "";
-        /// <summary>파형 파일의 전체 경로(확장자 없는 베이스 경로). 툴팁으로만 보여 준다.</summary>
-        public string WaveformFullPath
-        {
-            get => _waveformFullPath;
-            private set => SetProperty(ref _waveformFullPath, value);
-        }
-
-        private bool _isWaveformMissing;
-        /// <summary>레시피에는 적혀 있는데 파일이 없다 — 폴더째 옮겼거나 지운 경우다.</summary>
-        public bool IsWaveformMissing
-        {
-            get => _isWaveformMissing;
-            private set => SetProperty(ref _isWaveformMissing, value);
-        }
-
-        private string _waveformHeadType = "-";
-        /// <summary>파형 파일에 적힌 헤드 종류. 헤드명과 다르면 다른 헤드용 파형이다.</summary>
-        public string WaveformHeadType
-        {
-            get => _waveformHeadType;
-            private set => SetProperty(ref _waveformHeadType, value);
-        }
-
-        private string _waveformPulseText = "-";
-        /// <summary>ComA / ComB 펄스 개수.</summary>
-        public string WaveformPulseText
-        {
-            get => _waveformPulseText;
-            private set => SetProperty(ref _waveformPulseText, value);
-        }
-
-        private string _waveformVstText = "-";
-        /// <summary>대기 전압(Vst).</summary>
-        public string WaveformVstText
-        {
-            get => _waveformVstText;
-            private set => SetProperty(ref _waveformVstText, value);
-        }
-
-        private string _waveformDurationText = "-";
-        /// <summary>한 주기 길이(두 채널 중 긴 쪽).</summary>
-        public string WaveformDurationText
-        {
-            get => _waveformDurationText;
-            private set => SetProperty(ref _waveformDurationText, value);
-        }
-
-        private string _waveformGreyLevelText = "-";
-        /// <summary>펄스가 배정된 계조. 여기 없는 계조로 쏘면 아무것도 나오지 않는다.</summary>
-        public string WaveformGreyLevelText
-        {
-            get => _waveformGreyLevelText;
-            private set => SetProperty(ref _waveformGreyLevelText, value);
-        }
-
-        /// <summary>
-        /// 레시피에 적힌 파형 파일을 읽어 요약값을 채운다. 표시 전용이라 실패해도
-        /// 레시피 로드를 막지 않는다 — 값이 '-' 로 남고 파일 없음만 표시된다.
-        /// </summary>
-        public void LoadWaveformInfo(string recipeName)
-        {
-            string? basePath = GetWaveformPath(recipeName);
-
-            WaveformFullPath = basePath ?? "";
-            WaveformFileName = string.IsNullOrWhiteSpace(basePath)
-                ? "" : Path.GetFileName(basePath!);
-
-            ClearWaveformSummary();
-            if (string.IsNullOrWhiteSpace(basePath)) { IsWaveformMissing = false; return; }
-
-            string comAPath = basePath + ".ComA";
-            string comBPath = basePath + ".ComB";
-            if (!File.Exists(comAPath)) { IsWaveformMissing = true; return; }
-
-            IsWaveformMissing = false;
-
-            try
-            {
-                var comA = WaveformParser.Parse(comAPath);
-                var comB = File.Exists(comBPath) ? WaveformParser.Parse(comBPath) : null;
-                var doc  = Print.WaveformDocumentBuilder.Build(comA, comB, WaveformFileName);
-
-                WaveformHeadType     = string.IsNullOrWhiteSpace(doc.HeadType) ? "-" : doc.HeadType;
-                WaveformPulseText    = $"A {doc.ComA.Pulses.Count} / B {doc.ComB.Pulses.Count}";
-                WaveformVstText      = doc.Vst.ToString("F1") + " V";
-                WaveformDurationText = Math.Max(doc.ComA.TotalTimeUs, doc.ComB.TotalTimeUs).ToString("F2") + " µs";
-
-                var used = Enumerable.Range(0, Infrastructure.Print.Waveform.GreyLevelMatrix.Levels)
-                                     .Where(gl => doc.GreyLevels.HasAnyPulse(gl))
-                                     .Select(gl => "GL" + gl)
-                                     .ToList();
-                WaveformGreyLevelText = used.Count > 0 ? string.Join(" · ", used) : "없음";
-            }
-            catch (Exception ex)
-            {
-                ClearWaveformSummary();
-                _addLogAction?.Invoke($"[RECIPE] 파형 정보 읽기 실패: {ex.Message}", LogLevel.Warning);
-            }
-        }
-
-        private void ClearWaveformSummary()
-        {
-            WaveformHeadType      = "-";
-            WaveformPulseText     = "-";
-            WaveformVstText       = "-";
-            WaveformDurationText  = "-";
-            WaveformGreyLevelText = "-";
-        }
+        // 웨이브폼 요약(표시 전용)은 뺐다(2026-09-03 사용자 결정). 헤드는 레시피가 아니라
+        // Meteor cfg 의 WaveformFileIdx 로 파형을 고르므로, 이 카드는 헤드가 실제로 쓰는 값이
+        // 아니면서 권위 있어 보였다. 파형 편집·적용은 [웨이브폼] 화면이 맡는다 —
+        // GetWaveformPath / SetWaveformPath 는 그 화면이 쓰므로 남겨 둔다.
 
         private int _nozzleCount;
         /// <summary>헤드 전체 노즐 수.</summary>
@@ -652,6 +557,30 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 OnPropertyChanged(nameof(NozzleCountHint));
             }
         }
+
+        /// <summary>
+        /// 스와스 간격[mm] = 노즐 피치 × <b>열당</b> 노즐 수 × 칩 수.
+        ///
+        /// <para><b>왜 헤드 길이가 아닌가</b>(2026-09-03 사용자 결정): 인쇄 한 판을 끝내고 X 로
+        /// 건너뛰는 거리는 <b>노즐이 실제로 덮은 폭</b>이어야 한다. [헤드 길이]는 그 폭이 아니라
+        /// 헤드 사양서의 치수라, 헤드를 바꾸면 둘이 어긋나고 이음매가 벌어지거나 겹친다.</para>
+        ///
+        /// <para><b>왜 총 노즐 수가 아니라 열당인가</b>: 열이 둘이면 두 열은 <b>같은 구간</b>을
+        /// 반 피치씩 엇갈려 덮는다 — 해상도가 두 배가 될 뿐 폭은 그대로다. 총 노즐 수를 곱하면
+        /// 실제 폭의 두 배가 나오고, 스와스마다 절반씩 빈 줄이 생긴다(S800 = 67.76 vs 33.88mm).</para>
+        ///
+        /// <para>칩 수는 곱한다 — 칩은 열과 달리 <b>옆으로 이어 붙어</b> 폭을 늘린다. 다만 칩
+        /// 경계의 겹침 노즐은 빼지 않으므로, 칩 헤드(S3200)에서는 이 값이 실제보다 조금 크다
+        /// (4칩 기준 약 15mm). 칩 헤드를 실제로 쓰게 되면 <c>ChipHeadLayout.PrintWidthUm</c> 로
+        /// 갈아탈 것 — 그쪽은 겹침까지 계산한다.</para>
+        /// </summary>
+        public double SwathPitchMm =>
+            NozzlePitchUm * NozzlesPerRow * Math.Max(1, ChipCount) / 1000.0;
+
+        /// <summary>[열당 노즐 수] 옆에 붙는 안내 — 이 값이 정하는 스와스 간격.</summary>
+        public string SwathHint => SwathPitchMm > 0
+            ? $"칩 하나의 한 열 · 스와스 {SwathPitchMm:F3} mm"
+            : "칩 하나의 한 열 (S3200 = 400)";
 
         /// <summary>
         /// 레시피에서 읽은 헤드 사양을 화면에 채운다. 레시피에 값이 없으면(옛 레시피)
@@ -1098,39 +1027,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
-        public string? GetWaveformPath(string recipeName)
-        {
-            try
-            {
-                using var db = new SqliteConnection(_dbPath);
-                db.Open();
-                return db.QueryFirstOrDefault<string>(
-                    "SELECT WaveformBasePath FROM Recipes WHERE Name = @recipeName",
-                    new { recipeName });
-            }
-            catch { return null; }
-        }
-
-        public void SetWaveformPath(string recipeName, string fullBasePath)
-        {
-            try
-            {
-                using var db = new SqliteConnection(_dbPath);
-                db.Open();
-                db.Execute(
-                    "UPDATE Recipes SET WaveformBasePath = @path WHERE Name = @recipeName",
-                    new { path = fullBasePath, recipeName });
-                _addLogAction?.Invoke($"[RECIPE] {recipeName} — 웨이브폼 경로 저장: {System.IO.Path.GetFileName(fullBasePath)}", LogLevel.Info);
-            }
-            catch (Exception ex)
-            {
-                _addLogAction?.Invoke($"[RECIPE] 웨이브폼 경로 저장 실패: {ex.Message}", LogLevel.Error);
-            }
-
-            // 레시피 화면이 이미 그 레시피를 열어 두고 있으면 바로 다시 읽는다 —
-            // 화면을 나갔다 들어와야 바뀌면 적용이 안 된 것으로 보인다.
-            if (recipeName == SelectedRecipeName) LoadWaveformInfo(recipeName);
-        }
+        // 레시피↔파형 링크(WaveformBasePath)는 걷어냈다(2026-09-04 사용자 결정).
+        // 쓰는 곳도 읽는 곳도 [웨이브폼] 화면 하나뿐인 닫힌 고리였고, 헤드는 그 값이 아니라
+        // Meteor cfg 의 WaveformFileIdx 로 파형을 고른다 — 링크가 있으면 이 레시피의 파형이
+        // 사실인 것처럼 보인다. Recipes.WaveformBasePath 컬럼은 옛 레시피 호환으로 남겨 두되
+        // 아무도 읽지 않는다.
 
         private void LoadActiveRecipeOnStartup()
         {
@@ -1212,9 +1113,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 // 활성 레시피를 불러왔을 때만 장비에 비춘다. 편집하려고 다른 레시피를 열어 본 것만으로
                 // 토출·노즐 선택이 그 헤드로 바뀌면, 보기만 했는데 장비가 따라 움직이는 셈이 된다.
                 if (recipeName == ActiveRecipeName) ApplyHeadSpecToMachine();
-
-                // 파형은 레시피에 경로만 적혀 있다 — 화면에 보이는 요약은 그 파일에서 읽는다.
-                LoadWaveformInfo(recipeName);
 
                 LoadTeachingPoints(recipeName);
 

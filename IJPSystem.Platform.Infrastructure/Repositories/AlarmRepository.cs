@@ -98,7 +98,7 @@ namespace IJPSystem.Platform.Infrastructure.Repositories
             }
         }
 
-        // 임베디드 SQL 시드(82행)를 적재. INSERT OR IGNORE이므로 재실행 안전.
+        // 임베디드 SQL 시드(83행)를 적재. INSERT OR IGNORE이므로 재실행 안전.
         private static void ApplyEmbeddedSeed(SqliteConnection conn)
         {
             var asm = Assembly.GetExecutingAssembly();

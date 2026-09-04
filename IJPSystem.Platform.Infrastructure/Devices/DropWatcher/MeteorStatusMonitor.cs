@@ -179,10 +179,16 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
                         }
                         else
                         {
-                            // 엔진 미실행/점유중 — 뺏지 않고 사유만 표시
+                            // 엔진 미실행/점유중 — 뺏지 않고 사유만 표시.
+                            //
+                            // ★ 여기서 DHCP 를 말하지 않는다. PiOpenPrinter 는 <b>엔진 프로세스</b>에
+                            //   붙는 호출이라 PCC 와 무관하다 — DHCP 는 엔진이 뜬 <b>뒤</b>에 PCC 가
+                            //   주소를 받느냐의 문제이고, 그때는 아래의 "PCC 미부착 n/m" 이 뜬다.
+                            //   두 단계를 한 문장에 뭉쳐 놨더니 엔진이 안 떴는데 DHCP 를 보러 갔다
+                            //   (실장 2026-09-02).
                             res.Detail = ro == eRET.RVAL_CLAIMED
-                                ? "헤드 점유중(다른 앱)"
-                                : "헤드(Meteor) 엔진 미실행 — DHCP 서버·엔진 확인";
+                                ? "헤드 점유중(다른 앱) — Meteor 도구·LabVIEW 를 닫으세요"
+                                : "Meteor PrintEngine 이 떠 있지 않습니다 — [엔진 시작] 을 누르세요";
                             return res;
                         }
                     }
@@ -212,9 +218,11 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
                         res.Pccs = ReadPccs(st);
                         res.Hdcs = ReadHdcs(res.Pccs);
 
+                        // 엔진은 떴다 — 여기서부터가 네트워크 문제다. 어디를 봐야 하는지 같이 적는다.
                         res.Detail = res.Connected
                             ? $"PCC {st.PccsAttached}/{st.PccsRequired} · {st.PrinterState} · HeadPower {st.HeadPowerState}"
-                            : $"PCC 미부착 {st.PccsAttached}/{st.PccsRequired} · {st.PrinterState}";
+                            : $"PCC 미부착 {st.PccsAttached}/{st.PccsRequired} · {st.PrinterState}" +
+                              " — 어댑터 이름·DHCP 서버를 확인하세요";
                     }
                     else
                     {
@@ -241,6 +249,48 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         }
 
         /// <summary>
+        /// PrintEngine 을 띄운다. 폴링과 같은 자물쇠 안에서 돈다 — 같은 API 를 두 스레드가
+        /// 부르면 안 된다.
+        ///
+        /// <para>이미 떠 있으면 <c>PiStartPrintEngine</c> 이 그 사실을 돌려주므로 굳이 미리
+        /// 확인하지 않는다. 다음 폴에서 <c>PiOpenPrinter</c> 가 붙는다.</para>
+        /// </summary>
+        public (bool Ok, string Message) StartEngine(string configPath)
+        {
+            lock (_io)
+            {
+                if (_unavailable) return (false, "헤드(Meteor) 미탑재 — 시작할 엔진이 없습니다.");
+                if (string.IsNullOrWhiteSpace(configPath))
+                    return (false, "엔진 설정(.cfg) 경로가 비어 있습니다 — AppConfig 의 MeteorConfigPath 를 확인하세요.");
+                if (!System.IO.File.Exists(configPath))
+                    return (false, $"엔진 설정을 찾지 못했습니다: {configPath}");
+
+                try
+                {
+                    EnsureNativeDir();
+
+                    var r = PrinterInterfaceCLS.PiStartPrintEngine(configPath);
+                    if (r != eRET.RVAL_OK)
+                        return (false, $"PiStartPrintEngine 실패({r}) — cfg 의 [Ethernet] 어댑터 이름이 " +
+                                       "Windows 네트워크 연결 이름과 같은지 확인하세요.");
+
+                    // 여기서 PiOpenPrinter 까지 하지 않는다 — 붙는 일은 폴링이 자기 순서에 한다.
+                    // (엔진이 설정을 읽고 자리를 잡을 시간이 필요하다)
+                    return (true, "PrintEngine 시작 요청 — 잠시 뒤 상태가 올라옵니다.");
+                }
+                catch (DllNotFoundException)
+                {
+                    _unavailable = true;
+                    return (false, "네이티브 PrinterInterface.dll 을 찾지 못했습니다 — Meteor SDK 설치를 확인하세요.");
+                }
+                catch (Exception ex)
+                {
+                    return (false, $"엔진 시작 실패: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
         /// PCC 별 상태를 읽는다. 실패해도 프린터 상태 자체는 이미 읽었으므로 조용히 건너뛴다
         /// — 여기서 예외가 나가면 상태바가 통째로 "미연결"이 된다.
         /// </summary>
@@ -261,7 +311,17 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
                         Number              = i,
                         StatusBits          = unchecked((uint)p.bmStatusBits),
                         StatusBits2         = unchecked((uint)p.bmStatusBits2),
-                        FaultRegister       = unchecked((uint)p.FaultRegister),
+                        // SDK 4.9 에서 이름이 FaultRegister → FaultRegister_obsolete 로 바뀌었다
+                        // (문서: "@deprecated Use TAppHeadStatus::FaultRegister").
+                        //
+                        // 그래도 이 값을 계속 읽는 이유: 헤드 쪽 대체 필드는 TAppHeadStatus.FaultRegBits 인데
+                        // 배치가 다르다(하위 16비트=DataPath A, 상위 16비트=B). 지금 PccFaultDecoder 는
+                        // PCC 레지스터 배치(헤드 6개 × 4비트 + PLL)를 푸는 것이라, 그 값을 그대로 넣으면
+                        // <b>엉뚱한 폴트 이름</b>이 화면에 뜬다. 비트 뜻을 실물로 확인하기 전에는 옮기지 않는다.
+                        //
+                        // ★실장 확인거리: 헤드는 폴트를 보고하는데 여기가 늘 0 이면, 4.9 가 이 필드를
+                        //   더는 채우지 않는 것이다 — 그때 FaultRegBits 용 디코더를 새로 만든다.
+                        FaultRegister       = unchecked((uint)p.FaultRegister_obsolete),
                         PdCount             = p.PdCount,
                         PrintCount          = p.PrintCount,
                         EncoderCount        = p.EncoderCount,
@@ -323,12 +383,22 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         }
 
         /// <summary>PCC 가 받은 IPv4 주소. 0 이면 주소를 못 받은 것이라 빈 문자열로 둔다.</summary>
+        /// <summary>
+        /// PCC 가 받은 IPv4 를 사람이 읽는 표기로.
+        ///
+        /// <para><b>낮은 바이트가 첫 옥텟이다.</b> SDK 는 주소를 네트워크 바이트 순서로 담아
+        /// 리틀엔디안 <c>int</c> 로 넘긴다 — 그래서 <c>v &amp; 0xFF</c> 가 <c>192</c> 다.</para>
+        ///
+        /// <para>예전에는 높은 바이트부터 읽어서 11호기 화면에 <c>2.2.168.192</c> 가 떴다
+        /// (2026-09-04). 실제 주소는 <c>192.168.2.2</c> — DHCP 서버의 ACK(yiaddr)와 엔진 로그의
+        /// <c>PCC-E client [192.168.2.2]</c> 가 둘 다 그렇게 말한다. 정확히 뒤집힌 값이었다.</para>
+        /// </summary>
         private static string IpText(int addr)
         {
             if (addr == 0) return "";
 
             uint v = unchecked((uint)addr);
-            return $"{v >> 24 & 0xFF}.{v >> 16 & 0xFF}.{v >> 8 & 0xFF}.{v & 0xFF}";
+            return $"{v & 0xFF}.{v >> 8 & 0xFF}.{v >> 16 & 0xFF}.{v >> 24 & 0xFF}";
         }
 
         /// <summary>엔진이 보고 있는 PCC 번호 목록. 비어 있으면 DHCP·네트워크부터 볼 것.</summary>

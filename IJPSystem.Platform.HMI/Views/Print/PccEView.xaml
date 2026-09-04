@@ -273,6 +273,19 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Meteor PrintEngine 시작. 엔진이 붙어 있으면 스스로 꺼진다(CanStartEngine).
+                         노즐을 쏘는 명령이 아니라 엔진 프로세스를 올리고 cfg 를 읽히는 것뿐이라,
+                         Head Power 처럼 시퀀스를 거치게 하지 않고 여기 둔다. -->
+                    <Button Command="{Binding StartEngineCommand}"
+                            Width="120" Height="32" Margin="0,0,8,0"
+                            Style="{StaticResource MutedActionButtonStyle}"
+                            Background="#1E3A5F"
+                            ToolTip="Meteor PrintEngine 을 띄웁니다. 엔진이 떠야 PCC·헤드 상태를 읽을 수 있습니다.">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="▶" FontSize="12" Margin="0,0,7,0" VerticalAlignment="Center" Foreground="#60A5FA"/>
+                            <TextBlock Text="엔진 시작" FontSize="12" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button Command="{Binding RefreshCommand}"
                             Width="96" Height="32" Margin="0,0,8,0"
                             Style="{StaticResource MutedActionButtonStyle}"
@@ -661,7 +674,29 @@
                             <Border Style="{StaticResource PccCard}">
                                 <StackPanel>
                                     <TextBlock Text="CONNECTION" Style="{StaticResource PccSectionTitle}"/>
+
+                                    <!-- [엔진 시작] 결과. 실패 사유는 로그로만 흘리면 묻힌다. -->
+                                    <Border Background="#132033" BorderBrush="#1E3A5F" BorderThickness="1"
+                                            CornerRadius="6" Padding="10,7" Margin="0,0,0,10">
+                                        <Border.Style>
+                                            <!-- 기본은 보이게 두고 '빈 문자열일 때만' 숨긴다 —
+                                                 반대로 쓰면(기본 숨김 + 빈값 숨김) 영영 안 보인다. -->
+                                            <Style TargetType="Border">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding StartEngineResult}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Text="{Binding StartEngineResult}" TextWrapping="Wrap"
+                                                   Foreground="#93C5FD" FontSize="11"/>
+                                    </Border>
+
                                     <TextBlock Style="{StaticResource PccNote}">
+                                        <Run Text="엔진이 떠 있어야 아래가 의미가 있습니다 — 안 떠 있으면 위의 [엔진 시작] 을 먼저 누르세요."/>
+                                        <LineBreak/>
                                         <Run Text="PCC 가 붙지 않으면 대개 하드웨어가 아니라 다음 셋 중 하나입니다."/>
                                         <LineBreak/>
                                         <Run Text="① DHCP 서버가 떠 있지 않다 — PCC-E 는 IP 를 받아야 나타납니다(PCC 표의 IP 가 '주소 없음')."/>

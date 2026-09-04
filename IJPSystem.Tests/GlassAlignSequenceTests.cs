@@ -31,6 +31,10 @@ namespace IJPSystem.Tests
             public int VerifyOkFrom { get; set; } = 1;
             public int VerifyCount { get; private set; }
 
+            /// <summary>Calls 에 넣지 않는다 — 그 목록은 "무엇이 움직이고 찍혔나"만 담는다.</summary>
+            public int BeginRunCount { get; private set; }
+            public void BeginRun() => BeginRunCount++;
+
             public Task<string> MoveToMark1Async(CancellationToken ct) => Say("MoveMark1");
             // 복귀는 이동과 <b>다른 이름</b>으로 적는다 — 둘을 같은 이름으로 적으면 회전 뒤 복귀가
             // 다시 절대 이동(T 포함)으로 돌아가도 시험이 통과해 버린다.
@@ -63,8 +67,12 @@ namespace IJPSystem.Tests
             private Task<string> Say(string what) { Calls.Add(what); return Task.FromResult(what); }
         }
 
+        /// <summary>
+        /// 인쇄 시퀀스와 <b>같은 한 벌</b>(마크1 이동 포함). 아래 번호 시험이 전부 이것을 본다.
+        /// 글라스 화면 버튼은 마크1 이동을 빼는데, 그건 따로 시험한다.
+        /// </summary>
         private static IReadOnlyList<SequenceStepDef> Steps(IGlassAlignService? align)
-            => GlassAlignSequence.Build(null!, null!, align);
+            => GlassAlignSequence.Build(null!, null!, align, moveToMark1First: true);
 
         /// <summary>모션 대기 단계는 장비가 필요하다 — 여기서는 정렬 서비스가 하는 단계만 돌린다.</summary>
         private static async Task RunAlignStepsAsync(IReadOnlyList<SequenceStepDef> steps, params int[] numbers)
@@ -116,6 +124,46 @@ namespace IJPSystem.Tests
             await RunAlignStepsAsync(steps, 1, 2, 4, 5, 7);
 
             Assert.Equal(new[] { "MoveMark1", "Measure1", "MoveMark2", "Measure2" }, fake.Calls);
+        }
+
+        [Fact]
+        public void 화면_버튼은_마크1로_옮기지_않고_촬상부터_한다()
+        {
+            // 화면에서 누르는 사람은 이미 조그로 마크를 렌즈 밑에 놓았다. 거기서 다시
+            // GLASS ALIGN 절대 이동을 내면 맞춰 놓은 자리를 티칭값으로 덮어쓴다.
+            var screen = GlassAlignSequence.Build(null!, null!, new FakeAlign());
+            var names  = screen.Select(s => s.Name).ToList();
+
+            Assert.DoesNotContain("Step_GlassAlign_Mark1Move", names);
+            Assert.DoesNotContain("Step_GlassAlign_Mark1MoveDone", names);
+
+            // 나머지는 그대로다 — 준비 확인으로 시작해 마크1 촬상으로 이어진다.
+            Assert.Equal("Step_GlassAlign_Ready", names[0]);
+            Assert.Equal("Step_GlassAlign_Mark1Find", names[1]);
+            Assert.Equal(Enumerable.Range(1, screen.Count), screen.Select(s => s.Number));
+        }
+
+        [Fact]
+        public void 인쇄_시퀀스는_마크1로_옮기는_단계를_그대로_둔다()
+        {
+            // 여기서는 사람이 자리를 잡아 주지 않는다 — 스스로 가야 한다.
+            var names = GlassAlignSequence.Embedded(null!, new FakeAlign { IsEnabled = true }, 4)
+                                          .Select(s => s.Name).ToList();
+
+            Assert.Contains("Step_GlassAlign_Mark1Move", names);
+            Assert.Contains("Step_GlassAlign_Mark1MoveDone", names);
+        }
+
+        [Fact]
+        public async Task 판을_시작할_때_앞_판의_오차를_지운다()
+        {
+            // 안 지우면 새 글라스의 첫 측정을 앞 글라스의 오차와 견준다.
+            var fake = new FakeAlign();
+            var steps = Steps(fake);
+
+            await steps[0].Action(CancellationToken.None);
+
+            Assert.Equal(1, fake.BeginRunCount);
         }
 
         // ── 멈추는 조건 ──────────────────────────────────────────────────

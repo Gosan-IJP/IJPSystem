@@ -60,6 +60,40 @@ namespace IJPSystem.Tests
         }
 
         [Fact]
+        public void 실측_교정은_잰_그대로_되돌려준다()
+        {
+            // FromMoves 는 "스테이지를 이만큼 밀었더니 마크가 이만큼 갔다"를 담는다.
+            // 그러니 ToPx 에 같은 이동을 주면 <b>잰 픽셀이 그대로</b> 나와야 한다 —
+            // 뒤집힌 부호가 필요한 자리는 없다.
+            //
+            // 이걸 못 지키면 교정 확인이 예측을 정반대로 잡아, 잘 잰 교정을
+            // "예측과 어긋난다"며 버린다(실장 2026-08-31: 150µm 이동에 443px 어긋남).
+            // 카메라가 비스듬히 달려 축이 섞인 경우로 잡았다 — 부호만 맞으면 통과하는
+            // 나란한 배치로는 이 실수를 못 잡는다.
+            var k = PixelToStage.FromMoves(0.300, 280.0, -95.0,
+                                           0.322, 90.0, 305.0)!;
+
+            // 두 이동을 동시에 하면 픽셀 변화도 합이다(선형).
+            var (u, v) = k.ToPx(0.300, 0.322);
+
+            Assert.Equal(280.0 + 90.0, u, 6);
+            Assert.Equal(-95.0 + 305.0, v, 6);
+        }
+
+        [Fact]
+        public void 실측_교정의_두_방향은_서로의_역이다()
+        {
+            var k = PixelToStage.FromMoves(0.300, 280.0, -95.0,
+                                           0.322, 90.0, 305.0)!;
+
+            var (u, v) = k.ToPx(0.21, -0.13);
+            var (x, y) = k.ToMm(u, v);
+
+            Assert.Equal(0.21, x, 9);
+            Assert.Equal(-0.13, y, 9);
+        }
+
+        [Fact]
         public void 교정이_없으면_아무_계산도_하지_않는다()
         {
             var none = new PixelToStage();
@@ -877,12 +911,31 @@ namespace IJPSystem.Tests
             // 마크2 를 5.6mm(≈5000px) 밀어낸다 — 화면에 있을 수가 없는 값이었다.
             var lim = AlignLimits.ForCamera(Spec, 1280, 1024, 160);
 
-            Assert.InRange(lim.MaxShiftMm, 0.30, 0.50);
+            Assert.InRange(lim.MaxShiftMm, 0.60, 0.80);
             Assert.InRange(lim.MaxAngleDeg, 0.10, 0.20);
 
             // 한계까지 기울어도 마크2 는 화면 안이어야 한다 — 그러라고 시야에서 뽑았다.
             double markShiftMm = 160 * Math.Sin(lim.MaxAngleDeg * Math.PI / 180);
             Assert.True(markShiftMm <= 1024 * Spec / 2000.0, $"{markShiftMm:F3}mm 는 화면 밖이다");
+        }
+
+        [Fact]
+        public void 화면에서_찾을_수_있는_어긋남은_거절하지_않는다()
+        {
+            // 어긋남 한계는 마크를 <b>이미 찾은 뒤</b>에 걸린다. 찾았다는 것은 화면 안에
+            // 있다는 뜻이고, 기준으로 되돌리는 이동은 마크를 시야 안쪽으로 끌어오는 것이라
+            // 잃어버릴 수가 없다 — 볼 수 있으면 고칠 수 있다.
+            //
+            // 예전에는 각도와 같은 75% 를 써서, 화면에 멀쩡히 보이는 마크를 두고
+            // "너무 많이 벗어났습니다 — 글라스를 다시 놓으세요"로 세웠다(실장 2026-09-01).
+            var lim = AlignLimits.ForCamera(Spec, 1280, 1024, 150);
+
+            // 화면 안에서 기준으로부터 가장 멀리 떨어질 수 있는 거리 = 긴 변의 반.
+            double farthestInFrameMm = 1280 * Spec / 2000.0;
+
+            Assert.True(lim.MaxShiftMm >= farthestInFrameMm,
+                $"화면 안 {farthestInFrameMm:F3}mm 까지 보이는데 한계가 {lim.MaxShiftMm:F3}mm 라 " +
+                "보이는 마크를 거절한다");
         }
 
         /// <summary>

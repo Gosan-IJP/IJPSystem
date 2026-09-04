@@ -53,7 +53,7 @@ namespace IJPSystem.Platform.HMI
             DispatcherUnhandledException += (s, ev) =>
             {
                 ev.Handled = true; // 앱이 즉시 죽지 않게 막음
-                LoggerService.WriteToFile("FATAL", $"[UI thread] {ev.Exception}");
+                if (!LogFatalDeduped("[UI thread]", ev.Exception)) return;
 
                 // 같은 예외가 타이머 등에서 반복되면 창이 무한히 쌓이므로, 한 번에 하나만 표시.
                 if (_errorDialogOpen) return;
@@ -67,11 +67,12 @@ namespace IJPSystem.Platform.HMI
             };
             AppDomain.CurrentDomain.UnhandledException += (s, ev) =>
             {
-                LoggerService.WriteToFile("FATAL", $"[non-UI thread] {ev.ExceptionObject}");
+                if (ev.ExceptionObject is Exception ex) LogFatalDeduped("[non-UI thread]", ex);
+                else LoggerService.WriteToFile("FATAL", $"[non-UI thread] {ev.ExceptionObject}");
             };
             TaskScheduler.UnobservedTaskException += (s, ev) =>
             {
-                LoggerService.WriteToFile("FATAL", $"[Task] {ev.Exception}");
+                LogFatalDeduped("[Task]", ev.Exception);
                 ev.SetObserved();
             };
 
@@ -84,6 +85,10 @@ namespace IJPSystem.Platform.HMI
             {
                 // ① 현장 진단용 시작 배너 — 버전/비트수/관리자권한/OS (디버거 없이 환경 확인)
                 LogStartupBanner();
+
+                // 주소공간 감시 시작. 32비트라 천장이 낮고(2GB 또는 4GB), 거기에 닿으면
+                // WPF 렌더가 0x80070008 로 죽는다 — 터지기 전에 로그로 보이게 한다.
+                Common.MemoryWatchdog.Start();
 
                 var loader = new ConfigLoader();
 
@@ -351,6 +356,45 @@ namespace IJPSystem.Platform.HMI
             _          => new VirtualVisionDriver(),
         };
         private static string GetConfigPath(string fileName) => PathUtils.GetConfigPath(fileName);
+
+        // ── 같은 예외 반복 억제 ───────────────────────────────────────────────
+        // 2026-09-03 실장: 렌더 스레드가 죽자 같은 COMException 이 초당 12번 올라왔고,
+        // 한 번에 4KB 짜리 스택이 통째로 찍혔다. 20초 만에 로그가 이것만으로 찼고
+        // <b>첫 발생</b>이 그 안에 파묻혔다 — 원인을 찾을 때 가장 필요한 한 줄이었는데.
+        // 그래서 같은 예외(형식+첫 프레임)는 처음 한 번만 전체를 남기고, 뒤로는
+        // 주기적으로 횟수만 요약한다.
+        private static string _lastFatalKey = "";
+        private static int _lastFatalCount;
+        private static DateTime _lastFatalLogAt = DateTime.MinValue;
+        private static readonly TimeSpan FatalRepeatSummaryInterval = TimeSpan.FromSeconds(10);
+
+        /// <summary>FATAL 을 기록한다. 반복이라 요약만 남겼으면 <c>false</c>(대화상자도 띄우지 말 것).</summary>
+        private static bool LogFatalDeduped(string tag, Exception ex)
+        {
+            string firstFrame = ex.StackTrace?.Split('\n')[0].Trim() ?? "";
+            string key = $"{tag}|{ex.GetType().FullName}|{ex.Message}|{firstFrame}";
+
+            if (key != _lastFatalKey)
+            {
+                // 앞의 반복이 요약되지 않고 끝났으면 마무리 줄을 남긴다.
+                if (_lastFatalCount > 0)
+                    LoggerService.WriteToFile("FATAL", $"[반복 종료] 위 예외가 {_lastFatalCount}회 더 발생했습니다.");
+
+                _lastFatalKey   = key;
+                _lastFatalCount = 0;
+                _lastFatalLogAt = DateTime.Now;
+                LoggerService.WriteToFile("FATAL", $"{tag} {ex}");
+                return true;
+            }
+
+            _lastFatalCount++;
+            if (DateTime.Now - _lastFatalLogAt < FatalRepeatSummaryInterval) return false;
+
+            _lastFatalLogAt = DateTime.Now;
+            LoggerService.WriteToFile("FATAL",
+                $"[반복] 같은 예외가 {_lastFatalCount}회 발생 — {ex.GetType().Name}: {ex.Message}");
+            return false;
+        }
 
         /// <summary>시작 배너: 앱 버전·프로세스 비트수·관리자권한·런타임·OS 를 1회 기록.</summary>
         private static void LogStartupBanner()

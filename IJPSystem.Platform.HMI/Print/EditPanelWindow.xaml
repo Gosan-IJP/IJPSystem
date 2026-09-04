@@ -273,7 +273,7 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
                     <TextBlock Text="Line Width" FontWeight="Bold" Foreground="#94A3B8" VerticalAlignment="Center"/>
                     <TextBox x:Name="LineWidthBox" Style="{StaticResource DarkBox}" Width="60" Height="26" Margin="8,0,0,0"
-                             Text="7" TextChanged="LineWidth_Changed"
+                             Text="5" TextChanged="LineWidth_Changed"
                              ToolTip="선·도형 굵기 [이미지 픽셀]. 눈금(⊞)을 켜면 이 굵기 그대로 픽셀이 켜진다."/>
                     <StackPanel Margin="4,0,0,0">
                         <RepeatButton Style="{StaticResource StepArrow}" Content="▲" Click="LineWidthUp_Click"/>

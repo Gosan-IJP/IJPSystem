@@ -55,8 +55,25 @@ namespace IJPSystem.Platform.HMI.Print
 
         // ---- Convert Parameters ----
         private double _dpiX = 600, _dpiY = 600;
-        public double DropPerInchX { get => _dpiX; set { _dpiX = value; OnPropertyChanged(); UpdateMeasuredLength(); } }
-        public double DropPerInchY { get => _dpiY; set { _dpiY = value; OnPropertyChanged(); UpdateMeasuredLength(); } }
+        public double DropPerInchX
+        {
+            get => _dpiX;
+            set { _dpiX = value; OnPropertyChanged(); OnPropertyChanged(nameof(DropPitchXText)); UpdateMeasuredLength(); }
+        }
+        public double DropPerInchY
+        {
+            get => _dpiY;
+            set { _dpiY = value; OnPropertyChanged(); OnPropertyChanged(nameof(DropPitchYText)); UpdateMeasuredLength(); }
+        }
+
+        /// <summary>
+        /// 방울 하나의 간격 [mm]. DPI 는 인치당 방울 수라 눈으로 크기가 잡히지 않는다 —
+        /// 600DPI 가 42µm 라는 것을 옆에 적어 두면 도면 치수와 바로 견줄 수 있다.
+        /// </summary>
+        public string DropPitchXText => PitchText(_dpiX);
+        public string DropPitchYText => PitchText(_dpiY);
+
+        private static string PitchText(double dpi) => dpi > 0 ? $"{25.4 / dpi:F4} mm" : "— mm";
 
         /// <summary>
         /// 방울 간격 분할 수. 1 = 노즐 간격 그대로, 2 = ½(2패스).
