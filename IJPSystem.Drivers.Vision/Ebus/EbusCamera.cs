@@ -153,6 +153,15 @@ namespace IJPSystem.Drivers.Vision.Ebus
                     TrySetMono8();
                     ReadFrameSize();
 
+                    // ★ 노출/게인은 <b>스트리밍을 켜기 전에</b> 건다.
+                    //   AcquisitionStart 뒤에는 GenICam 이 파라미터를 잠그는 기종이 있어
+                    //   (TLParamsLocked) 쓰기가 조용히 거부된다. 2026-09-04 11호기 CAM_DW(JAI GOX-8105M):
+                    //   AcquisitionStart 뒤에 노드를 뒤졌더니 Exposure 계열 14개가 전부 쓰기=False,
+                    //   ExposureTime 은 가용=False 였다 — EXP 를 바꿔도 저장이 안 되던 이유가 이것이다.
+                    PrepareExposureMode();
+                    if (cfg.DefaultExposureMs > 0) SetExposureMs(cfg, cfg.DefaultExposureMs);
+                    if (cfg.DefaultGain      > 0) SetGain(cfg, cfg.DefaultGain);
+
                     _pipeline = new PvPipeline(_stream)
                     {
                         BufferSize  = _device.PayloadSize,
@@ -162,10 +171,6 @@ namespace IJPSystem.Drivers.Vision.Ebus
 
                     _device.StreamEnable();
                     Execute("AcquisitionStart");
-
-                    // 설정된 초기 노출/게인 적용(노드명 탐색도 여기서 1회 끝난다)
-                    if (cfg.DefaultExposureMs > 0) SetExposureMs(cfg, cfg.DefaultExposureMs);
-                    if (cfg.DefaultGain      > 0) SetGain(cfg, cfg.DefaultGain);
 
                     IsOpen = true;
                     Detail = Describe(info);
@@ -274,27 +279,27 @@ namespace IJPSystem.Drivers.Vision.Ebus
         // ── GenICam 파라미터 ────────────────────────────────────────────────
         public void SetExposureMs(CameraDeviceInfo cfg, double ms)
         {
-            string? node = ResolveNode(ref _exposureNode, cfg.ExposureNode, ExposureNodeCandidates);
+            string? node = ResolveNode(ref _exposureNode, cfg.ExposureNode, ExposureNodeCandidates, "Exposure");
             if (node == null) return;
             WriteNumeric(node, ms * 1000.0);   // GenICam ExposureTime 단위는 µs
         }
 
         public void SetGain(CameraDeviceInfo cfg, double gain)
         {
-            string? node = ResolveNode(ref _gainNode, cfg.GainNode, GainNodeCandidates);
+            string? node = ResolveNode(ref _gainNode, cfg.GainNode, GainNodeCandidates, "Gain");
             if (node == null) return;
             WriteNumeric(node, gain);
         }
 
         public double GetExposureMs(CameraDeviceInfo cfg)
         {
-            string? node = ResolveNode(ref _exposureNode, cfg.ExposureNode, ExposureNodeCandidates);
+            string? node = ResolveNode(ref _exposureNode, cfg.ExposureNode, ExposureNodeCandidates, "Exposure");
             return node == null ? 0.0 : ReadNumeric(node) / 1000.0;
         }
 
         public double GetGain(CameraDeviceInfo cfg)
         {
-            string? node = ResolveNode(ref _gainNode, cfg.GainNode, GainNodeCandidates);
+            string? node = ResolveNode(ref _gainNode, cfg.GainNode, GainNodeCandidates, "Gain");
             return node == null ? 0.0 : ReadNumeric(node);
         }
 
@@ -344,10 +349,34 @@ namespace IJPSystem.Drivers.Vision.Ebus
             => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 
         /// <summary>
+        /// <c>ExposureTime</c> 을 쓸 수 있는 상태로 만든다 — 자동노출을 끄고 노출모드를 Timed 로.
+        ///
+        /// <para>JAI 는 <c>ExposureAuto=Continuous</c> 이거나 <c>ExposureMode</c> 가 Timed 가 아니면
+        /// <c>ExposureTime</c> 을 <b>가용=False</b> 로 감춘다. 이러면 노드 이름이 맞는데도 후보 탐색이
+        /// 실패해 "노드를 찾지 못했습니다" 로 끝난다(2026-09-04 11호기 CAM_DW).
+        /// 이름 문제로 오해하기 딱 좋은 자리라, 이름을 뒤지기 <b>전에</b> 상태부터 정리한다.</para>
+        ///
+        /// <para>지원하지 않는 기종에서는 두 쓰기가 조용히 실패하고(WriteEnum 이 WARN 만 남긴다)
+        /// 그대로 진행한다 — 원래 되던 카메라를 못 쓰게 만들지 않는다.</para>
+        /// </summary>
+        private void PrepareExposureMode()
+        {
+            if (_params == null) return;
+            TryWriteEnumQuiet("ExposureAuto", "Off");
+            TryWriteEnumQuiet("ExposureMode", "Timed");
+        }
+
+        /// <summary>없거나 못 쓰는 노드여도 로그를 남기지 않는 열거형 쓰기(기종 차이 흡수용).</summary>
+        private void TryWriteEnumQuiet(string node, string value)
+        {
+            try { _params!.SetEnumValue(node, value); } catch { }
+        }
+
+        /// <summary>
         /// 쓸 수 있는 노드명을 한 번만 찾아 캐시한다. config 에 강제 지정이 있으면 그것만 쓴다
         /// (틀린 이름을 넣었을 때 조용히 다른 노드로 넘어가면 원인 파악이 어려워진다).
         /// </summary>
-        private string? ResolveNode(ref string? cached, string configured, string[] candidates)
+        private string? ResolveNode(ref string? cached, string configured, string[] candidates, string keyword)
         {
             if (cached != null) return cached.Length == 0 ? null : cached;
             if (_params == null) return null;
@@ -370,7 +399,54 @@ namespace IJPSystem.Drivers.Vision.Ebus
             LoggerService.WriteToFile("WARN",
                 $"[eBUS Vision] {CameraId} 노드를 찾지 못했습니다({string.Join("/", candidates)}) — " +
                 "VisionConfig 의 ExposureNode/GainNode 로 지정하세요.");
+            DumpNodes(keyword);
             return null;
+        }
+
+        /// <summary>
+        /// 후보명이 하나도 안 맞을 때, 카메라가 실제로 가진 노드 중 <paramref name="keyword"/> 를
+        /// 포함하는 것을 전부 남긴다.
+        ///
+        /// <para>기종마다 이름이 달라(JAI/Hikrobot/구형 GenICam) 후보 목록은 언제든 빗나간다.
+        /// 그때 "못 찾았다"만 남기면 사람이 eBUS Player 를 열어 노드를 뒤져야 하는데, 그 사이
+        /// 카메라 소유권이 넘어가 앱이 못 붙는 <b>또 다른 문제</b>가 생긴다
+        /// (2026-09-04 11호기 CAM_DW: ExposureTime/Abs/Raw 셋 다 불발).
+        /// 그러니 답을 카메라에게 직접 묻고 로그에 적어 둔다 — VisionConfig 에 그대로 옮겨 쓰면 된다.</para>
+        ///
+        /// <para>접근 상태(가용/읽기/쓰기)까지 남기는 이유: 노드가 <b>있는데 지금 못 읽는</b> 경우가 있다.
+        /// JAI 는 ExposureMode 가 Off 면 ExposureTime 이 unavailable 이 되어, 이름은 맞아도
+        /// 후보 탐색(<see cref="Exists"/>)이 실패한다. 이름이 보이는데 가용=False 면 그쪽을 의심할 것.</para>
+        /// </summary>
+        private void DumpNodes(string keyword)
+        {
+            if (_params == null || string.IsNullOrWhiteSpace(keyword)) return;
+            try
+            {
+                var hits = new List<string>();
+                foreach (var p in _params)
+                {
+                    string name = p.Name ?? "";
+                    if (name.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                    // 읽을 수 있으면 현재 값도 남긴다. ExposureMode/ExposureAuto 의 값이
+                    // ExposureTime 의 가용 여부를 좌우하므로, 이 값이 곧 원인 진단이다.
+                    string now = "";
+                    if (p.IsReadable)
+                    {
+                        try { now = $" ={_params.GetEnumValueAsString(name)}"; }
+                        catch { try { now = $" ={ReadNumeric(name):G6}"; } catch { } }
+                    }
+                    hits.Add($"{name}({p.Type}, 가용={p.IsAvailable}, 읽기={p.IsReadable}, 쓰기={p.IsWritable}{now})");
+                }
+
+                LoggerService.WriteToFile("INFO", hits.Count == 0
+                    ? $"[eBUS Vision] {CameraId} '{keyword}' 가 이름에 들어간 노드가 하나도 없습니다 — 기종이 다른 방식으로 노출을 다룹니다."
+                    : $"[eBUS Vision] {CameraId} '{keyword}' 관련 노드 {hits.Count}개: {string.Join(", ", hits)}");
+            }
+            catch (Exception ex)
+            {
+                LoggerService.WriteToFile("WARN", $"[eBUS Vision] {CameraId} 노드 목록 조회 실패: {ex.Message}");
+            }
         }
 
         private bool Exists(string node)

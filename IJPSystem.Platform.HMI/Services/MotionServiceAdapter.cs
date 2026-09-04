@@ -190,8 +190,13 @@ namespace IJPSystem.Platform.HMI.Services
                         }
 
                         // 도달 결과 — 지시만 남기고 결과를 안 남기면 티칭 오차/InPosition 미달을 추적할 수 없다.
+                        // ★ 위치도 드라이버에서 직접 읽는다. 위 InPosition 은 드라이버를 직접 보는데
+                        //   위치만 100ms 캐시(ax.CurrentPos)에서 읽으면 감속 중 값이 찍혀, 제대로 선 축이
+                        //   어긋난 것처럼 보인다(11호기 INITIALIZE 에서 X -0.449mm · T +1.028deg 로 찍혔으나
+                        //   InPos 는 전부 정상이었다 — 실재하지 않는 오차).
                         double target = usedAxes[ax.Info.Name];
-                        return (Axis: ax.Info.AxisNo, Target: target, Actual: ax.CurrentPos, InPos: inPos);
+                        double actual = ax.ReadDriverPosition() ?? ax.CurrentPos;
+                        return (Axis: ax.Info.AxisNo, Target: target, Actual: actual, InPos: inPos);
                     }
                     catch (Exception ex)
                     {

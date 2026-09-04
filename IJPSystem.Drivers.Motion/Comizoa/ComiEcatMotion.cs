@@ -133,6 +133,15 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             //   ※ .cec(네트워크 구성)는 앱이 만들 수 없다 — 실장 PC 의 C:\ProgramData\COMIZOA\ 에 존재해야 한다.
             string comizoaDir = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "COMIZOA");
+
+            // ★ 아래 두 가지(.cec 없음 / LOCAL_IP 없음)는 <b>그 자체로 오류가 아니다</b>.
+            //   LoadDevice 가 실패했을 때의 유력한 원인일 뿐이다. 2026-09-04 11호기에서
+            //   둘 다 없는 채로 LoadDevice=True · 슬레이브 8개 · OP 도달까지 정상이었다
+            //   (Embedded 모드는 데몬도 .cec 도 쓰지 않는 경로가 있다).
+            //   정상 기동에 ERROR 를 찍으면 사람이 로그를 안 보게 된다 — 그게 더 위험하다.
+            //   그래서 여기서는 모아만 두고, LoadDevice 가 <b>실패했을 때만</b> ERROR 로 꺼낸다.
+            var loadSuspects = new System.Collections.Generic.List<string>();
+
             try
             {
                 System.IO.Directory.CreateDirectory(comizoaDir);
@@ -146,14 +155,14 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 for (int i = 0; i < files.Length; i++) files[i] = System.IO.Path.GetFileName(files[i]);
                 LoggerService.WriteToFile("INFO", $"[ComiEcat] '{comizoaDir}' 구성파일: [{string.Join(", ", files)}]");
 
-                // .cec 가 없으면 마스터가 슬레이브 구성을 모른다 — 여기서 못 넘어간다.
-                // 파일 목록만 찍어 두면 "한 개뿐이네"를 사람이 알아채야 하는데,
-                // 2026-09-03 11호기 신규 PC 에서 아무도 못 알아챘다. 이름을 대고 말해 준다.
+                // .cec 가 없으면 마스터가 슬레이브 구성을 모를 수 있다. 파일 목록만 찍어 두면
+                // "한 개뿐이네"를 사람이 알아채야 하는데, 2026-09-03 11호기 신규 PC 에서
+                // 아무도 못 알아챘다. 그래서 이름을 대고 말해 준다 — 다만 실패했을 때만.
                 // ★ 이 파일은 Comizoa 설정 유틸리티가 만든다 — 앱이 만들 수 없다.
                 if (System.IO.Directory.GetFiles(comizoaDir, "CEcatNetCfg_*.cec").Length == 0)
-                    LoggerService.WriteToFile("ERROR",
+                    loadSuspects.Add(
                         $"[ComiEcat] EtherCAT 네트워크 구성(CEcatNetCfg_*.cec)이 '{comizoaDir}' 에 없습니다 — " +
-                        "슬레이브 구성을 알 수 없어 초기화가 실패합니다. " +
+                        "마스터가 슬레이브 구성을 모를 수 있습니다. " +
                         "Comizoa 설정 유틸리티로 생성하거나, 동일 장비(10호기)의 폴더 내용을 복사하세요.");
             }
             catch (Exception ex)
@@ -173,7 +182,8 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                 $"데몬={cfg.DaemonIp}:{cfg.DaemonPortL}/{cfg.DaemonPortM}, 마스터={cfg.MasterIp}, " +
                 $"재시도={cfg.CommRetryNum}회");
 
-            WarnIfLocalIpMissing(cfg);
+            string? ipSuspect = DescribeLocalIpMissing(cfg);
+            if (ipSuspect != null) loadSuspects.Add(ipSuspect);
 
             bool loaded;
             int errLoad;
@@ -193,10 +203,21 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             LoggerService.WriteToFile("INFO",
                 $"[ComiEcat] LoadDevice={loaded} (err={ComiEcatError.Describe(errLoad)}), NumDevices={numDev}, NumNetworks={numNet}");
             if (!loaded)
+            {
+                // 실패했다 — 이제야 앞서 모아 둔 의심 사유를 꺼낼 차례다.
+                foreach (string s in loadSuspects) LoggerService.WriteToFile("ERROR", s);
                 throw new InvalidOperationException(
                     $"LoadDevice 실패 (err={ComiEcatError.Describe(errLoad)}, NumDevices={numDev}). " +
                     $"C:\\ProgramData\\COMIZOA\\ 의 구성파일(ComiEcatLibCfg.ini/ComiEcatDCSetup.ini/CEcatNetCfg_*.cec) 존재 여부, " +
                     $"Comizoa 데몬 실행, 원격 마스터({cfg.MasterIp}) 연결을 확인.");
+            }
+
+            // 성공했다면 의심 사유는 전부 헛짚은 것이다. 지웠다가 나중에 "그때 .cec 있었나?" 를
+            // 되짚을 수 없으면 곤란하므로 한 줄로 남기되, 오류가 아님을 분명히 해 둔다.
+            if (loadSuspects.Count > 0)
+                LoggerService.WriteToFile("INFO",
+                    $"[ComiEcat] 참고 — 아래 {loadSuspects.Count}건은 이 구성에서 문제되지 않았습니다(LoadDevice 성공): " +
+                    string.Join(" / ", loadSuspects.ConvertAll(s => s.Replace("[ComiEcat] ", ""))));
 
             // 구성된 슬레이브 수 확인(LabVIEW 와 동일: ecNet_GetCfgSlaveCount)
             int slaveCnt = ecNet_GetCfgSlaveCount(NetID, out int errCnt);
@@ -229,18 +250,22 @@ namespace IJPSystem.Drivers.Motion.Comizoa
         }
 
         /// <summary>
-        /// <c>LOCAL_IP</c> 가 이 PC 의 어느 NIC 에도 없으면 크게 남긴다.
+        /// <c>LOCAL_IP</c> 가 이 PC 의 어느 NIC 에도 없으면 그 사유를 문장으로 돌려준다(없으면 null).
         ///
         /// <para>새 PC 를 셋업할 때 가장 먼저 빠지는 것이 모터쪽 NIC 의 고정 IP 다. 그 상태로
-        /// LoadDevice 를 부르면 붙을 곳이 없어 재시도만 하다가 스플래시가 멈춘 것처럼 보인다.
-        /// 이건 10초 만에 확인되는 것이라 <b>기다리기 전에</b> 알려 준다.</para>
+        /// 데몬 경유 구성을 쓰면 붙을 곳이 없어 재시도만 하다가 스플래시가 멈춘 것처럼 보인다.</para>
+        ///
+        /// <para><b>여기서 로그를 남기지 않는다</b> — 2026-09-04 11호기는 LOCAL_IP 가 없는 채로
+        /// LoadDevice 가 그냥 성공했다(슬레이브 8개 OP 도달). 즉 이건 오류가 아니라 <b>실패했을 때의
+        /// 유력한 원인</b>일 뿐이다. 정상 기동에 ERROR 를 찍으면 사람이 로그를 안 보게 된다.
+        /// 호출부가 모아 두었다가 LoadDevice 가 실패했을 때만 꺼낸다.</para>
         ///
         /// <para><b>막지는 않는다</b> — 예외를 던지면 우리가 예상 못한 정상 구성(원격 데몬 등)을
         /// 끊어 버릴 수 있다. 이미 도는 장비를 세우는 쪽이 더 나쁘다. 판단은 로그를 보고 사람이 한다.</para>
         /// </summary>
-        private static void WarnIfLocalIpMissing(ComiEcatConfig cfg)
+        private static string? DescribeLocalIpMissing(ComiEcatConfig cfg)
         {
-            if (!cfg.EmbeddedMode || string.IsNullOrWhiteSpace(cfg.LocalIp)) return;
+            if (!cfg.EmbeddedMode || string.IsNullOrWhiteSpace(cfg.LocalIp)) return null;
 
             try
             {
@@ -259,16 +284,16 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                     }
                 }
 
-                if (found) return;
+                if (found) return null;
 
-                LoggerService.WriteToFile("ERROR",
-                    $"[ComiEcat] 이 PC 에 LOCAL_IP({cfg.LocalIp}) 가 없습니다 — EtherCAT 데몬에 붙을 수 없습니다. " +
-                    $"모터쪽 NIC 를 {cfg.LocalIp}/255.255.255.0 으로 고정하세요. " +
-                    $"현재 IP: [{string.Join(", ", mine)}]");
+                return $"[ComiEcat] 이 PC 에 LOCAL_IP({cfg.LocalIp}) 가 없습니다 — 데몬 경유 구성이라면 붙을 곳이 없습니다. " +
+                       $"모터쪽 NIC 를 {cfg.LocalIp}/255.255.255.0 으로 고정하세요. " +
+                       $"현재 IP: [{string.Join(", ", mine)}]";
             }
             catch (Exception ex)
             {
                 LoggerService.WriteToFile("WARN", $"[ComiEcat] NIC 조회 실패(진단 생략): {ex.Message}");
+                return null;
             }
         }
 

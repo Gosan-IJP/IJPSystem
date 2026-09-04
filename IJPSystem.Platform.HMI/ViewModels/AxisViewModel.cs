@@ -441,6 +441,16 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public bool IsDriverServoOn()
             => _driver?.GetStatus(Info.AxisNo)?.IsServoOn == true;
 
+        // driver 의 실시간 위치(캐시 우회). null 이면 드라이버가 없거나 읽기에 실패한 것이다.
+        //
+        // ★ "도달했다"를 판정한 자리에서 위치를 <b>같은 기준으로</b> 찍기 위한 것이다.
+        //   InPosition 은 드라이버에 직접 묻고 위치는 100ms 캐시에서 읽으면, 감속 중 값이 찍혀
+        //   멀쩡히 선 축이 크게 어긋난 것처럼 보인다(2026-09-04 11호기 INITIALIZE:
+        //   InPos 정상인데 로그에는 X 오차 -0.449mm, T 오차 +1.028deg — 실재하지 않는 오차였다).
+        //   없는 오차를 쫓게 만드는 로그는 없느니만 못하다.
+        public double? ReadDriverPosition()
+            => _driver?.GetStatus(Info.AxisNo)?.CurrentPos;
+
         public void UpdateMotorStatus()
         {
             try
