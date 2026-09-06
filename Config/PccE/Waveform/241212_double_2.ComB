@@ -1,0 +1,43 @@
+; -- An example of the Epson S800 head waveform file.
+; -- This is just an example, the waveform from this file may not produce any
+; -- sensible results in a real life. Though may be useful for tuning amplifier and so on.
+; -- This is a "Small drop" waveform referred as "ComB" in Epson datasheet.
+
+[generic]
+HeadType                 = "EPSON_S800"                 ; head type
+Version                  = 1
+; -- "ComB" indicates that this is a "Small drop" waveform
+WaveformType             = "COMB"
+
+[Pulse0]
+; Start       | Slew    | End        |Hold Time,
+; voltage,    | Rate,   | voltage,   |us
+; V           | V/us    | V          |
+; -- this pulse prints for GL1
+GLMask_A                 = 0x1                          ; -- Grey level mask for nozzle rowA.
+GLMask_B                 = 0x1                          ; -- Grey level mask for nozzle rowB.
+TempCompMask             = 0x0                          ; -- Segment temperature compensation mask. One bit per segment
+Seg0                     = 27.3,0,27.3,2
+Seg1                     = 27.3,-3.45,20.4,1.9
+Seg2                     = 20.4,3.45,27.3,1.55
+
+[Pulse1]
+GLMask_A                 = 0x0
+GLMask_B                 = 0x0
+TempCompMask             = 0x0
+Seg0                     = 27.3,0,27.3,1.25
+Seg1                     = 27.3,3.65,31.3,1
+Seg2                     = 31.3,-7.6,16.9,1
+Seg3                     = 16.9,-14.4,2.5,2.6
+Seg4                     = 2.5,26.5,29,0.8
+Seg5                     = 29,-29.5,5.4,1
+Seg6                     = 5.4,10.35,31.3,1.45
+Seg7                     = 31.3,-4,27.3,14.75
+
+[TemperatureCompensation]
+Enabled                  = 0                            ; 0 to disable T compensation, 1 to enable
+TCompLow                 = 40.0                         ; Low temperature threshold for compensation,  40C by default
+TCompHigh                = 45.0                         ; High temperature threshold for compensation, 45C by default
+VCompStart               = 24.0                         ; Voltage threshold for starting compensation, Volts
+VCompEnd                 = 29.5                         ; Max. voltage that can be achieved by compensation, Volts
+VTCoef                   = -0.0148                      ; Voltage/Temperature coefficient, Volts/DegC

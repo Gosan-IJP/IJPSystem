@@ -1,0 +1,13 @@
+
+[Generic]
+HeadType                 = "EPSON_S800"
+Version                  = 1
+WaveformType             = "COMA"
+
+[Pulse0]
+TempCompMask             = 0x0
+GLMask_A                 = 0x2
+GLMask_B                 = 0x2
+Seg0                     = 18,-15.5,2.5,2
+Seg1                     = 2.5,22.5,28,3.85
+Seg2                     = 28,-7,18,1.55

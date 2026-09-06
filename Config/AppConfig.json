@@ -10,8 +10,10 @@
   "LogSaveDays": 30,
   "IsDoorCheckEnabled": false,
 
-  "_comment3": "MeteorConfigPath = PCC 가 읽는 PrintEngine 설정(.cfg). 비우면 Config/PrintEngine.cfg 를 찾는다. 상대경로는 Config 폴더 기준, 절대경로는 그대로 — 제어PC 는 C:/Users/Public/Documents/Meteor/Config/PccE/... 를 그대로 가리킬 것.",
-  "MeteorConfigPath": "PccE/DefaultEpsonS3200_PccE.cfg",
+  "_comment3": "MeteorConfigPath = PCC 가 읽는 PrintEngine 설정(.cfg). 비우면 Config/PrintEngine.cfg 를 찾는다. 상대경로는 Config 폴더 기준, 절대경로는 그대로.",
+  "_comment4": "★PULSE 는 EPSON S800 이다(예전 값 DefaultEpsonS3200_PccE.cfg 는 S3200 샘플이라 틀렸다). 이 파일은 이름만 벤더 샘플이고 내용은 Gosan 튜닝본이다 — 파형 13개, WaveformFileIdx=13(ETM_BUT_T1), Invert=1(엔코더 방향), FireOut=1(토출 동기 출력 = 드랍와처 트리거의 출발점).",
+  "_comment5": "★호기마다 손대야 하는 값이 cfg 안에 둘 있다: [Ethernet] Adapter1 은 Windows 어댑터 이름과 글자까지 같아야 하고(10호기 'PCC-E' / 11호기 'PCC2-E'), [System] PccType 은 실제 부착 보드와 맞춰야 한다(엔진 로그의 Attached: 값). 설치 후 이 두 줄만 고칠 것.",
+  "MeteorConfigPath": "PccE/DefaultEpsonS800_PccE.cfg",
 
   "DriverMode": {
     "IO": "Virtual",

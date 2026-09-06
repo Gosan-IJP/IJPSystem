@@ -20,7 +20,14 @@
 ; 1.0.33: Meteor PCC 펌웨어(SocApp · PccE_ES800.rbx · HDC_ES800.rbx) 동봉. 지금까지는 호기마다
 ;         Meteor 설치 폴더에서 손으로 복사해야 PCC 가 붙었다 — 안 하면 34초마다 접속/절단만
 ;         반복하고 PccsAttached 가 0 에 머문다(2026-09-04 11호기). 이제 설치만으로 끝난다.
-#define MyAppVersion   "1.0.33"
+; 1.0.34: 헤드 파형 14쌍(.ComA/.ComB) 동봉 + 앱이 보는 Meteor cfg 를 S3200 샘플에서 S800 튜닝본으로
+;         바로잡았다. 지금까지 벤더 샘플(TestS800_Waveform 하나)을 보고 있어서 파형을 못 찾았다.
+;         튜닝본에는 파형 13개·WaveformFileIdx=13(ETM_BUT_T1)·Invert=1(엔코더 방향)·FireOut=1
+;         (토출 동기 출력 = 드랍와처 트리거의 출발점)이 들어 있다.
+;         ★기존 설치본은 Config 를 보존하므로 AppConfig.json 의 MeteorConfigPath 가 <b>안 바뀐다</b> —
+;          현장에서 Config\_reference\AppConfig.json 과 비교해 손으로 고칠 것.
+;         ★호기마다 cfg 의 [Ethernet] Adapter1 과 [System] PccType 은 여전히 손봐야 한다.
+#define MyAppVersion   "1.0.34"
 #define MyAppPublisher "GosanTech"                      ; ← 회사명으로 수정
 #define MyAppExeName   "IJPSystem.Platform.HMI.exe"
 #define PublishDir     "publish"                        ; build-installer.ps1 의 publish 출력
@@ -83,6 +90,12 @@ Source: "meteor\ApplicationImages\*"; DestDir: "{app}\Config\ApplicationImages";
 ;    Rbf 는 엔진이 찾는 기준이 둘로 갈려 두 군데에 깐다. 어느 쪽을 읽는지 확정되면 한 줄 지울 것.
 Source: "meteor\Rbf\*";              DestDir: "{app}\Rbf";                      Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 Source: "meteor\Rbf\*";              DestDir: "{app}\Config\Rbf";               Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
+
+; 5) 헤드 파형(.ComA/.ComB) — cfg 의 Waveform1~13 이 "Waveform\이름.ComA" 로 가리킨다.
+;    위 (2)가 Config\PccE\Waveform 으로 이미 깔지만, 엔진이 cfg 폴더 기준인지 Config 루트 기준인지
+;    확정하지 못했다(SocApp 은 Config 루트, Rbf 는 앱 루트였다 — 기준이 하나가 아니다).
+;    83KB 밖에 안 되니 루트에도 깔아 둔다. 파형이 없으면 전압 파형이 안 실려 노즐이 움직이지 않는다.
+Source: "..\Config\PccE\Waveform\*"; DestDir: "{app}\Config\Waveform"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\{#MyAppName}";                         Filename: "{app}\{#MyAppExeName}"
