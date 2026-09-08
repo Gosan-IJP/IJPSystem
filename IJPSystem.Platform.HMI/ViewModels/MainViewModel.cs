@@ -706,12 +706,123 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         // 헤드(Meteor PCC) 연결 상태 폴링 — 백그라운드에서 attach·조회 후 UI 스레드로 반영.
         // 네이티브 DLL 미탑재/엔진 미실행/점유중이면 회색 + 사유 툴팁으로 조용히 표시(예외 없음).
+        private bool _engineAutoStartTried;
+
+        // ── PCC 미연결 안내 ────────────────────────────────────────────────
+        //
+        // 붙는 데 시간이 걸린다(엔진 기동 → PiOpenPrinter → 이더넷으로 PCC 부착). 그래서
+        // 잠깐 안 붙은 것과 <b>영영 안 붙는 것</b>을 시간으로 가른다. 20초는 스핏 경로의
+        // PCC 부착 대기(15초)보다 길게 잡은 값이다 — 짧게 잡으면 정상 부착 중에 창이 뜬다.
+        private static readonly TimeSpan PccAlertAfter = TimeSpan.FromSeconds(20);
+        private readonly DateTime _startedAt = DateTime.Now;
+        private bool _pccAlertShown;
+        private bool _pccEverConnected;
+
         private void UpdateHeadConnection()
         {
             if (_headMonitor == null) return;   // DriverMode.Head=None — 헤드 미탑재 장비
             var s = _headMonitor.Poll();
+
+            // 엔진이 안 떠 있으면 앱이 스스로 한 번 띄운다.
+            //
+            // 모니터는 <b>이미 도는</b> 엔진에 붙기만 하고(PiOpenPrinter), 엔진을 띄우는 곳은
+            // 스핏과 PCC-E 의 [엔진 시작] 뿐이었다. 그래서 앱을 켜고 바로 인쇄 데이터를 올리면
+            // "엔진에 연결되지 않았습니다" 가 났다 — 사용자가 왜 다른 화면에 먼저 들러야 하는지
+            // 알 길이 없다(실장 2026-09-08).
+            //
+            // 한 번만 시도한다. 실패가 진짜 원인(cfg 없음·점유)이면 500ms 마다 되풀이해 봐야
+            // 로그만 더러워지고, 그때는 [엔진 시작] 이 사유를 보여 준다.
+            if (!s.Reachable && !_engineAutoStartTried && _headMonitor is MeteorStatusMonitor)
+            {
+                _engineAutoStartTried = true;
+                if (TryAutoStartEngine()) s = _headMonitor.Poll();   // 떴으면 이번 표시부터 반영
+            }
+
+            if (s.Connected) _pccEverConnected = true;
+
+            // 한 번도 못 붙은 채 시간이 지나면 딱 한 번 알린다. 붙었다가 끊긴 것은 다른 사건이라
+            // 여기서 다루지 않는다(그건 상태 표시가 맡는다).
+            if (!_pccAlertShown && !_pccEverConnected
+                && _headMonitor is MeteorStatusMonitor
+                && DateTime.Now - _startedAt > PccAlertAfter)
+            {
+                _pccAlertShown = true;
+                WarnPccNotConnected(s);
+            }
+
             System.Windows.Application.Current?.Dispatcher.Invoke(
                 () => SetHeadConnection(s.Connected, s.Detail, s));
+        }
+
+        /// <summary>
+        /// PCC 가 안 붙었을 때 한 번 알린다.
+        ///
+        /// <para><b>두 단계를 구분해서 말한다.</b> 엔진 프로세스에 못 붙은 것과, 엔진은 붙었는데
+        /// PCC 하드웨어가 안 온 것은 원인이 전혀 다르다. 한 문장에 뭉쳐 놨더니 엔진이 안 떴는데
+        /// DHCP 를 보러 간 적이 있다(실장 2026-09-02).</para>
+        /// </summary>
+        private void WarnPccNotConnected(MeteorHeadStatus s)
+        {
+            string title = "PCC 연결 안 됨";
+            string body;
+
+            if (!s.Reachable)
+            {
+                // 1단계 실패 — 엔진 프로세스. PCC·DHCP 는 아직 이야기할 단계가 아니다.
+                body = "Meteor PrintEngine 에 연결하지 못했습니다.\n\n" +
+                       $"사유: {s.Detail}\n\n" +
+                       "· PCC-E 화면의 [엔진 시작] 으로 다시 시도할 수 있습니다.\n" +
+                       "· 다른 앱(LabVIEW·Meteor 도구)이 떠 있으면 닫으세요 — 프린터는 한 프로세스만 씁니다.\n" +
+                       "· cfg 경로는 AppConfig.json 의 MeteorConfigPath 가 정합니다.";
+            }
+            else
+            {
+                // 2단계 실패 — 엔진은 붙었고 PCC 하드웨어가 안 왔다. 여기서부터 DHCP 이야기다.
+                body = $"엔진에는 붙었지만 PCC 가 오지 않았습니다 ({s.PccsAttached}/{s.PccsRequired}).\n\n" +
+                       $"프린터 상태: {s.PrinterState}\n\n" +
+                       "· PCC 전원과 이더넷 링크(PCC2-E 어댑터)를 확인하세요.\n" +
+                       "· PCC 는 DHCP 로 주소를 받습니다 — DHCP 서버가 떠 있어야 합니다.\n" +
+                       "· cfg 의 [Ethernet] 어댑터 이름이 실제 NIC 과 맞는지 보세요.";
+            }
+
+            AddLog($"[HEAD] {title} — " + (s.Reachable
+                       ? $"PCC 미부착 {s.PccsAttached}/{s.PccsRequired}"
+                       : s.Detail),
+                   LogLevel.Warning);
+
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                Dialogs.Show(body, title, System.Windows.MessageBoxButton.OK,
+                             System.Windows.MessageBoxImage.Warning));
+        }
+
+        /// <summary>
+        /// Meteor PrintEngine 을 자동으로 띄운다. 노즐을 쏘는 명령이 아니라
+        /// 엔진 프로세스를 올리고 cfg 를 읽히는 것뿐이다.
+        /// </summary>
+        private bool TryAutoStartEngine()
+        {
+            try
+            {
+                string path = PathUtils.ResolveConfigPath(
+                    AppSettingsService.Current?.MeteorConfigPath,
+                    IJPSystem.Platform.Common.Constants.AppConstants.MeteorConfigFile);
+
+                if (!System.IO.File.Exists(path))
+                {
+                    AddLog($"[HEAD] 엔진 자동 시작 안 함 — cfg 가 없습니다: {path}", LogLevel.Warning);
+                    return false;
+                }
+
+                var (ok, msg) = _headMonitor!.StartEngine(path);
+                AddLog("[HEAD] 엔진 자동 시작 — " + msg, ok ? LogLevel.Success : LogLevel.Warning);
+                return ok;
+            }
+            catch (Exception ex)
+            {
+                // 자동 시작 실패로 앱이 흔들려서는 안 된다 — [엔진 시작] 으로 수동 진행이 남아 있다.
+                AddLog($"[HEAD] 엔진 자동 시작 실패({ex.GetType().Name}): {ex.Message}", LogLevel.Warning);
+                return false;
+            }
         }
 
         private void ExecuteForceOutput(IOViewModel vm)

@@ -42,7 +42,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             _mainVM = mainVM;
 
-            RefreshCommand          = new RelayCommand(_ => Refresh());
+            // 버튼으로 누른 새로고침은 결과를 말한다. cfg 가 안 바뀌었으면 화면도 안 바뀌어서
+            // 눌리지 않은 것처럼 보인다 — 무엇을 다시 읽었는지 한 줄이라도 남아야 한다.
+            RefreshCommand          = new RelayCommand(_ => RefreshFromButton());
             OpenConfigFolderCommand = new RelayCommand(_ => OpenConfigFolder(), _ => ConfigExists);
             StartEngineCommand      = _startEngine = new RelayCommand(_ => StartEngine(), _ => CanStartEngine);
             SelectTabCommand        = new RelayCommand(p => SelectedTab = p as string ?? "STATUS");
@@ -222,6 +224,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
             "[레시피에 적용]까지는 되지만 실제 토출에는 쓰이지 않습니다.";
 
         // ── 동작 ─────────────────────────────────────────────────────────
+
+        /// <summary>[새로고침] 버튼 — 다시 읽고, 무엇을 읽었는지 로그에 남긴다.</summary>
+        private void RefreshFromButton()
+        {
+            Refresh();
+            _mainVM.AddLog(
+                ConfigExists
+                    ? $"[HEAD] cfg 다시 읽음 — {System.IO.Path.GetFileName(ConfigPath)} " +
+                      $"({HeadTypeText}, 파형 {Waveforms.Count}개)"
+                    : $"[HEAD] cfg 를 찾지 못했습니다 — {ConfigPath}",
+                ConfigExists ? LogLevel.Info : LogLevel.Warning);
+        }
+
         public void Refresh()
         {
             string path = PathUtils.ResolveConfigPath(
