@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    시리얼(Modbus RTU) 포트 스캐너 — 읽기 전용.
+
+    새 제어PC 를 셋업할 때마다 "DMD 는 몇 번 포트인가 / iCore 는 몇 번인가"를 알아내야 한다.
+    USB 시리얼은 꽂는 순서에 따라 번호가 바뀌므로 다른 호기의 값을 옮겨 적을 수 없다
+    (2026-09-07 11호기: 설정은 COM6/COM12 인데 COM6 은 Intel AMT 가상 포트였고 COM12 는 없었다).
+
+    ※ 솔루션(IJPSystem.slnx)에는 넣지 않는다 — 실장 진단용이라 앱 빌드에 딸려갈 이유가 없다.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>IJPSystem.Tools.SerialScan</RootNamespace>
+    <AssemblyName>SerialScan</AssemblyName>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!--
+    실장에서 쓰는 실행 스크립트. publish 폴더에만 두면 .gitignore 에 걸려 저장소에 남지 않는다
+    — 다음 호기에서 다시 쓰려면 처음부터 만들어야 한다. 여기 두고 게시할 때 딸려가게 한다.
+    ※ 내용은 ASCII 로만 쓸 것. 한글을 넣으면 CP949 콘솔에서 깨진다(2026-09-07 확인).
+  -->
+  <ItemGroup>
+    <None Include="*.bat" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NModbus" Version="3.0.81" />
+    <PackageReference Include="NModbus.Serial" Version="3.0.81" />
+    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

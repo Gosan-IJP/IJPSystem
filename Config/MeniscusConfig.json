@@ -1,8 +1,13 @@
 {
   "_comment1": "메니스커스 압력 컨트롤러(DMD) — Modbus RTU / 시리얼. 패턴 인쇄 화면의 압력 표시·설정과 VV 패널의 MPC AL 램프가 이 값을 쓴다.",
   "_comment2": "★붙일지 말지는 여기가 아니라 AppConfig.json 의 DriverMode.Meniscus 가 정한다 (Virtual | Dmd). 이 파일은 '어떻게 붙을지'만 담는다.",
-  "_comment3": "★레지스터 주소·스케일은 아직 미검증(placeholder)이다. 모듈 매뉴얼과 LabVIEW DMD_Read Pressure.vi 로 확인한 뒤 여기서 고칠 것 — 빌드 없이 바뀐다.",
-  "_comment4": "★COM 포트 확인 필요. 옛 AppConfig 에는 COM3 으로 적혀 있었으나 9호기 실배선 기록은 COM6 이다.",
+  "_comment3": "★2026-09-07 11호기 실측: 0~1000 을 훑어 읽히는 레지스터는 50·51·52 셋뿐이었다(FC3/FC4 동일값). 예전 placeholder(0/256/257)는 전부 Illegal Data Address 였다 — 셋 다 틀린 값이었다.",
+  "_comment3a": "★셋 중 51 만 값이 있었다(=219, 펌프 정지 상태). 그래서 51 을 읽기 주소로 잡았다. 다만 '51 이 압력' 이라는 것은 <b>아직 미확정</b>이다 — 실제 압력계와 비교해서 확인할 것. 안 맞으면 50/52 를 대신 넣어 본다.",
+  "_comment3b": "★PressureSetAddress/ControlAddress 는 여전히 모른다. 후보는 50 과 52 뿐인데(둘 다 0), 어느 쪽이 설정값이고 어느 쪽이 ON/OFF 인지 구분할 근거가 없다. 확인 전에는 쓰기를 시도하지 말 것 — 모르는 레지스터에 값을 넣으면 되돌리기 어렵다.",
+  "_comment3c": "구분 방법: 펌프를 켜고(VV 패널 — EtherCAT DO 계통이라 이 파일과 무관) Tools\\SerialScan 의 3_SweepAddresses 를 다시 돌려 <b>값이 변하는 주소</b>를 본다. 변하는 쪽이 실측 압력이다.",
+  "_comment4": "★COM 포트는 호기마다 다르다 — 옮겨 적지 말고 반드시 확인할 것. USB 시리얼은 꽂는 순서로 번호가 정해진다. (옛 AppConfig=COM3, 9호기 실배선=COM6)",
+  "_comment4a": "★★11호기(2026-09-07)에서 COM6 은 'Intel(R) Active Management Technology - SOL' 이었다 — 메인보드가 만드는 가상 포트다. 포트가 열리므로 로그에 'DMD 연결됨 — COM6' 이 찍히고 바로 'Read 실패: timed out' 이 난다. 배선/레지스터를 의심하기 전에 장치 관리자에서 그 COM 이 무엇인지부터 볼 것.",
+  "_comment4b": "★확인 도구: Tools\\SerialScan (self-contained, .NET 설치 불필요). 앱을 닫고 'SerialScan.exe --ports COM8,COM9,COM10' — 응답한 포트·보레이트·UnitId 를 찍어 준다. 'Modbus 예외' 로 나와도 성공이다(장치는 있고 주소만 다름). 주소를 모르는 지금 상태에서도 포트는 이렇게 찾는다.",
   "_comment5": "VV 패널의 Meni/Pump 출력은 이 계통이 아니라 EtherCAT DO 코일(ComiEcatDigitalIo)이다. 여기를 꺼도 밸브 동작에는 영향이 없다.",
   "_comment6": "Parity 0=None 1=Odd 2=Even 3=Mark 4=Space · StopBits 0=None 1=One 2=Two 3=OnePointFive (StrobeConfig.json 과 같은 규약).",
   "_comment7": "확인 순서 — (1) 압력 표시가 실제 압력계와 맞는지 본다. 안 맞으면 PressureReadAddress / PressureScale(0.1) / PressureOffset 을 조정한다. (2) 읽기가 맞은 뒤에 ON/OFF 와 Setpoint 를 시험한다. 쓰기는 모르는 레지스터에 값을 넣는 것이라 되돌리기 어렵다.",
@@ -16,7 +21,7 @@
 
   "UnitId": 1,
 
-  "PressureReadAddress": 0,
+  "PressureReadAddress": 51,
   "PressureSetAddress": 256,
   "ControlAddress": 257,
 
