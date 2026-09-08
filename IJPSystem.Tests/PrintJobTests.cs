@@ -474,14 +474,21 @@ namespace IJPSystem.Tests
             Assert.Contains("읽지 못했습니다", ctl.Message);
         }
 
+        /// <summary>
+        /// 못 보내면 <b>전송기가 대는 이유를 그대로</b> 보여야 한다.
+        ///
+        /// <para>예전에는 무조건 "헤드가 준비되지 않았습니다 — 전원·연결을 확인하세요" 였는데,
+        /// 실제 원인은 엔진 프로세스가 안 뜬 것이었다. 화면 말만 믿고 헤드 전원과 배선을
+        /// 뜯어보게 된다(실장 2026-09-08).</para>
+        /// </summary>
         [Fact]
-        public void 헤드가_준비되지_않으면_전송하지_않는다()
+        public void 전송할_수_없으면_그_이유를_그대로_보여준다()
         {
             var ctl = new PrintJobController(new NotReadyDownloader());
 
             Assert.Null(ctl.LoadAndDownload(SaveJob()));
             Assert.Equal(PrintReadyState.Fault, ctl.State);
-            Assert.Contains("준비되지 않았습니다", ctl.Message);
+            Assert.Contains(NotReadyDownloader.Reason, ctl.Message);
         }
 
         [Fact]
@@ -551,18 +558,24 @@ namespace IJPSystem.Tests
 
         private sealed class NotReadyDownloader : IPrintDataDownloader
         {
+            public const string Reason = "엔진이 안 떴습니다 — [엔진 시작]";
+
             public string Name => "테스트";
             public bool IsReady => false;
+            public string? NotReadyReason => Reason;
             public void Download(PrintJob job) => throw new InvalidOperationException("불려서는 안 된다");
             public void Release() { }
+            public string? LastTransferDetail => null;
         }
 
         private sealed class ThrowingDownloader : IPrintDataDownloader
         {
             public string Name => "테스트";
             public bool IsReady => true;
+            public string? NotReadyReason => null;
             public void Download(PrintJob job) => throw new IOException("버퍼를 못 잡았다");
             public void Release() { }
+            public string? LastTransferDetail => null;
         }
     }
 }

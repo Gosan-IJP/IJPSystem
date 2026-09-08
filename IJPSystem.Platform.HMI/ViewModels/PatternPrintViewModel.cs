@@ -572,8 +572,21 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // Meteor 가 파일을 읽는 게 아니다. PCC 는 PC 의 파일시스템을 모른다 —
         // 여기서 우리가 읽어 PCC 메모리로 올리고, Print 는 이미 올라간 것을 쏠 뿐이다.
         // 그래서 저장과 인쇄가 갈라져 있고, 저장해 둔 것을 나중에 여러 번 찍을 수 있다.
-        private readonly PrintJobController _printJob =
-            new PrintJobController(new NullPrintDataDownloader());
+        // 전송 경로는 설정(DriverMode.Head)이 고른다 — HeadVoltage 와 같은 스위치다. 같은 헤드를
+        // 두 군데서 따로 판정하면 한쪽만 가상인 상태가 만들어진다.
+        // ※ 실물이 실패해도 가상으로 떨어지지 않는다. 안 올라간 데이터가 READY 로 보이는 쪽이 훨씬 위험하다.
+        private readonly PrintJobController _printJob;
+
+        private PrintJobController CreatePrintJobController()
+        {
+            string mode = Infrastructure.Config.AppSettingsService.Current?.DriverMode?.Head?.Trim() ?? "None";
+            IPrintDataDownloader downloader =
+                string.Equals(mode, "Meteor", StringComparison.OrdinalIgnoreCase)
+                    ? new Infrastructure.Print.Meteor.MeteorImageBufferDownloader(
+                          m => _mainVM.AddLog("[PRINT] " + m, LogLevel.Info))
+                    : new NullPrintDataDownloader();
+            return new PrintJobController(downloader);
+        }
 
         private string _printDataState = "대기";
         /// <summary>READY / 대기 / 오류 — 지금 PCC 에 무엇이 올라가 있는지.</summary>
@@ -697,12 +710,17 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 PrintDataPath       = folder;
                 PrintDataStateText  = "READY TO PRINT";
                 PrintDataStateBrush = "#34D399";
+                // 적재 시각과 버퍼 번호를 같이 띄운다. 이 둘이 없으면 <b>같은 폴더를 다시 올렸을 때
+                // 화면이 한 글자도 안 바뀌어</b> 눌린 건지 알 수가 없다. 버퍼 번호·DWORD 수는
+                // 엔진 로그의 "Allocated image buffer DWORDs=… ID=…" 와 그대로 대조된다.
+                string detail = _printJob.LastTransferDetail is { Length: > 0 } d ? " · " + d : "";
+                string at     = _printJob.LoadedAt is DateTime t ? $" · {t:HH:mm:ss} 적재" : "";
                 PrintDataSummary    =
                     $"{System.IO.Path.GetFileName(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar))} · " +
                     $"{job.Steps}스텝 × {job.Nozzles}노즐 · " +
                     $"{job.Para.WidthMm:F1}×{job.Para.HeightMm:F1}mm · 방울 {job.DropCount:N0}개 · " +
-                    $"{_printJob.DownloaderName}";
-                _mainVM.AddLog($"[PRINT] READY — {job}", LogLevel.Success);
+                    $"{_printJob.DownloaderName}{detail}{at}";
+                _mainVM.AddLog($"[PRINT] READY — {job}{detail}", LogLevel.Success);
             }
 
             RefreshRecentPrintData();
@@ -725,6 +743,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             _mainVM = mainVM;
             Monitor = new VisualMonitorViewModel(mainVM, "Drop");   // 드랍와쳐 기본
+            _printJob = CreatePrintJobController();   // _mainVM 이 있어야 로그를 넘길 수 있다
 
             PrintCommand          = new RelayCommand(async _ => await RunPatternPrintAsync(),
                                                      _ => IsOriginSet && !IsPrinting);
@@ -825,11 +844,23 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
             catch { return; }   // IO 미연결/미초기화 시 무시
 
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            // ★ 종료 중에는 Dispatcher.Invoke 가 TaskCanceledException 을 던진다. 300ms 타이머라
+            //   앱을 닫는 순간 높은 확률로 이 자리에 걸리는데, 스레드풀 스레드에서 나므로
+            //   전역 처리기가 [FATAL] 로 남긴다 — 정상 종료인데 로그만 보면 비정상 종료로 읽힌다
+            //   (2026-09-07 11호기). 화면이 사라지는 마당의 표시 갱신이라 조용히 접는 것이 맞다.
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished) return;
+
+            try
             {
-                LevelSensorLow  = low;
-                LevelSensorHigh = high;
-            });
+                dispatcher.Invoke(() =>
+                {
+                    LevelSensorLow  = low;
+                    LevelSensorHigh = high;
+                });
+            }
+            catch (System.Threading.Tasks.TaskCanceledException) { /* 종료 중 — 갱신할 화면이 없다 */ }
+            catch (OperationCanceledException) { }
         }
 
         /// <summary>

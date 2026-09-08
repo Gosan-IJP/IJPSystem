@@ -12,10 +12,16 @@ namespace IJPSystem.Platform.Infrastructure.Print
         /// <summary>파일을 읽는 중.</summary>
         Loading,
 
-        /// <summary>PCC 로 올리는 중.</summary>
+        /// <summary>엔진으로 올리는 중.</summary>
         Downloading,
 
-        /// <summary>데이터가 PCC 안에 있다 — 이제 트리거만 주면 찍는다.</summary>
+        /// <summary>
+        /// 데이터가 <b>엔진 메모리</b>에 올라가 있다 — 파일을 다시 읽을 필요가 없다.
+        ///
+        /// <para>★<b>PCC 안에 있다는 뜻은 아니다.</b> 이미지 버퍼는 PC 쪽 엔진 메모리에 잡히고,
+        /// PCC 하드웨어로는 인쇄 명령을 낼 때 나간다. 그래서 이 상태에서 PCC 화면을 봐도
+        /// 올라간 그림은 보이지 않는다.</para>
+        /// </summary>
         ReadyToPrint,
 
         /// <summary>발사 중.</summary>
@@ -46,11 +52,32 @@ namespace IJPSystem.Platform.Infrastructure.Print
         /// <summary>지금 보낼 수 있는가(헤드 준비·연결).</summary>
         bool IsReady { get; }
 
-        /// <summary>패턴을 PCC 메모리로 올린다. 끝나면 트리거만 주면 찍힌다.</summary>
+        /// <summary>
+        /// 보낼 수 없다면 <b>무엇을 하면 되는지</b>. 보낼 수 있으면 null.
+        ///
+        /// <para>여기가 비어 있으면 화면은 "헤드가 준비되지 않았습니다 — 전원·연결을 확인하세요"
+        /// 같은 뭉뚱그린 말밖에 못 한다. 실제로는 엔진 프로세스가 안 떴을 뿐인데 헤드 전원과
+        /// 배선을 뜯어보게 된다(실장 2026-09-08). 막힌 쪽이 이유를 아는 유일한 자리다.</para>
+        /// </summary>
+        string? NotReadyReason { get; }
+
+        /// <summary>
+        /// 패턴을 엔진 메모리로 올린다. 끝나면 파일을 다시 읽지 않고 인쇄할 수 있다.
+        /// (PCC 하드웨어로 나가는 것은 인쇄 명령을 낼 때다)
+        /// </summary>
         void Download(PrintJob job);
 
         /// <summary>올려 둔 데이터를 버린다. PrintEngine 메모리는 앱이 직접 반납해야 한다.</summary>
         void Release();
+
+        /// <summary>
+        /// 직전에 <b>실제로 올라간 것</b>의 식별값(버퍼 번호·크기 등). 아직 없으면 null.
+        ///
+        /// <para>화면의 스텝·노즐 수는 <b>읽은 파일</b>을 말할 뿐이라, 그게 엔진에 들어갔다는
+        /// 증거가 되지 못한다. 엔진 로그와 대조할 수 있는 값이 화면에 있어야
+        /// "무엇이 올라갔는가" 를 눈으로 확인할 수 있다.</para>
+        /// </summary>
+        string? LastTransferDetail { get; }
     }
 
     /// <summary>
@@ -63,12 +90,16 @@ namespace IJPSystem.Platform.Infrastructure.Print
     {
         public string Name => "[가상] 전송 안 함";
         public bool IsReady => true;
+        public string? NotReadyReason => null;
 
         /// <summary>마지막으로 받은 것 — 화면·검사에서 무엇이 넘어왔는지 확인한다.</summary>
         public PrintJob? Last { get; private set; }
 
         public void Download(PrintJob job) => Last = job ?? throw new ArgumentNullException(nameof(job));
         public void Release() => Last = null;
+
+        /// <summary>올린 적이 없으니 대조할 값도 없다.</summary>
+        public string? LastTransferDetail => null;
     }
 
     /// <summary>
@@ -107,6 +138,12 @@ namespace IJPSystem.Platform.Infrastructure.Print
         /// <summary>전송기 이름 — 화면에 "무엇으로 보냈는가"를 남긴다.</summary>
         public string DownloaderName => _downloader.Name;
 
+        /// <summary>직전에 실제로 올라간 것의 식별값(버퍼 번호·크기). 엔진 로그와 대조용. 없으면 null.</summary>
+        public string? LastTransferDetail => _downloader.LastTransferDetail;
+
+        /// <summary>마지막으로 적재가 끝난 시각. 같은 데이터를 다시 올려도 이 값은 바뀐다.</summary>
+        public DateTime? LoadedAt { get; private set; }
+
         /// <summary>
         /// ① 파일을 읽어 ② 검증하고 ③ PCC 로 올린다. 끝나면 <see cref="PrintReadyState.ReadyToPrint"/>.
         ///
@@ -140,7 +177,7 @@ namespace IJPSystem.Platform.Infrastructure.Print
 
             if (!_downloader.IsReady)
             {
-                Fail("헤드가 준비되지 않았습니다 — 전원·연결을 확인하세요.");
+                Fail(_downloader.NotReadyReason ?? "전송할 수 없는 상태입니다 — 헤드 연결을 확인하세요.");
                 return null;
             }
 
@@ -156,8 +193,10 @@ namespace IJPSystem.Platform.Infrastructure.Print
             }
 
             CurrentJob = job;
+            LoadedAt   = DateTime.Now;
             Message = $"READY — {job.Steps}스텝 × {job.Nozzles}노즐, 방울 {job.DropCount:N0}개 " +
-                      $"({_downloader.Name})";
+                      $"({_downloader.Name}" +
+                      (LastTransferDetail is { Length: > 0 } d ? ", " + d : "") + ")";
             SetState(PrintReadyState.ReadyToPrint);
             return job;
         }
@@ -186,6 +225,7 @@ namespace IJPSystem.Platform.Infrastructure.Print
         {
             try { _downloader.Release(); } catch { /* 반납 실패로 화면을 막지는 않는다 */ }
             CurrentJob = null;
+            LoadedAt   = null;
             Problems = Array.Empty<string>();
             Message = "";
             SetState(PrintReadyState.Idle);

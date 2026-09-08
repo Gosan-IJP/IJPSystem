@@ -83,12 +83,16 @@ namespace IJPSystem.Platform.HMI.Views
         // ── Print Image Design (DXF Rasterizer 모달 창) ───────────────
         private void PrintImageDesign_Click(object sender, System.Windows.RoutedEventArgs e)
         {
-            string? initialPath = (DataContext as PatternPrintViewModel)?.PrintDataPath;
-            var win = new IJPSystem.Platform.HMI.Print.DxfRasterizerWindow(initialPath)
+            var vm = DataContext as PatternPrintViewModel;
+            var win = new IJPSystem.Platform.HMI.Print.DxfRasterizerWindow(vm?.PrintDataPath)
             {
                 Owner = System.Windows.Window.GetWindow(this)
             };
             win.ShowDialog();
+
+            // 여기서 저장한 것이 바로 목록에 보여야 한다. 갱신은 화면 진입(Loaded)에만 걸려
+            // 있어서, 방금 만든 것을 보려면 다른 화면에 갔다 돌아와야 했다 — 저장이 안 된 줄 안다.
+            vm?.RefreshRecentPrintData();
         }
     }
 }
