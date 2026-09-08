@@ -1,5 +1,7 @@
 {
-  "_comment1": "iCore iPulse LED 컨트롤러(모델 1P1S-100A). 9호기는 한 포트(COM12/USB)에 2대가 sID 로 물려 있다.",
+  "_comment1": "iCore iPulse LED 컨트롤러(모델 1P1S-100A). 한 포트에 2대가 sID 1(DWC)/2(GVC) 로 물려 있다.",
+  "_comment1a": "★ComPort 는 호기마다 다르다 — 옮겨 적지 말 것. USB 시리얼은 꽂는 순서로 번호가 정해진다(9호기 COM12, 11호기 COM9). 보레이트 115200 과 sID 1/2, 레지스터 주소는 모델 값이라 안 바뀐다.",
+  "_comment1b": "★확인법: 앱을 닫고 Tools\\SerialScan → '한 포트에 UnitId 1과 2가 115200 으로 응답' 하면 그게 iCore 다. 못을 박으려면 0x200(Slave Address)을 읽어 자기 번호가 나오는지 본다(2026-09-07 11호기 COM9: 0x200=1, 0x300=2 확인).",
   "_comment2": "실측 2026-08-05 (Tools/IPulseProbe): FC3 응답, 0x200 Slave Address 가 각각 1/2, Operation(0x300)=0(OFF).",
   "_comment3": "★시간 파라미터는 IEEE-754 float32(하위 워드 먼저). Duration [0,16672]=0x41200000=10.0us, Period=10000.0us 로 정확히 떨어져 확정.",
   "_comment4": "이전 설정(COM7 / DelayRegister 0 / 정수 스케일)은 전부 틀렸다 — 주소도 형식도 달라 드랍와처 지연이 한 번도 걸리지 않았다.",
@@ -20,6 +22,12 @@
   "SettleMs": 50,
 
   "_comment7": "Camera = CameraId(VisionConfig 와 같은 키). RunMode = 켤 때 쓸 Operation 값 — DWC 는 토출 동기가 필요해 Pulse(2), GVC 는 육안 조명이라 Continuous(1).",
+  "_comment7a": "★★'LIGHT ON 했는데 불이 안 들어온다' 의 1순위 원인은 고장이 아니라 <b>Pulse(2) 모드</b>다. Pulse 는 트리거가 들어와야 한 번 발광하므로, 트리거원이 Digital IO 인데 트리거 체인이 멈춰 있으면(제어PC 에 NI 런타임 없음 등) 0x300 쓰기·리드백이 모두 성공하고도 LED 는 계속 어둡다. 에러가 안 나니 배선·전원·포트를 뒤지게 된다(2026-09-07 11호기). 화면 로그가 이제 0x301 을 읽어 이 경우를 짚어 준다.",
+  "_comment7b": "LED·전원만 따로 확인하려면 CAM_DW 의 RunMode 를 잠시 1(Continuous)로 두고 재시작 → LIGHT ON. 상시 점등이라 트리거와 무관하게 켜진다. 켜지면 조명계는 정상이고 남은 문제는 트리거뿐이다. <b>확인 후 반드시 2 로 되돌릴 것</b> — Continuous 로는 액적이 정지해 보이지 않아 측정이 안 된다.",
+  "_comment7c": "★2026-09-07 11호기 실측 — 위 방법으로 <b>Continuous(1) 에서 점등 확인</b>. 따라서 LED·전원·배선·Configurator 의 LED Enable 채널·정격전류가 모두 정상이다. 어두웠던 원인은 Pulse 모드에 발광 트리거가 없던 것 하나뿐이다.",
+  "_comment7d": "★Pulse 발광은 사슬의 맨 끝이다: 헤드/잉크 → 스핏 → PCC FireOut → PFI5 → ctr1(÷100) → ctr0 → LED. 즉 <b>실제로 토출이 돌아야</b> 불이 깜빡인다 — NI 설치나 설정만으로는 켤 수 없다. 헤드 미장착 상태에서 DWC 조명이 어두운 것은 정상이며 고칠 대상이 아니다.",
+  "_comment7e": "★NI-DAQmx 는 호기마다 다르다 — 11호기 제어PC 에는 C:\\Windows\\SysWOW64\\nicaiu.dll(2.81MB, 2019-09-16) 이 <b>이미 있다</b>(2026-09-07 확인). 다른 호기 기록을 옮겨 적어 '미설치' 로 단정하지 말 것. 개발PC 에는 없다(DllImport 지연 바인딩이라 없어도 빌드는 된다).",
+  "_comment7f": "커미셔닝 순서 — 헤드가 붙기 전까지는 RunMode 1 로 두고 카메라 초점·시야·MicronsPerPixel 재교정을 먼저 한다(빛이 있어야 보인다). 헤드·잉크 장착 후 2 로 되돌리고 스핏 → 트리거 → 지연 스윕 → 액적 속도 측정으로 넘어간다.",
   "_comment8": "sID 배정 확정(2026-08-06). ① GVC 화면 LIGHT ON(sID 2) 시 실제 점등 확인 ② Trigger_Count 가 sID1=59198 / sID2=1042 로 57배 차 — 토출마다 발광하는 DWC 가 sID 1 ③ Trigger Delay 가 sID1 에만 설정됨(지연은 DWC 전용).",
   "_comment9": "★DWC 실장 메모: Trigger Input(0x301) 이 Internal(0) 로 되어 있다 — 제어PC 에 NI 런타임(nicaiu.dll)이 없어 트리거가 안 들어오니 임시로 자체 발광시킨 상태. NI 복구 후 Digital IO(1) 로 되돌릴 것. Internal 이면 토출과 무동기라 액적이 정지해 보이지 않는다.",
   "Devices": [

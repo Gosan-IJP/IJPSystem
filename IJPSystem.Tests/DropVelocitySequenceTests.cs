@@ -40,9 +40,16 @@ namespace IJPSystem.Tests
             public uint? TryReadDelayRaw() =>
                 double.IsNaN(LastDelayMicroseconds) ? null : (uint)Math.Round(LastDelayMicroseconds);
 
+            /// <summary>쓴 값을 그대로 돌려준다 — 리드백 검증이 '일치' 로 떨어지는 정상 상태.</summary>
+            public double? ReadDelayMicroseconds() =>
+                double.IsNaN(LastDelayMicroseconds) ? null : LastDelayMicroseconds;
+
             public bool IsEnabled { get; private set; }
             public ushort ExpectedRunMode => 2;                     // 드랍와처 = Pulse
             public ushort? ReadOperationMode() => IsEnabled ? ExpectedRunMode : (ushort)0;
+
+            /// <summary>Digital IO(1) — 실장 구성. 트리거원 경고 경로를 타지 않는다.</summary>
+            public ushort? ReadTriggerInput() => 1;
 
             public void Dispose() { }
         }

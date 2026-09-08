@@ -32,6 +32,16 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         uint? TryReadDelayRaw();
 
         /// <summary>
+        /// 지연 리드백을 <b>us 로 해석</b>한 값. 실패/미지원이면 null.
+        ///
+        /// <para>검증은 이걸로 해야 한다. raw 를 쓴 값과 그대로 비교하면 float32 기종에서
+        /// 항상 어긋난 것으로 보인다 — 890.0us 의 raw 는 1147043840(=0x445E8000)이라
+        /// 890 과 같을 리가 없다(2026-09-07 11호기에서 멀쩡한 스트로브를 두고
+        /// "쓴 값과 다름 — 주소/스케일 확인" 이 떴다).</para>
+        /// </summary>
+        double? ReadDelayMicroseconds();
+
+        /// <summary>
         /// 지금 <b>실제로</b> 어떤 모드로 켜져 있는가(0=OFF / 1=Continuous / 2=Pulse). 읽기 실패 시 null.
         ///
         /// <para><see cref="Enable"/> 를 호출했다는 사실만으로는 켜졌다고 말할 수 없다 — 전원이
@@ -42,6 +52,16 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
         /// <summary>이 조명이 있어야 할 모드(드랍와처=2 Pulse, 글라스뷰=1 Continuous). 판정 기준값.</summary>
         ushort ExpectedRunMode { get; }
+
+        /// <summary>
+        /// 트리거 입력원(0x301). 0=Internal(자체 발진) / 1=Digital IO(외부 트리거). 읽기 실패 시 null.
+        ///
+        /// <para>★"켜라고 했는데 불이 안 들어온다" 의 1순위 원인이다. Pulse(2) 모드는 트리거가
+        /// 들어와야 한 번 발광하므로, Digital IO 인데 트리거 체인이 죽어 있으면(NI 런타임 미설치 등)
+        /// 0x300 쓰기·리드백이 모두 성공해도 LED 는 영원히 어둡다. 고장이 아니라 정상 동작이라
+        /// 화면이 이유를 말해주지 않으면 배선부터 의심하게 된다(2026-09-07 11호기).</para>
+        /// </summary>
+        ushort? ReadTriggerInput();
     }
 
     /// <summary>
@@ -65,6 +85,13 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
         /// <summary>Trigger Delay 레지스터(0x314). LabVIEW <c>iCore_Set Delay time.vi</c> 대상.</summary>
         public ushort DelayRegister { get; set; } = 0x314;
+
+        /// <summary>
+        /// 트리거 입력원 레지스터(0x301). 0=Internal, 1=Digital IO. <b>읽기 전용으로만 쓴다</b> —
+        /// 진단 로그가 "Pulse 인데 트리거가 없어서 어둡다" 를 구분하기 위한 것이다.
+        /// 값을 바꾸는 것은 iPulse Configurator 의 일이다.
+        /// </summary>
+        public ushort TriggerInputRegister { get; set; } = 0x301;
 
         /// <summary>
         /// ★지연은 스케일 정수가 아니라 <b>IEEE-754 float32</b> 다(2026-08-05 실측 확정).
@@ -321,6 +348,13 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
         public ushort ExpectedRunMode => _dev.RunMode;
 
+        /// <summary>트리거 입력원(0x301) 리드백. 0=Internal / 1=Digital IO. 읽기 실패 시 null.</summary>
+        public ushort? ReadTriggerInput()
+        {
+            var r = _bus?.ReadHolding(_dev.UnitId, _cfg.TriggerInputRegister, 1);
+            return r is { Length: > 0 } ? r[0] : null;
+        }
+
         /// <summary>
         /// 지연 레지스터 리드백(raw 비트). 커미셔닝 검증용 — 통신·주소가 맞는지 확인한다.
         /// float32 로 해석하려면 <see cref="ReadDelayMicroseconds"/> 를 쓸 것.
@@ -382,6 +416,10 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
         public uint? TryReadDelayRaw() =>
             double.IsNaN(LastDelayMicroseconds) ? null : (uint)Math.Round(LastDelayMicroseconds);
 
+        /// <summary>가상은 쓴 값을 그대로 돌려준다 — 검증 경로가 '일치' 로 떨어지는 것을 확인할 수 있다.</summary>
+        public double? ReadDelayMicroseconds() =>
+            double.IsNaN(LastDelayMicroseconds) ? null : LastDelayMicroseconds;
+
         /// <summary>
         /// 가상은 Enable 한 대로 돌려준다 — 실물처럼 "명령과 리드백이 일치" 하는 정상 상태를 재현한다.
         /// 덕분에 화면의 조명 램프를 가상 모드에서 그대로 확인할 수 있다.
@@ -390,6 +428,9 @@ namespace IJPSystem.Platform.Infrastructure.Devices.DropWatcher
 
         /// <summary>가상 드랍와처는 실물과 같이 Pulse(2) 를 기준으로 둔다.</summary>
         public ushort ExpectedRunMode => 2;
+
+        /// <summary>가상은 스스로 발광 시점을 만든다 → Internal(0). 트리거 없음 경고가 뜨지 않아야 한다.</summary>
+        public ushort? ReadTriggerInput() => 0;
 
         public void Dispose() => IsConnected = false;
     }

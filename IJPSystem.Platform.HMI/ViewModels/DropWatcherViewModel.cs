@@ -660,11 +660,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 _mainVM.AddLog($"[VISION] DropWatcher: Delay {which} = {DelayTimeUs:F1}us 적용", LogLevel.Info);
 
                 // 커미셔닝 검증 — LabVIEW 원본처럼 쓰기 직후 리드백으로 통신/주소를 확인한다.
+                // ★ 비교는 <b>us 로 해석한 값</b>으로 한다. raw 를 그대로 견주면 float32 기종에서
+                //   늘 어긋난 것으로 보인다 — 890.0us 의 raw 는 1147043840(0x445E8000)이라
+                //   890 과 같을 수가 없다. 2026-09-07 11호기에서 멀쩡히 왕복하는 스트로브를 두고
+                //   "주소/스케일 확인" 이 떠서, 잘 붙은 장치를 의심하게 만들었다.
+                double? echoed = _strobe.ReadDelayMicroseconds();
                 var raw = _strobe.TryReadDelayRaw();
-                if (raw != null)
-                    _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 리드백 raw={raw} " +
-                                   $"({(raw == (uint)Math.Round(DelayTimeUs) ? "일치" : "쓴 값과 다름 — 주소/스케일 확인")})",
-                                   LogLevel.Info);
+                if (echoed != null)
+                {
+                    bool match = Math.Abs(echoed.Value - DelayTimeUs) <= 0.5;   // 부동소수 왕복 오차 여유
+                    _mainVM.AddLog(
+                        $"[VISION] DropWatcher: 스트로브 리드백 {echoed.Value:F1}us (raw={raw}) " +
+                        (match ? "— 일치" : $"— 쓴 값({DelayTimeUs:F1}us)과 다름. 주소/스케일 확인"),
+                        match ? LogLevel.Success : LogLevel.Warning);
+                }
                 else
                     _mainVM.AddLog("[VISION] DropWatcher: 스트로브 리드백 실패/미지원 — 쓰기 자체는 성공",
                                    LogLevel.Warning);
@@ -700,9 +709,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 _strobe.Enable(next);
                 IsStrobeOn = next;
                 // Operation(0x300) 을 쓰고 리드백까지 확인한다 — 실패하면 위 Enable 이 예외를 던진다.
-                // 그래도 불이 안 들어오면 컨트롤러의 LED Enable(채널) 이 꺼진 것(Configurator 전용 설정).
+                ushort mode = next ? _strobe.ExpectedRunMode : (ushort)0;
                 _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 발광 {(next ? "ON" : "OFF")} " +
-                               "(불이 안 들어오면 iPulse Configurator 의 LED Enable 채널 확인)", LogLevel.Info);
+                               $"(Operation=0x300 ← {mode} {ModeName(mode)}, 리드백 확인됨)", LogLevel.Info);
+
+                // ★여기까지 성공해도 눈에 불이 안 보일 수 있다. Pulse 는 트리거가 와야 한 번 발광하기
+                //   때문이다 — 쓰기가 다 맞았는데 어두우면 배선이 아니라 트리거를 봐야 한다.
+                if (next && mode == 2) WarnIfPulseWithoutTrigger();
             }
             catch (Exception ex)
             {
@@ -710,6 +723,53 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 온/오프 실패({ex.GetType().Name}): {ex.Message}",
                                LogLevel.Error);
             }
+        }
+
+        private static string ModeName(ushort mode) => mode switch
+        {
+            0 => "OFF",
+            1 => "Continuous",
+            2 => "Pulse",
+            _ => "?"
+        };
+
+        /// <summary>
+        /// Pulse 로 켠 뒤 "왜 어두운가" 를 로그로 답한다.
+        ///
+        /// <para>Pulse(2)는 트리거가 들어올 때 한 번 발광한다. 그래서 트리거원이 Digital IO 인데
+        /// 트리거 체인이 돌지 않으면 <b>모든 쓰기가 성공하고도 LED 는 계속 어둡다</b> — 고장이 아니라
+        /// 정상 동작이다. 이 안내가 없으면 배선·전원·포트를 뒤지게 된다(2026-09-07 11호기, NI 런타임
+        /// 미설치로 트리거 체인이 죽어 있었다).</para>
+        /// </summary>
+        private void WarnIfPulseWithoutTrigger()
+        {
+            ushort? src = _strobe.ReadTriggerInput();
+
+            if (src == 0)   // Internal — 스스로 발진하므로 트리거와 무관하게 켜져야 한다
+            {
+                _mainVM.AddLog("[VISION] DropWatcher: 트리거원 Internal(0) — 자체 발진이라 토출과 무동기입니다. " +
+                               "액적이 정지해 보이지 않으니 측정 전에 Digital IO(1) 로 되돌릴 것.", LogLevel.Warning);
+                return;
+            }
+
+            if (src == null)
+            {
+                _mainVM.AddLog("[VISION] DropWatcher: 트리거원(0x301) 을 읽지 못했습니다 — 어두우면 트리거부터 확인.",
+                               LogLevel.Info);
+                return;
+            }
+
+            // Digital IO(1): 외부 트리거가 있어야만 발광한다.
+            if (!_trigger.IsRunning)
+                _mainVM.AddLog("[VISION] DropWatcher: 트리거원 Digital IO(1) 인데 트리거 체인이 정지 상태입니다 — " +
+                               "Pulse 는 트리거가 와야 발광하므로 불이 안 들어오는 게 정상입니다. " +
+                               "먼저 트리거를 시작하세요(NI 런타임 미설치면 그것부터). " +
+                               "LED·전원만 확인하려면 StrobeConfig.json 의 CAM_DW RunMode 를 1(Continuous)로 두고 재시작.",
+                               LogLevel.Warning);
+            else
+                _mainVM.AddLog("[VISION] DropWatcher: 트리거원 Digital IO(1) · 트리거 체인 동작 중 — " +
+                               "그래도 어두우면 iPulse Configurator 의 LED Enable 채널과 정격전류를 확인하세요.",
+                               LogLevel.Info);
         }
 
         // 스트로브 지연 컨트롤러 연결 보장. 실장 COM 포트가 없어도 화면은 떠야 하므로 지연 초기화 + 실패 허용.
@@ -731,6 +791,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         : "";
                     _mainVM.AddLog($"[VISION] DropWatcher: 스트로브 연결됨(포트 열림){port} — 장비 응답은 Delay 적용/리드백으로 확인",
                                    LogLevel.Info);
+                    // 연결과 동시에 Enable(true) 로 켰다. Pulse 면 여기서도 트리거가 없어 어두울 수 있으므로
+                    // 토글과 똑같이 이유를 남긴다(첫 점등이 대개 이 경로다).
+                    if (_strobe.ExpectedRunMode == 2) WarnIfPulseWithoutTrigger();
                 }
             }
             catch (Exception ex)
