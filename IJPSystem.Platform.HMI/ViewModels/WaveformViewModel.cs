@@ -3,6 +3,7 @@ using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.HMI.Common;
 using IJPSystem.Platform.Infrastructure.Config;
+using IJPSystem.Platform.Infrastructure.Print.Meteor;
 using IJPSystem.Platform.Infrastructure.Print.Waveform;
 using Microsoft.Win32;
 using System;
@@ -113,7 +114,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         // ── 파형 목록(파일 관리) ───────────────────────────────────────────
         // MetWaveEpson 의 Waveform 콤보 + Import / Remove / Rename / Make Default 와 같은 자리.
-        private readonly WaveformRepository _repo = new();
+        // ★ 목록도 기본도 <b>Meteor cfg 가 기준</b>이다(2026-09-07).
+        //   예전에는 저장소가 %PUBLIC%\Documents\Meteor\Waveform 을 보고, [기본]은 그 폴더에
+        //   따로 적어 둔 마커 파일이 정했다. 그런데 헤드가 파형을 고르는 값은 cfg 의
+        //   WaveformFileIdx 다 — 화면은 1번을 [Default]로 띄우는데 헤드는 13번을 쏘고 있었다.
+        //   폴더까지 달라서(cfg 는 Config\PccE\Waveform) Import/Remove 가 헤드와 무관한
+        //   폴더에 작용했다. 두 개의 "기본"을 하나로 합친다.
+        private readonly WaveformRepository _repo;
+        private MeteorConfigFile _meteorCfg;
 
         public ObservableCollection<WaveformEntry> WaveformList { get; } = new();
 
@@ -209,6 +217,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // 사용자가 고친 것만 "저장 안 됨"으로 센다(로드는 제외).
             Editor.Edited += () => IsDirty = true;
 
+            // cfg 를 먼저 읽어야 어느 폴더를 볼지 정해진다.
+            _meteorCfg = MeteorConfigFile.Load(MeteorConfigPath);
+            _repo      = new WaveformRepository(CfgWaveformDir());
+
             RefreshWaveformList();
             AutoLoadDefault();
             SelectLoadedInList();
@@ -241,10 +253,34 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// </summary>
         private void AutoLoadDefault()
         {
-            var def = _repo.GetDefault();
+            var def = WaveformList.FirstOrDefault(e => e.IsDefault) ?? _repo.GetDefault();
             if (def == null) return;
             LoadWaveformFiles(_repo.RootDirectory, def.Name, auto: true);
         }
+
+        // ── cfg 가 기준 ───────────────────────────────────────────────────
+
+        /// <summary>
+        /// cfg 의 파형들이 실제로 놓인 폴더. 등록이 없으면 null 을 줘서 저장소가 예전 규약
+        /// 경로(<c>%PUBLIC%\Documents\Meteor\Waveform</c>)로 물러나게 한다 — cfg 가 아직
+        /// 정리되지 않은 장비에서 화면이 통째로 비어 버리지 않도록.
+        /// </summary>
+        private string? CfgWaveformDir()
+        {
+            var first = _meteorCfg.Waveforms.FirstOrDefault();
+            if (first == null) return null;
+            try { return Path.GetDirectoryName(first.FullPath); }
+            catch { return null; }
+        }
+
+        /// <summary>헤드가 실제로 쓰는 기본 파형 이름(<c>WaveformFileIdx</c> 가 가리키는 것).</summary>
+        private string? CfgDefaultName()
+            => _meteorCfg.Waveforms.FirstOrDefault(w => w.IsDefault)?.Name;
+
+        /// <summary>cfg 에 등록된 파형인가 — 등록되지 않은 파일은 헤드가 고를 수 없다.</summary>
+        private MeteorWaveformRef? CfgEntryOf(string name)
+            => _meteorCfg.Waveforms.FirstOrDefault(
+                   w => string.Equals(w.Name, name, StringComparison.OrdinalIgnoreCase));
 
         // ── 파일 로드 ─────────────────────────────────────────────────────
         private void ExecuteLoad()
@@ -510,7 +546,16 @@ namespace IJPSystem.Platform.HMI.ViewModels
             try
             {
                 WaveformList.Clear();
-                foreach (var e in _repo.List()) WaveformList.Add(e);
+
+                // [기본] 표시는 저장소의 마커가 아니라 cfg 의 WaveformFileIdx 를 따른다.
+                // 폴더에는 있는데 cfg 에 없는 파일도 그대로 보여 준다 — 숨기면 "분명히
+                // 넣었는데 목록에 없다" 가 되고, 보여 주면 "왜 기본으로 못 정하지" 로
+                // 끝난다. 뒤쪽이 훨씬 알아채기 쉽다.
+                string? cfgDefault = CfgDefaultName();
+                foreach (var e in _repo.List())
+                    WaveformList.Add(cfgDefault == null
+                        ? e
+                        : e with { IsDefault = string.Equals(e.Name, cfgDefault, StringComparison.OrdinalIgnoreCase) });
                 SelectedWaveform = WaveformList.FirstOrDefault(
                     e => string.Equals(e.Name, keep, StringComparison.OrdinalIgnoreCase));
             }
@@ -620,14 +665,54 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
         }
 
+        /// <summary>
+        /// 기본 파형 지정 — <b>cfg 의 <c>WaveformFileIdx</c> 한 줄</b>을 바꾼다.
+        ///
+        /// <para>저장소 마커를 고쳐 봐야 헤드는 모른다. 헤드가 파형을 고르는 값은 cfg 의
+        /// 이 번호 하나뿐이라, 여기를 안 고치면 화면만 바뀌고 토출은 그대로다.</para>
+        ///
+        /// <para>cfg 에 등록되지 않은 파일은 <b>번호가 없어</b> 기본으로 정할 수 없다.
+        /// 그 경우 무엇을 해야 하는지(cfg 에 Waveform<i>N</i> 줄을 추가) 말해 준다 —
+        /// 버튼이 아무 말 없이 안 먹으면 파일이 깨진 줄 안다.</para>
+        ///
+        /// <para>엔진이 이미 떠 있으면 <b>다시 읽어야</b> 반영된다. cfg 는 기동할 때 읽는다.</para>
+        /// </summary>
         private void ExecuteMakeDefault()
         {
             var e = SelectedWaveform;
             if (e == null) return;
 
-            _repo.MakeDefault(e);
-            RefreshWaveformList(e.Name);
-            _mainVM.AddLog($"[WAVEFORM] 기본 파형: {e.Name}", LogLevel.Info);
+            var cfgEntry = CfgEntryOf(e.Name);
+            if (cfgEntry == null)
+            {
+                _mainVM.AddLog($"[WAVEFORM] '{e.Name}' 은 cfg 에 등록되어 있지 않아 기본으로 정할 수 없습니다.",
+                               LogLevel.Warning);
+                Dialogs.Show(
+                    $"'{e.Name}' 은 Meteor 설정(.cfg)에 등록되어 있지 않습니다.\n\n" +
+                    "헤드는 cfg 의 Waveform1~N 번호로만 파형을 고릅니다.\n" +
+                    $"먼저 아래 파일에 줄을 추가하세요:\n\n{MeteorConfigPath}\n\n" +
+                    $"    [{_meteorCfg.HeadSection}]\n" +
+                    $"    Waveform<번호> = \"Waveform\\{e.Name}.ComA\"",
+                    "cfg 미등록 파형", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                MeteorConfigFile.SetValue(MeteorConfigPath, "DefaultParameterValues",
+                                          "WaveformFileIdx", cfgEntry.Index.ToString());
+                _meteorCfg = MeteorConfigFile.Load(MeteorConfigPath);   // 쓴 값을 다시 읽어 화면과 맞춘다
+                RefreshWaveformList(e.Name);
+
+                _mainVM.AddLog($"[WAVEFORM] 기본 파형: {cfgEntry.Index}번 {e.Name} " +
+                               "— 엔진이 떠 있으면 PCC 설정을 다시 읽어야 반영됩니다.", LogLevel.Success);
+            }
+            catch (Exception ex)
+            {
+                _mainVM.AddLog($"[WAVEFORM] 기본 파형 지정 실패: {ex.Message}", LogLevel.Error);
+                Dialogs.Show($"설정 파일을 고치지 못했습니다.\n{ex.Message}\n\n{MeteorConfigPath}",
+                    "기본 파형 지정 실패", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void RaiseFileCanExecute()
