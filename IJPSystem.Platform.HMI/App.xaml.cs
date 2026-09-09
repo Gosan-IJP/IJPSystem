@@ -18,7 +18,6 @@ using IJPSystem.Platform.HMI.Common.Models;
 using IJPSystem.Platform.HMI.ViewModels;
 using IJPSystem.Platform.HMI.Views;
 using IJPSystem.Platform.Infrastructure.Config;
-using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -133,33 +132,17 @@ namespace IJPSystem.Platform.HMI
                     "Vision Driver", $"{appSettings.DriverMode.Vision} Vision 드라이버 연결",
                     InitializeVisionDriver);
 
-                // 헤드(Meteor PCC) 연결 확인 — Vision 다음 단계. 읽기 전용 1회 조회.
-                // 미부착은 실패가 아니라 경고(!)로 표시하고 기동은 계속한다(엔진 없이도 HMI 는 떠야 함).
-                // Head=None(미사용 구성)이어도 항목 자체는 항상 표시한다 — 단계가 통째로 사라지면
-                // "확인을 못 한 건지, 안 쓰는 구성인지" 화면에서 구분할 수 없다.
-                // 가상도 한 단계로 보여 준다 — 스플래시에서 "미사용"으로 지나가면
-                // 화면에 가상 값이 뜨는 이유를 알 수 없다.
-                string headMode  = DriverMode(d => d.Head);
-                bool headEnabled = headMode == "meteor";
-                bool headVirtual = headMode == "virtual";
-                await splashVM.RunStepAsync(
-                    "Print Head",
-                    headEnabled ? "Meteor 헤드 PCC 부착 상태 확인"
-                    : headVirtual ? "가상 헤드 — 실물 없이 화면 확인용"
-                    : "미사용 — DriverMode.Head=None",
-                    () =>
-                    {
-                        if (headVirtual)
-                            return (Enabled: true, Connected: false, Detail: "가상 헤드 — 화면의 값은 실물이 아닙니다");
-                        if (!headEnabled)
-                            return (Enabled: false, Connected: false, Detail: "미사용 — DriverMode.Head=None");
-                        var s = ProbeMeteorHead();
-                        return (Enabled: true, Connected: s.Connected, Detail: s.Detail);
-                    },
-                    r => (!r.Enabled  ? InitStepStatus.Skipped
-                          : r.Connected ? InitStepStatus.Done
-                                        : InitStepStatus.Warning,
-                          r.Detail));
+                // ★헤드(Print Head)는 스플래시 단계가 아니다 — 여기서 물어봐야 답이 정해져 있다.
+                //
+                //   엔진은 앱이 뜬 뒤 MainViewModel 의 폴링이 스스로 띄운다(TryAutoStartEngine).
+                //   즉 스플래시 시점에는 엔진이 아직 없는 것이 <b>정상</b>이라, 여기서 확인하면
+                //   매 부팅 느낌표가 떴다. 항상 뜨는 경고는 경고가 아니라 배경 소음이 되고,
+                //   안내 문구도 "[엔진 시작] 을 누르세요" 라 자동 시작과 어긋나 있었다.
+                //   (실장 2026-09-09 — 사용자가 "항상 느낌표" 를 지적)
+                //
+                //   헤드 상태는 이후가 전부 맡는다: 상태 표시줄 HEAD, 자동 시작 로그,
+                //   그리고 PCC 가 30초 안에 안 붙으면 뜨는 알림. 구성값(Head=Meteor/Virtual/None)은
+                //   위의 [Config] 부팅 로그에 이미 남으므로 가상 여부도 로그로 따라갈 수 있다.
 
                 _machine = await splashVM.RunStepAsync(
                     "Machine Setup", "PulseMachine 초기화 + Motor Config 로드",
@@ -240,19 +223,6 @@ namespace IJPSystem.Platform.HMI
 
         
         
-        /// <summary>
-        /// Meteor 헤드(PCC) 부착 상태 1회 조회. 예외를 던지지 않으므로 스플래시 단계가 실패로 끝나지 않는다.
-        /// PiOpenPrinter 는 프린터를 점유(claim)하므로 확인 후 즉시 해제 —
-        /// 이어서 생성되는 MainViewModel 의 상시 모니터가 다시 붙을 수 있게 한다.
-        /// </summary>
-        private static MeteorHeadStatus ProbeMeteorHead()
-        {
-            using var monitor = new MeteorStatusMonitor();
-            var status = monitor.Poll();
-            LoggerService.WriteToFile(status.Connected ? "INFO" : "WARN", $"[HEAD] {status.Detail}");
-            return status;
-        }
-
         /// <summary>AppConfig.json 의 DriverMode 값(대소문자·공백 무시). 미설정 시 Virtual.</summary>
         private static string DriverMode(Func<DriverModeSettings, string> pick)
             => (pick(AppSettingsService.Current?.DriverMode ?? new DriverModeSettings()) ?? "Virtual")

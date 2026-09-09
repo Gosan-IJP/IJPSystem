@@ -857,12 +857,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // ── PCC 미연결 안내 ────────────────────────────────────────────────
         //
         // 붙는 데 시간이 걸린다(엔진 기동 → PiOpenPrinter → 이더넷으로 PCC 부착). 그래서
-        // 잠깐 안 붙은 것과 <b>영영 안 붙는 것</b>을 시간으로 가른다. 20초는 스핏 경로의
-        // PCC 부착 대기(15초)보다 길게 잡은 값이다 — 짧게 잡으면 정상 부착 중에 창이 뜬다.
-        private static readonly TimeSpan PccAlertAfter = TimeSpan.FromSeconds(20);
+        // 잠깐 안 붙은 것과 <b>영영 안 붙는 것</b>을 시간으로 가른다.
+        private static readonly TimeSpan PccAlertAfter = TimeSpan.FromSeconds(30);
+
         private readonly DateTime _startedAt = DateTime.Now;
         private bool _pccAlertShown;
         private bool _pccEverConnected;
+
+        // ★기준 시각은 <b>엔진이 뜬 때</b>다. 앱 시작 시각으로 재면, 엔진 자동 시작이 5초쯤
+        //   걸리는 만큼 PCC 부착에 주어지는 시간이 그대로 깎인다(2026-09-09: 앱 기준 20초가
+        //   엔진 기준으로는 19.6초였다). 엔진이 끝내 안 뜨면 앱 시작 시각으로 잰다.
+        private DateTime? _engineUpAt;
+
+        private DateTime PccClockFrom => _engineUpAt ?? _startedAt;
 
         private void UpdateHeadConnection()
         {
@@ -886,11 +893,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
             if (s.Connected) _pccEverConnected = true;
 
+            // 엔진이 붙은 순간부터 PCC 부착 시계를 센다 — 그 전까지는 PCC 를 기다릴 단계가 아니다.
+            if (s.Reachable) _engineUpAt ??= DateTime.Now;
+
             // 한 번도 못 붙은 채 시간이 지나면 딱 한 번 알린다. 붙었다가 끊긴 것은 다른 사건이라
             // 여기서 다루지 않는다(그건 상태 표시가 맡는다).
             if (!_pccAlertShown && !_pccEverConnected
                 && _headMonitor is MeteorStatusMonitor
-                && DateTime.Now - _startedAt > PccAlertAfter)
+                && DateTime.Now - PccClockFrom > PccAlertAfter)
             {
                 _pccAlertShown = true;
                 WarnPccNotConnected(s);
@@ -924,11 +934,28 @@ namespace IJPSystem.Platform.HMI.ViewModels
             else
             {
                 // 2단계 실패 — 엔진은 붙었고 PCC 하드웨어가 안 왔다. 여기서부터 DHCP 이야기다.
+                //
+                // ★PCC 가 <b>하나도 안 보이면</b>(PccsPresent 없음) 주소를 못 받은 것이다. PCC-E 는
+                //   DHCP 로 주소를 받으므로, IP 가 '주소 없음' 이면 엔진 눈에 아예 나타나지 않는다.
+                //
+                //   원인은 <b>세 가지가 같은 증상</b>을 낸다 — 랜선/전원이 빠짐, DHCP 서버가 안 뜸,
+                //   cfg 어댑터 이름이 실제 NIC 과 다름. 한때 여기서 DHCP 를 단정했는데 실제로는
+                //   선이 빠져 있었다(실장 2026-09-09). 셋을 가르는 건 DHCP 서버의 Clients 탭이다 —
+                //   PCC 가 목록에 뜨면 배선은 살아 있다는 뜻이라 남는 후보가 준다.
+                bool nonePresent = s.PccsPresent.Length == 0 || s.PccsPresent.Contains("없");
+
                 body = $"엔진에는 붙었지만 PCC 가 오지 않았습니다 ({s.PccsAttached}/{s.PccsRequired}).\n\n" +
                        $"프린터 상태: {s.PrinterState}\n\n" +
-                       "· PCC 전원과 이더넷 링크(PCC2-E 어댑터)를 확인하세요.\n" +
-                       "· PCC 는 DHCP 로 주소를 받습니다 — DHCP 서버가 떠 있어야 합니다.\n" +
-                       "· cfg 의 [Ethernet] 어댑터 이름이 실제 NIC 과 맞는지 보세요.";
+                       (nonePresent
+                           ? "PCC 가 하나도 보이지 않습니다 — 주소를 못 받았습니다.\n\n" +
+                             "· ★랜선과 PCC 전원부터 보세요 — 선이 빠져 있어도 주소를 못 받습니다(실장 2026-09-09).\n" +
+                             "· ★DHCP 서버가 떠 있는지 보세요. 없으면 잠깐 띄워 IP 를 줍니다.\n" +
+                             "   (상시 실행은 금물 — EtherCAT 홈복귀를 방해합니다. 주소를 받으면 끕니다)\n" +
+                             "· cfg 의 [Ethernet] 어댑터 이름이 실제 NIC 이름과 같은지 보세요.\n\n" +
+                             "셋 다 'IP 주소 없음' 이라는 같은 증상을 냅니다. 둘을 가르는 건\n" +
+                             "DHCP 서버의 Clients 탭 — PCC 가 목록에 있으면 배선은 살아 있는 겁니다."
+                           : "· PCC 전원과 이더넷 링크(PCC2-E 어댑터)를 확인하세요.\n" +
+                             "· cfg 의 [Ethernet] 어댑터 이름이 실제 NIC 과 맞는지 보세요.");
             }
 
             AddLog($"[HEAD] {title} — " + (s.Reachable
