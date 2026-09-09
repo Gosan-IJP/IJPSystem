@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using IJPSystem.Platform.Domain.Models.Config;
 using IJPSystem.Platform.Infrastructure.Config;
+using IJPSystem.Platform.Infrastructure.Devices.Meniscus;
 using Xunit;
 
 namespace IJPSystem.Tests
@@ -125,6 +126,52 @@ namespace IJPSystem.Tests
         {
             Assert.False(Enabled(new AppSettings()));
             Assert.Equal("", new AppSettings().DriverMode.Meniscus);
+        }
+
+        // ── 단위 변환 ────────────────────────────────────────────────────
+        //
+        // 장비 레지스터는 0.1Pa 단위이고 바깥 규약은 kPa 다. 스케일 하나가 틀어지면
+        // 13.8Pa 가 13,800Pa 로 보이는데, 통신이 멀쩡하니 아무 에러도 안 난다
+        // — 실제로 11호기에서 그렇게 떴다(2026-09-08). 장비 없이 여기서 잡는다.
+
+        /// <summary>랩뷰 맵 기준: 레지스터 1 = 0.1Pa.</summary>
+        [Theory]
+        [InlineData(0,     0.0)]        // 0
+        [InlineData(500,   0.05)]       // 50Pa  = 0.050kPa
+        [InlineData(138,   0.0138)]     // 13.8Pa — 11호기 관측값
+        [InlineData(10000, 1.0)]        // 1000Pa = 1kPa
+        public void 레지스터를_kPa_로_읽는다(int raw, double expectedKpa)
+            => Assert.Equal(expectedKpa, new DmdConfig().ToPressure((ushort)raw), 6);
+
+        /// <summary>목표압력은 10배 정수로 써 넣는다(SV ÷10).</summary>
+        [Theory]
+        [InlineData(0.05, 500)]
+        [InlineData(1.0,  10000)]
+        public void kPa_를_레지스터로_쓴다(double kpa, int expectedRaw)
+            => Assert.Equal((ushort)expectedRaw, new DmdConfig().ToRaw(kpa));
+
+        /// <summary>음압도 다뤄야 한다 — 메니스커스는 보통 음압으로 잡는다.</summary>
+        [Fact]
+        public void 음압은_부호가_유지된다()
+        {
+            var cfg = new DmdConfig();
+            ushort raw = cfg.ToRaw(-0.2);                 // -200Pa
+            Assert.Equal(-0.2, cfg.ToPressure(raw), 6);   // 왕복해도 부호가 살아 있어야 한다
+        }
+
+        /// <summary>
+        /// 기본 주소가 랩뷰 맵과 같아야 한다. 읽기와 쓰기가 <b>다른 주소</b>이고
+        /// 쓰기 쪽(0·1)은 write-only 라, 이 값이 흐트러지면 읽기 스윕으로는 되찾을 수 없다.
+        /// </summary>
+        [Fact]
+        public void 기본_주소는_랩뷰_맵과_같다()
+        {
+            var cfg = new DmdConfig();
+            Assert.Equal(51, cfg.PressureReadAddress);    // PV
+            Assert.Equal(1,  cfg.PressureSetAddress);     // SV 쓰기 (write-only)
+            Assert.Equal(0,  cfg.ControlAddress);         // RUN/STOP 쓰기 (write-only)
+            Assert.Equal(50, cfg.RunStateAddress);        // RUN/STOP 상태
+            Assert.Equal(52, cfg.SetpointReadAddress);    // SV 되읽기
         }
     }
 }

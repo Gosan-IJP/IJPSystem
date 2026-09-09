@@ -1,30 +1,41 @@
 {
-  "_comment1": "메니스커스 압력 컨트롤러(DMD) — Modbus RTU / 시리얼. 패턴 인쇄 화면의 압력 표시·설정과 VV 패널의 MPC AL 램프가 이 값을 쓴다.",
+  "_comment1": "메니스커스 압력 컨트롤러(DMD) — Modbus RTU / RS-485(Non-Echo). 패턴 인쇄 화면의 압력 표시·설정과 VV 패널의 MPC AL 램프가 이 값을 쓴다.",
   "_comment2": "★붙일지 말지는 여기가 아니라 AppConfig.json 의 DriverMode.Meniscus 가 정한다 (Virtual | Dmd). 이 파일은 '어떻게 붙을지'만 담는다.",
-  "_comment3": "★2026-09-07 11호기 실측: 0~1000 을 훑어 읽히는 레지스터는 50·51·52 셋뿐이었다(FC3/FC4 동일값). 예전 placeholder(0/256/257)는 전부 Illegal Data Address 였다 — 셋 다 틀린 값이었다.",
-  "_comment3a": "★셋 중 51 만 값이 있었다(=219, 펌프 정지 상태). 그래서 51 을 읽기 주소로 잡았다. 다만 '51 이 압력' 이라는 것은 <b>아직 미확정</b>이다 — 실제 압력계와 비교해서 확인할 것. 안 맞으면 50/52 를 대신 넣어 본다.",
-  "_comment3b": "★PressureSetAddress/ControlAddress 는 여전히 모른다. 후보는 50 과 52 뿐인데(둘 다 0), 어느 쪽이 설정값이고 어느 쪽이 ON/OFF 인지 구분할 근거가 없다. 확인 전에는 쓰기를 시도하지 말 것 — 모르는 레지스터에 값을 넣으면 되돌리기 어렵다.",
-  "_comment3c": "구분 방법: 펌프를 켜고(VV 패널 — EtherCAT DO 계통이라 이 파일과 무관) Tools\\SerialScan 의 3_SweepAddresses 를 다시 돌려 <b>값이 변하는 주소</b>를 본다. 변하는 쪽이 실측 압력이다.",
-  "_comment4": "★COM 포트는 호기마다 다르다 — 옮겨 적지 말고 반드시 확인할 것. USB 시리얼은 꽂는 순서로 번호가 정해진다. (옛 AppConfig=COM3, 9호기 실배선=COM6)",
-  "_comment4a": "★★11호기(2026-09-07)에서 COM6 은 'Intel(R) Active Management Technology - SOL' 이었다 — 메인보드가 만드는 가상 포트다. 포트가 열리므로 로그에 'DMD 연결됨 — COM6' 이 찍히고 바로 'Read 실패: timed out' 이 난다. 배선/레지스터를 의심하기 전에 장치 관리자에서 그 COM 이 무엇인지부터 볼 것.",
-  "_comment4b": "★확인 도구: Tools\\SerialScan (self-contained, .NET 설치 불필요). 앱을 닫고 'SerialScan.exe --ports COM8,COM9,COM10' — 응답한 포트·보레이트·UnitId 를 찍어 준다. 'Modbus 예외' 로 나와도 성공이다(장치는 있고 주소만 다름). 주소를 모르는 지금 상태에서도 포트는 이렇게 찾는다.",
+
+  "_map1": "★레지스터 맵 — 랩뷰 'DMD Control and State.vi' 에서 확인(2026-09-08). 그전까지는 전부 placeholder 추측이었다.",
+  "_map2": "읽기 (FC03/04, read-only)   50 = RUN/STOP 상태(1/0) · 51 = PV 현재압력 · 52 = SV 되읽기",
+  "_map3": "쓰기 (FC06, write-only)      0 = RUN/STOP 명령(1/0) · 1 = SV 목표압력",
+  "_map4": "★★읽기 주소와 쓰기 주소가 다르고, <b>쓰기 주소 0·1 은 write-only</b> 다. 읽으면 Illegal Data Address 가 난다. 그래서 2026-09-07 에 0~1000 을 전부 훑고도 50·51·52 만 나왔다 — 읽기로 훑는 스캐너에는 write-only 레지스터가 <b>원리적으로 안 보인다</b>. 스윕 결과가 비었다고 '주소가 없다' 고 결론내면 안 되는 이유다.",
+  "_map5": "★쓴 값의 확인은 52번(SV 되읽기)으로만 가능하다. 쓰기 주소 1 을 되읽으면 예외가 난다. 마찬가지로 'RUN 명령을 넣었다'와 '실제로 돌고 있다'는 다른 이야기라, 상태는 50번을 봐야 한다.",
+
+  "_scale1": "★장비 레지스터는 0.1Pa 단위다(PV 는 실제값의 10배로 오고, SV 도 10배로 써 넣는다). 클라이언트 바깥 규약이 kPa 이므로 PressureScale 은 0.1Pa→kPa 인 <b>0.0001</b> 이다.",
+  "_scale2": "예전 값 0.1 은 결과를 1000배로 부풀렸다 — raw 138(=13.8Pa)이 화면에 13,800Pa 로 떴다(2026-09-08 11호기). 화면 Pa = raw × PressureScale × 1000 이라는 것을 기억할 것(클라이언트가 kPa 를 돌려주고 화면이 Pa 로 바꾼다).",
+
+  "_seq": "사용 순서 (랩뷰와 동일) — ① 연결 ② SV 목표압력 쓰기(주소 1) + RUN(주소 0 = 1) ③ PV 주기 폴링(주소 51)으로 감시 ④ 종료 시 STOP(주소 0 = 0).",
+
+  "_comment4": "★COM 포트는 호기마다 다르다 — 옮겨 적지 말고 반드시 확인할 것. USB 시리얼은 꽂는 순서로 번호가 정해진다. 아래 값은 11호기 실측(2026-09-07)이다. 보레이트·UnitId 는 장비 설정이라 잘 안 바뀌지만, 그것도 응답으로 확인하고 쓸 것. (옛 AppConfig=COM3, 9호기 랩뷰=COM6)",
+  "_comment4a": "★★11호기에서 COM6 은 'Intel(R) Active Management Technology - SOL' 이었다 — 메인보드가 만드는 가상 포트다. 포트가 열리므로 로그에 'DMD 연결됨 — COM6' 이 찍히고 바로 'Read 실패: timed out' 이 난다. 배선/레지스터를 의심하기 전에 장치 관리자에서 그 COM 이 무엇인지부터 볼 것.",
+  "_comment4b": "★포트 찾기: Tools\\SerialScan (self-contained, .NET 설치 불필요). 앱을 닫고 'SerialScan.exe --ports COM8,COM9,COM10'. 'Modbus 예외' 로 나와도 성공이다 — 장치는 있고 주소만 다르다는 뜻이다.",
   "_comment5": "VV 패널의 Meni/Pump 출력은 이 계통이 아니라 EtherCAT DO 코일(ComiEcatDigitalIo)이다. 여기를 꺼도 밸브 동작에는 영향이 없다.",
   "_comment6": "Parity 0=None 1=Odd 2=Even 3=Mark 4=Space · StopBits 0=None 1=One 2=Two 3=OnePointFive (StrobeConfig.json 과 같은 규약).",
-  "_comment7": "확인 순서 — (1) 압력 표시가 실제 압력계와 맞는지 본다. 안 맞으면 PressureReadAddress / PressureScale(0.1) / PressureOffset 을 조정한다. (2) 읽기가 맞은 뒤에 ON/OFF 와 Setpoint 를 시험한다. 쓰기는 모르는 레지스터에 값을 넣는 것이라 되돌리기 어렵다.",
+  "_comment7": "남은 확인 — 잉크를 채운 뒤 PV 표시가 실제 압력계와 맞는지 대조할 것. 어긋나면 PressureOffset 을 먼저 의심한다(스케일은 랩뷰에서 확인된 값이다).",
 
-  "ComPort": "COM6",
-  "BaudRate": 9600,
+  "ComPort": "COM10",
+  "BaudRate": 115200,
   "Parity": 0,
   "DataBits": 8,
   "StopBits": 1,
   "TimeoutMs": 1000,
 
-  "UnitId": 1,
+  "UnitId": 3,
 
   "PressureReadAddress": 51,
-  "PressureSetAddress": 256,
-  "ControlAddress": 257,
+  "PressureSetAddress": 1,
+  "ControlAddress": 0,
 
-  "PressureScale": 0.1,
+  "RunStateAddress": 50,
+  "SetpointReadAddress": 52,
+
+  "PressureScale": 0.0001,
   "PressureOffset": 0.0
 }

@@ -64,20 +64,28 @@ namespace IJPSystem.Platform.Infrastructure.Devices.Meniscus
         public double ReadPressure()
         {
             ushort[] regs = ReadHolding(_cfg.PressureReadAddress, 1);
-            // 부호(음압) 대응 위해 short 로 해석
-            return (short)regs[0] * _cfg.PressureScale + _cfg.PressureOffset;
+            return _cfg.ToPressure(regs[0]);
         }
 
         /// <summary>메니스커스 목표 압력 설정.</summary>
         public void WritePressureSetpoint(double pressure)
-        {
-            ushort raw = (ushort)Math.Round((pressure - _cfg.PressureOffset) / _cfg.PressureScale);
-            WriteSingle(_cfg.PressureSetAddress, raw);
-        }
+            => WriteSingle(_cfg.PressureSetAddress, _cfg.ToRaw(pressure));
 
         /// <summary>압력 제어 on/off (제어 레지스터 쓰기).</summary>
         public void WriteControl(bool enabled)
             => WriteSingle(_cfg.ControlAddress, (ushort)(enabled ? 1 : 0));
+
+        /// <summary>
+        /// 지금 <b>실제로</b> RUN 인가(50번). 명령을 넣었다는 사실과 장비가 도는 것은 다르다 —
+        /// 쓰기 주소 0 은 write-only 라 되읽을 수 없으므로, 확인할 길은 이 상태 레지스터뿐이다.
+        /// </summary>
+        public bool ReadRunning() => ReadHolding(_cfg.RunStateAddress, 1)[0] != 0;
+
+        /// <summary>
+        /// 장비가 물고 있는 목표압력(SV, 52번) — 쓴 값이 들어갔는지 확인하는 유일한 길.
+        /// 쓰기 주소 1 은 write-only 라 그쪽을 되읽으면 Illegal Data Address 가 난다.
+        /// </summary>
+        public double ReadSetpoint() => _cfg.ToPressure(ReadHolding(_cfg.SetpointReadAddress, 1)[0]);
 
         private void EnsureConnected()
         {
