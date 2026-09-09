@@ -116,10 +116,19 @@
             <RowDefinition Height="1.05*"/>  <!-- Layer / Paths -->
         </Grid.RowDefinitions>
 
-        <!-- ════ 헤더 ════ -->
+        <!-- ════ 헤더 ════
+             💾 Save 가 여기 있는 이유: 아래 카드에 두었더니 Print Info 와 자리를 다퉜다.
+             창을 줄이면 둘 중 하나가 반드시 찌그러지는데, 정보는 읽어야 하고 버튼은 눌러야 해서
+             어느 쪽을 희생해도 못 쓴다. 헤더는 높이가 고정(64)이라 무엇을 더 넣어도 안 밀린다. -->
         <Border Grid.Row="0" Background="#1E293B" Height="64">
-            <TextBlock Text="DXF Rasterizer" Foreground="White" FontSize="30" FontWeight="Bold"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Grid>
+                <TextBlock Text="DXF Rasterizer" Foreground="White" FontSize="30" FontWeight="Bold"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <Button Style="{StaticResource NavyBtn}" Content="💾   Save"
+                        Command="{Binding SaveCommand}"
+                        Width="150" Height="40" Margin="0,0,16,0"
+                        HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            </Grid>
         </Border>
 
         <!-- ════ 상단: Image Preview | Convert Parameters ════ -->
@@ -423,9 +432,10 @@
             </Border>
 
             <!-- Paths
-                 ★StackPanel 이 아니라 Grid 다. 스택으로 쌓으면 내용이 늘어난 만큼 아래가 창 밖으로
-                 밀려난다 — Print Info 를 넣었더니 실제로 💾 Save 가 화면에서 사라졌다(2026-09-09).
-                 Save·상태줄은 마지막 행에 고정하고, 남는 높이는 Print Info 가 가져간다. -->
+                 ★행 높이는 전부 Auto 다 — Print Info 를 <c>*</c> 로 두었더니 공간이 모자랄 때
+                 0 으로 찌그러져 네 줄이 통째로 사라졌다(2026-09-09). 남는 높이를 가져가라는 것과
+                 모자라면 먼저 없어지라는 것은 같은 말이다. 내용만큼 차지하게 두고, 자리를 다투던
+                 💾 Save 는 헤더로 뺐다 — 헤더는 높이가 고정이라 아무것도 밀지 않는다. -->
             <Border Grid.Column="2" Style="{StaticResource Card}" Padding="12">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -436,10 +446,10 @@
                         <RowDefinition Height="Auto"/>   <!-- Pattern Path -->
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>   <!-- Print Info 라벨 -->
-                        <RowDefinition Height="*"/>      <!-- Print Info — 남는 높이를 가져간다 -->
+                        <RowDefinition Height="Auto"/>   <!-- Print Info — 내용만큼 -->
                         <RowDefinition Height="Auto"/>   <!-- Loading Complete -->
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>   <!-- Save -->
+                        <RowDefinition Height="*"/>      <!-- 남는 높이는 여기서 흡수 -->
                         <RowDefinition Height="Auto"/>   <!-- 상태줄 -->
                     </Grid.RowDefinitions>
 
@@ -456,13 +466,13 @@
                     </Grid>
 
                     <TextBlock Grid.Row="2" Text="BMP Path" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
-                    <Border Grid.Row="3" Style="{StaticResource ReadBox}" MinHeight="38" Margin="0,0,0,8">
+                    <Border Grid.Row="3" Style="{StaticResource ReadBox}" MinHeight="44" Margin="0,0,0,8">
                         <TextBlock Text="{Binding BmpPath}" Foreground="#E2E8F0" FontFamily="Consolas" FontSize="12"
                                    TextWrapping="Wrap" VerticalAlignment="Center"/>
                     </Border>
 
                     <TextBlock Grid.Row="4" Text="Pattern Path" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
-                    <Border Grid.Row="5" Style="{StaticResource ReadBox}" MinHeight="38" Margin="0,0,0,8">
+                    <Border Grid.Row="5" Style="{StaticResource ReadBox}" MinHeight="44" Margin="0,0,0,8">
                         <TextBlock Text="{Binding PatternPath}" Foreground="#E2E8F0" FontFamily="Consolas" FontSize="12"
                                    TextWrapping="Wrap" VerticalAlignment="Center"/>
                     </Border>
@@ -515,10 +525,10 @@
                                      Foreground="#22A341" Background="Transparent" BorderThickness="0"/>
                     </Border>
 
-                    <Button Grid.Row="10" Style="{StaticResource NavyBtn}" Height="48" Content="💾   Save"
-                            Command="{Binding SaveCommand}"/>
+                    <!-- 💾 Save 는 헤더 우측 상단으로 옮겼다(2026-09-09) — 이 카드 안에서
+                         Print Info 와 높이를 다투다가 번갈아 잘렸다. -->
                     <TextBlock Grid.Row="11" Text="{Binding StatusText}" Foreground="#64748B" FontSize="11"
-                               TextWrapping="Wrap" Margin="2,6,0,0"/>
+                               TextWrapping="Wrap" Margin="2,6,0,0" VerticalAlignment="Bottom"/>
                 </Grid>
             </Border>
         </Grid>
