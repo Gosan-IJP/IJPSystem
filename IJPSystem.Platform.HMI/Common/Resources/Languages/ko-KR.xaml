@@ -30,6 +30,7 @@
     <system:String x:Key="Btn_StartContinuous">▶▶ 연속</system:String>
     <system:String x:Key="Lbl_ContinuousMode">연속 운전</system:String>
     <system:String x:Key="Lbl_ContinuousModeHint">ON — 한 사이클 완료 후 자동 반복</system:String>
+    <system:String x:Key="Lbl_ContinuousModeDryOnly">Dry Run 에서만 — Print Run 은 같은 자리에 겹쳐 찍힌다</system:String>
     <system:String x:Key="Btn_Stop">■ 정지</system:String>
     <system:String x:Key="Btn_EmergencyReset">⚠️ 비상 리셋</system:String>
 
@@ -140,6 +141,10 @@
     <system:String x:Key="Lbl_AutoAlign">자동 정렬</system:String>
     <system:String x:Key="Opt_Used">사용</system:String>
     <system:String x:Key="Opt_NotUsed">미사용</system:String>
+    <system:String x:Key="Lbl_RunMode">운전 모드</system:String>
+    <system:String x:Key="Opt_DryRun">Dry Run</system:String>
+    <system:String x:Key="Opt_PrintRun">Print Run</system:String>
+    <system:String x:Key="Msg_SwathFromPrintData">인쇄 데이터가 정합니다</system:String>
     <system:String x:Key="Btn_Logout">로그아웃</system:String>
     <system:String x:Key="Btn_ClearLog">지우기</system:String>
     <system:String x:Key="Recipe_SaveApplyHint">* SAVE: 기록 저장 | APPLY: 설비 파라미터 즉시 반영</system:String>
@@ -263,6 +268,18 @@
     <system:String x:Key="Step_AutoPrint_ReturnDone">복귀 완료 InPosition 확인</system:String>
     <system:String x:Key="Step_AutoPrint_SwathStep">스와스 스텝오버 — X축 헤드길이 이동</system:String>
     <system:String x:Key="Step_AutoPrint_SwathStepDone">스텝오버 InPosition 확인</system:String>
+
+    <!-- 인쇄 주행(PrintPassSequence) — 오토프린트·패턴프린트가 같이 쓴다.
+         Meteor 단계는 Print Run 에서만 목록에 생긴다(Dry Run 이면 아예 안 만든다). -->
+    <system:String x:Key="Step_Print_StartJob">인쇄 작업 시작 — 원점 기준 설정(SetHome)</system:String>
+    <system:String x:Key="Step_Print_StartSwath">스와스 데이터 전송 — 방향·이미지 지정</system:String>
+    <system:String x:Key="Step_Print_Scan">인쇄 진행 — 스캔(Y) 토출</system:String>
+    <system:String x:Key="Step_Print_ScanDone">인쇄 완료 InPosition 확인</system:String>
+    <system:String x:Key="Step_Print_Return">복귀 — 시작점으로 이동(비인쇄)</system:String>
+    <system:String x:Key="Step_Print_ReturnDone">복귀 완료 InPosition 확인</system:String>
+    <system:String x:Key="Step_Print_SwathStep">스와스 스텝오버 — X축 헤드길이 이동</system:String>
+    <system:String x:Key="Step_Print_SwathStepDone">스텝오버 InPosition 확인</system:String>
+    <system:String x:Key="Step_Print_EndJob">인쇄 작업 종료</system:String>
     <system:String x:Key="Step_AutoPrint_VacuumOff">V/C 척 진공 해제 (글래스 배출 준비)</system:String>
     <system:String x:Key="Step_AutoPrint_MoveReady">대기 위치(READY) 이동</system:String>
     <system:String x:Key="Step_AutoPrint_MoveReadyDone">READY 위치 InPosition 확인</system:String>

@@ -30,6 +30,7 @@
     <system:String x:Key="Btn_StartContinuous">▶▶ CONT</system:String>
     <system:String x:Key="Lbl_ContinuousMode">CONTINUOUS RUN</system:String>
     <system:String x:Key="Lbl_ContinuousModeHint">ON — auto-repeat after each cycle</system:String>
+    <system:String x:Key="Lbl_ContinuousModeDryOnly">Dry Run only — Print Run would overprint the same spot</system:String>
     <system:String x:Key="Btn_Stop">■ STOP</system:String>
     <system:String x:Key="Btn_EmergencyReset">⚠️ EMERGENCY RESET</system:String>
 
@@ -140,6 +141,10 @@
     <system:String x:Key="Lbl_AutoAlign">AUTO ALIGN</system:String>
     <system:String x:Key="Opt_Used">Used</system:String>
     <system:String x:Key="Opt_NotUsed">Not used</system:String>
+    <system:String x:Key="Lbl_RunMode">RUN MODE</system:String>
+    <system:String x:Key="Opt_DryRun">Dry Run</system:String>
+    <system:String x:Key="Opt_PrintRun">Print Run</system:String>
+    <system:String x:Key="Msg_SwathFromPrintData">Set by the print data</system:String>
     <system:String x:Key="Btn_Logout">LOGOUT</system:String>
     <system:String x:Key="Btn_ClearLog">CLEAR</system:String>
     <system:String x:Key="Recipe_SaveApplyHint">* SAVE: Save record | APPLY: Apply parameters immediately</system:String>
@@ -263,6 +268,18 @@
     <system:String x:Key="Step_AutoPrint_ReturnDone">Confirm InPosition after return</system:String>
     <system:String x:Key="Step_AutoPrint_SwathStep">Swath step-over — X by head length</system:String>
     <system:String x:Key="Step_AutoPrint_SwathStepDone">Confirm InPosition after step-over</system:String>
+
+    <!-- Print pass (PrintPassSequence) — shared by Auto Print and Pattern Print.
+         Meteor steps appear only in Print Run; in Dry Run they are not created at all. -->
+    <system:String x:Key="Step_Print_StartJob">Start print job — set X datum (SetHome)</system:String>
+    <system:String x:Key="Step_Print_StartSwath">Send swath data — direction and image</system:String>
+    <system:String x:Key="Step_Print_Scan">Printing — scan (Y) ejection</system:String>
+    <system:String x:Key="Step_Print_ScanDone">Confirm InPosition after printing</system:String>
+    <system:String x:Key="Step_Print_Return">Return — move to start (no printing)</system:String>
+    <system:String x:Key="Step_Print_ReturnDone">Confirm InPosition after return</system:String>
+    <system:String x:Key="Step_Print_SwathStep">Swath step-over — X axis by head length</system:String>
+    <system:String x:Key="Step_Print_SwathStepDone">Confirm InPosition after step-over</system:String>
+    <system:String x:Key="Step_Print_EndJob">End print job</system:String>
     <system:String x:Key="Step_AutoPrint_VacuumOff">V/C chuck Vacuum OFF (prepare unload)</system:String>
     <system:String x:Key="Step_AutoPrint_MoveReady">Move to READY position</system:String>
     <system:String x:Key="Step_AutoPrint_MoveReadyDone">Confirm InPosition at READY</system:String>

@@ -943,7 +943,8 @@ namespace IJPSystem.Platform.HMI.Views
 
             _moveStartStepNo = Find("Step_AutoPrint_MoveStart", _moveStartStepNo);
             _headDownStepNo  = Find("Step_AutoPrint_HeadDown", _headDownStepNo);
-            _printScanStepNo = Find("Step_AutoPrint_Print", _printScanStepNo);
+            // 주행 단계는 오토프린트·패턴프린트 공용(PrintPassSequence)이라 접두어가 Step_Print_ 다.
+            _printScanStepNo = Find("Step_Print_Scan", _printScanStepNo);
             _headUpStepNo    = Find("Step_AutoPrint_HeadUpAndMoveReady", _headUpStepNo);
 
             if (DiagEnabled && (before != _moveStartStepNo + _headDownStepNo + _printScanStepNo + _headUpStepNo))

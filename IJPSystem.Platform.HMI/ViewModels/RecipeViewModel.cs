@@ -108,6 +108,37 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// <summary>상태바 표기 — 언어 전환에도 따라간다.</summary>
         public string ActiveAutoAlignText => Common.Loc.T(_activeAutoAlign == 0 ? "Opt_Used" : "Opt_NotUsed");
 
+        // 활성 레시피의 운전 모드(0=Dry Run, 1=Print Run). 인쇄 시퀀스 생성이 이 값을 본다.
+        // AutoAlign 과 같은 이유로 편집값이 아니라 APPLY 된 값을 쓴다.
+        private int _activeRunMode;              // 기본 0(Dry Run) — 컬럼이 없던 레시피의 현행 동작
+        public int ActiveRunMode
+        {
+            get => _activeRunMode;
+            private set
+            {
+                if (SetProperty(ref _activeRunMode, value))
+                {
+                    OnPropertyChanged(nameof(ActiveIsPrintRun));
+                    OnPropertyChanged(nameof(ActiveIsDryRun));
+                    OnPropertyChanged(nameof(ActiveRunModeText));
+                }
+            }
+        }
+
+        /// <summary>적용된 레시피가 실제로 인쇄하는가. <b>인쇄 명령을 낼지 말지를 이 값이 정한다.</b></summary>
+        public bool ActiveIsPrintRun => _activeRunMode == 1;
+
+        /// <summary>
+        /// 드라이런인가 — 메인화면 상시 배너 조건.
+        ///
+        /// <para>꺼져 있는 상태가 눈에 안 보이면 그게 사고다. "인쇄를 눌렀는데 안 찍힌다" 를
+        /// 장비 고장으로 의심하기 전에 화면이 먼저 말해야 한다.</para>
+        /// </summary>
+        public bool ActiveIsDryRun => _activeRunMode == 0;
+
+        /// <summary>상태바 표기 — 언어 전환에도 따라간다.</summary>
+        public string ActiveRunModeText => Common.Loc.T(_activeRunMode == 1 ? "Opt_PrintRun" : "Opt_DryRun");
+
         public IReadOnlyDictionary<string, double>? GetActivePoint(string pointName) =>
             _activePointsSnapshot.TryGetValue(pointName, out var dict) ? dict : null;
 
@@ -123,6 +154,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ActiveSwathPitchMm = 0;
             ActivePrintDirection = 1;
             ActiveAutoAlign = 0;
+            ActiveRunMode = 0;   // 적용된 레시피가 없으면 잉크를 내지 않는 쪽이 안전하다
             OnPropertyChanged(nameof(ActivePrintDirectionText));
             OnPropertyChanged(nameof(ActiveAutoAlignText));
             if (string.IsNullOrEmpty(_activeRecipeName)) return;
@@ -151,8 +183,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     "SELECT PrintDirection FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 1;
                 ActiveAutoAlign = db.QueryFirstOrDefault<int?>(
                     "SELECT AutoAlign FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 0;
+                ActiveRunMode = db.QueryFirstOrDefault<int?>(
+                    "SELECT RunMode FROM Recipes WHERE Name=@recipe", new { recipe = _activeRecipeName }) ?? 0;
                 OnPropertyChanged(nameof(ActivePrintDirectionText));
                 OnPropertyChanged(nameof(ActiveAutoAlignText));
+                OnPropertyChanged(nameof(ActiveRunModeText));
 
                 // 1) 포인트
                 const string sqlPoints = @"
@@ -305,6 +340,44 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     IsDirty = true;
             }
         }
+
+        /// <summary>
+        /// 운전 모드 — 기본 설정 콤보박스(0=Dry Run, 1=Print Run)에 SelectedIndex 로 바인딩.
+        ///
+        /// <para><b>Dry Run</b> 은 모션·진공·정렬만 돌리고 <b>잉크를 내지 않는다</b>. 커미셔닝에서
+        /// 사이클을 통째로 확인할 때 쓴다. <b>Print Run</b> 이라야 인쇄 명령이 나간다.</para>
+        ///
+        /// <para><b>기본은 Dry Run</b> — 지금까지 오토런에 인쇄 동작이 아예 없었으므로 그것이 현행
+        /// 동작이다. 기본을 Print Run 으로 두면 업데이트만 했을 뿐인데 다음 운전에서 잉크가 나간다.</para>
+        ///
+        /// <para>★레시피에 저장되는 값이라 <b>꺼 둔 채 저장하면 조용히 안 찍힌다</b>. 그래서 활성
+        /// 레시피가 Dry Run 이면 메인화면에 상시 표시해야 한다(<see cref="ActiveRunModeText"/>).</para>
+        /// </summary>
+        private int _runModeIndex;              // 0=Dry Run, 1=Print Run
+        public int RunModeIndex
+        {
+            get => _runModeIndex;
+            set
+            {
+                int clamped = Math.Max(0, Math.Min(1, value));
+                if (SetProperty(ref _runModeIndex, clamped) && !_isLoading)
+                    IsDirty = true;
+                OnPropertyChanged(nameof(IsDryRun));
+                OnPropertyChanged(nameof(IsPrintRun));
+            }
+        }
+
+        /// <summary>
+        /// 편집 중인 값이 Dry Run 인가 — <b>프린팅수 입력 활성 조건</b>.
+        ///
+        /// <para>Print Run 에서는 스와스 수를 사람이 정하지 않는다. 인쇄 데이터의 폭이 몇 번
+        /// 나눠 찍어야 하는지를 이미 정하고 있어서, 그와 다른 수를 손으로 넣으면 그림이
+        /// 잘리거나 겹친다. 드라이런은 데이터가 없으니 몇 번 왕복할지 사람이 정한다.</para>
+        /// </summary>
+        public bool IsDryRun => _runModeIndex == 0;
+
+        /// <summary>Print Run 인가 — 프린팅수를 왜 못 만지는지 알리는 안내문의 표시 조건.</summary>
+        public bool IsPrintRun => _runModeIndex == 1;
 
         // 프린팅수(Swath) — 기타정보 화면 콤보박스(1~5)에 바인딩
         public int[] SwathOptions { get; } = { 1, 2, 3, 4, 5 };
@@ -959,6 +1032,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 try { db.Execute("ALTER TABLE Recipes ADD COLUMN AutoAlign INTEGER DEFAULT 0"); }
                 catch { /* 이미 존재하면 무시 */ }
 
+                // RunMode(운전 모드: 0=Dry Run, 1=Print Run) 컬럼 마이그레이션.
+                // ★기본 0(Dry Run) — 이 컬럼이 없던 기존 레시피의 현행 동작이 곧 드라이런이다
+                //   (지금까지 오토런에 인쇄 동작 자체가 없었다). 기본을 Print Run 으로 두면
+                //   업데이트만 했을 뿐인데 다음 운전에서 잉크가 나간다.
+                try { db.Execute("ALTER TABLE Recipes ADD COLUMN RunMode INTEGER DEFAULT 0"); }
+                catch { /* 이미 존재하면 무시 */ }
+
                 // 티칭 포인트 이름 변경: PRINT START → PRINT ORIGIN (2026-08-26).
                 //
                 // 인쇄 원점 창이 저장하는 자리가 바로 이 포인트라, 두 이름이 같은 것을
@@ -1083,6 +1163,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         new { recipeName }) ?? 1;
                     AutoAlignIndex = db.QueryFirstOrDefault<int?>(
                         "SELECT AutoAlign FROM Recipes WHERE Name=@recipeName",
+                        new { recipeName }) ?? 0;
+                    RunModeIndex = db.QueryFirstOrDefault<int?>(
+                        "SELECT RunMode FROM Recipes WHERE Name=@recipeName",
                         new { recipeName }) ?? 0;
 
                     // 글라스·노즐 정보 — 한 번의 조회로 가져온다(컬럼마다 왕복하면 열 번이 된다).
@@ -1507,7 +1590,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
                         // PurgeTime / Swath / HeadLength / PrintDirection / AutoAlign + 노즐·글라스 정보 저장
                         db.Execute(@"UPDATE Recipes SET
-                                         PurgeTime=@purgeTime, Swath=@swath, HeadLength=@headLength, PrintDirection=@printDir, AutoAlign=@autoAlign,
+                                         PurgeTime=@purgeTime, Swath=@swath, HeadLength=@headLength, PrintDirection=@printDir, AutoAlign=@autoAlign, RunMode=@runMode,
                                          GlassWidthMm=@gW, GlassHeightMm=@gH, GlassThicknessMm=@gT,
                                          GlassOriginXMm=@gX, GlassOriginYMm=@gY, FiducialPitchXMm=@fidX, FiducialPitchYMm=@fidY, PatternMinScore=@minScore, AlignToleranceDeg=@tolDeg, AlignToleranceXUm=@tolX, AlignToleranceYUm=@tolY,
                                          HeadName=@headName, HeadWidthMm=@headWidth, NozzlePitchUm=@nPitch, NozzleRows=@nRows,
@@ -1517,7 +1600,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                             new
                             {
                                 purgeTime = PurgeTime, swath = SwathCount, headLength = HeadLength,
-                                printDir = PrintDirectionIndex, autoAlign = AutoAlignIndex,
+                                printDir = PrintDirectionIndex, autoAlign = AutoAlignIndex, runMode = RunModeIndex,
                                 gW = GlassWidthMm, gH = GlassHeightMm, gT = GlassThicknessMm,
                                 gX = GlassOriginXMm, gY = GlassOriginYMm, fidX = FiducialPitchXMm, fidY = FiducialPitchYMm, minScore = PatternMinScore, tolDeg = AlignToleranceDeg, tolX = AlignToleranceXUm, tolY = AlignToleranceYUm,
                                 headName = HeadName, headWidth = HeadWidthMm, nPitch = NozzlePitchUm, nRows = NozzleRows,

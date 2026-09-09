@@ -78,6 +78,15 @@ namespace IJPSystem.Platform.Infrastructure.Print
         /// "무엇이 올라갔는가" 를 눈으로 확인할 수 있다.</para>
         /// </summary>
         string? LastTransferDetail { get; }
+
+        /// <summary>
+        /// 올라가 있는 엔진 버퍼 번호. 없으면 null.
+        ///
+        /// <para>인쇄 명령이 <b>이 번호로</b> 그림을 가리킨다. 화면 표시용 문자열
+        /// (<see cref="LastTransferDetail"/>)과 따로 두는 이유는, 명령을 조립하는 쪽은
+        /// 사람이 읽는 글이 아니라 숫자가 필요하기 때문이다.</para>
+        /// </summary>
+        uint? BufferId { get; }
     }
 
     /// <summary>
@@ -100,6 +109,9 @@ namespace IJPSystem.Platform.Infrastructure.Print
 
         /// <summary>올린 적이 없으니 대조할 값도 없다.</summary>
         public string? LastTransferDetail => null;
+
+        /// <summary>가상은 버퍼를 만들지 않는다 — null 이라 인쇄 명령도 나갈 수 없다.</summary>
+        public uint? BufferId => null;
     }
 
     /// <summary>
@@ -140,6 +152,17 @@ namespace IJPSystem.Platform.Infrastructure.Print
 
         /// <summary>직전에 실제로 올라간 것의 식별값(버퍼 번호·크기). 엔진 로그와 대조용. 없으면 null.</summary>
         public string? LastTransferDetail => _downloader.LastTransferDetail;
+
+        /// <summary>인쇄 명령이 가리킬 엔진 버퍼 번호. 없으면 찍을 것이 없다는 뜻이다.</summary>
+        public uint? BufferId => _downloader.BufferId;
+
+        /// <summary>
+        /// 지금 인쇄를 걸 수 있는가 — READY 이고 <b>실제 버퍼가 있어야</b> 한다.
+        ///
+        /// <para><see cref="CanPrint"/> 는 상태만 본다. 가상 전송기는 READY 까지 가면서도
+        /// 버퍼를 만들지 않으므로, 인쇄 명령을 내려는 쪽은 이쪽을 봐야 한다.</para>
+        /// </summary>
+        public bool HasPrintableBuffer => CanPrint && BufferId != null && CurrentJob != null;
 
         /// <summary>마지막으로 적재가 끝난 시각. 같은 데이터를 다시 올려도 이 값은 바뀐다.</summary>
         public DateTime? LoadedAt { get; private set; }

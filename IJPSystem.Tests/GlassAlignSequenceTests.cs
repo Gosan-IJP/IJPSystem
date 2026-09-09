@@ -309,19 +309,36 @@ namespace IJPSystem.Tests
             finally { GlassAlignServices.Current = null; }
         }
 
+        /// <summary>
+        /// 패턴 인쇄는 <b>정렬하지 않는다</b>(2026-09-09 결정).
+        ///
+        /// <para>티칭해 둔 인쇄 원점에 그대로 찍어 보는 시험 인쇄라 피듀셜 마크를 찾을 이유가 없다.
+        /// 마크에 맞춰 찍는 것은 오토프린트의 일이다 — 두 시퀀스의 <b>유일한 차이</b>가 이것이라,
+        /// 여기가 깨지면 둘이 같아졌거나 플래그가 뒤집힌 것이다.</para>
+        /// </summary>
         [Fact]
-        public void 패턴프린트는_인쇄_시작_위치_이동_앞에서_정렬한다()
+        public void 패턴프린트는_정렬하지_않는다()
         {
-            // 정렬이 스테이지를 옮기므로 뒤에 두면 맞춘 자리를 인쇄 이동이 덮어쓴다.
-            GlassAlignServices.Current = new FakeAlign { IsEnabled = true };
+            GlassAlignServices.Current = new FakeAlign { IsEnabled = true };   // 레시피가 켜 놓아도
             try
             {
                 var names = PatternPrintSequence.Build(null!, null!).Select(s => s.Name).ToList();
+                Assert.DoesNotContain(names, n => n.StartsWith("Step_GlassAlign_"));
+            }
+            finally { GlassAlignServices.Current = null; }
+        }
+
+        /// <summary>오토프린트는 인쇄 시작 위치로 가기 <b>전에</b> 정렬한다 — 뒤에 두면 맞춘 자리를 덮어쓴다.</summary>
+        [Fact]
+        public void 오토프린트는_인쇄_시작_위치_이동_앞에서_정렬한다()
+        {
+            GlassAlignServices.Current = new FakeAlign { IsEnabled = true };
+            try
+            {
+                var names = AutoPrintSequence.Build(null!, null!).Select(s => s.Name).ToList();
 
                 Assert.True(names.IndexOf("Step_GlassAlign_VerifyAngle")
-                          < names.IndexOf("Step_PatternPrint_MoveStart"));
-                Assert.True(names.IndexOf("Step_PatternPrint_DownloadImage")
-                          < names.IndexOf("Step_GlassAlign_Ready"));
+                          < names.IndexOf("Step_AutoPrint_MoveStart"));
             }
             finally { GlassAlignServices.Current = null; }
         }
@@ -370,7 +387,7 @@ namespace IJPSystem.Tests
             {
                 "Step_AutoPrint_MoveStart",
                 "Step_AutoPrint_HeadDown",
-                "Step_AutoPrint_Print",
+                "Step_Print_Scan",
                 "Step_AutoPrint_HeadUpAndMoveReady",
             };
 
@@ -397,8 +414,8 @@ namespace IJPSystem.Tests
                         Assert.True(names.IndexOf("Step_AutoPrint_MoveStart")
                                   < names.IndexOf("Step_AutoPrint_HeadDown"));
                         Assert.True(names.IndexOf("Step_AutoPrint_HeadDown")
-                                  < names.IndexOf("Step_AutoPrint_Print"));
-                        Assert.True(names.LastIndexOf("Step_AutoPrint_Print")
+                                  < names.IndexOf("Step_Print_Scan"));
+                        Assert.True(names.LastIndexOf("Step_Print_Scan")
                                   < names.IndexOf("Step_AutoPrint_HeadUpAndMoveReady"));
                     }
                 }
@@ -416,7 +433,7 @@ namespace IJPSystem.Tests
                 try
                 {
                     return AutoPrintSequence.Build(null!, null!, 1, 0, true)
-                        .Single(s => s.Name == "Step_AutoPrint_Print").Number;
+                        .Single(s => s.Name == "Step_Print_Scan").Number;
                 }
                 finally { GlassAlignServices.Current = null; }
             }
@@ -532,7 +549,7 @@ namespace IJPSystem.Tests
 
                 Assert.Equal(Number("Step_AutoPrint_MoveStart"),          Fallback("_moveStartStepNo"));
                 Assert.Equal(Number("Step_AutoPrint_HeadDown"),           Fallback("_headDownStepNo"));
-                Assert.Equal(Number("Step_AutoPrint_Print"),              Fallback("_printScanStepNo"));
+                Assert.Equal(Number("Step_Print_Scan"),              Fallback("_printScanStepNo"));
                 Assert.Equal(Number("Step_AutoPrint_HeadUpAndMoveReady"), Fallback("_headUpStepNo"));
             }
             finally { GlassAlignServices.Current = null; }

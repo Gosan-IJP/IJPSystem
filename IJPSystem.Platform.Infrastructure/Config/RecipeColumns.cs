@@ -26,7 +26,7 @@ namespace IJPSystem.Platform.Infrastructure.Config
         public static readonly string[] NotCopied = { "Id", "Name", "SortOrder", "WaveformBasePath" };
 
         /// <summary>인쇄 조건.</summary>
-        public static readonly string[] PrintSettings = { "PurgeTime", "Swath", "PrintDirection", "AutoAlign" };
+        public static readonly string[] PrintSettings = { "PurgeTime", "Swath", "PrintDirection", "AutoAlign", "RunMode" };
 
         /// <summary>글라스 사양.</summary>
         public static readonly string[] GlassSpec =

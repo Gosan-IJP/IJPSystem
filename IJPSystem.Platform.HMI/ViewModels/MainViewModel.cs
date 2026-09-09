@@ -12,6 +12,7 @@ using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Infrastructure.Config;
 using IJPSystem.Platform.Infrastructure.Repositories;
 using IJPSystem.Platform.Infrastructure.Devices.DropWatcher;
+using IJPSystem.Platform.Infrastructure.Print;
 using IJPSystem.Platform.HMI.Common;
 using static IJPSystem.Platform.HMI.Common.Loc;
 using IJPSystem.Platform.HMI.Views;
@@ -59,6 +60,117 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         /// <summary>PCC-E 화면이 상황을 바꿔 볼 수 있도록 노출한다(가상일 때만 의미가 있다).</summary>
         public IMeteorStatusSource? HeadSource => _headMonitor;
+
+        // ── 인쇄 데이터 적재 ──────────────────────────────────────────────
+        //
+        // ★두 화면이 <b>같은 하나</b>를 본다. 예전에는 패턴 인쇄 화면이 자기 것을 들고 있었는데,
+        //   엔진 버퍼는 프로세스에 하나뿐이라 "어디에 올라가 있는가" 가 화면마다 다르면 안 된다.
+        //   게다가 패턴 인쇄 화면은 처음 들어갈 때 만들어져서, 오토런만 누르면 그 화면이
+        //   존재하지도 않았다 — 오토런이 무엇을 찍을지 알 길이 없었다.
+        private readonly Lazy<PrintJobController> _printJob;
+
+        /// <summary>지금 엔진에 무엇이 올라가 있는가. 패턴 인쇄 화면과 오토런이 같이 본다.</summary>
+        public PrintJobController PrintJob => _printJob.Value;
+
+        /// <summary>
+        /// 인쇄 명령을 낼 상대. <b>실물 헤드일 때만</b> 만들어진다(DriverMode.Head=Meteor).
+        /// null 이면 인쇄 시퀀스가 Meteor 단계를 만들지 않는다 — 즉 모션만 돈다.
+        /// </summary>
+        public IJPSystem.Platform.Domain.Models.Printing.IPrintJobCommands? PrintCommands { get; }
+
+        private static bool IsMeteorHead() =>
+            string.Equals(AppSettingsService.Current?.DriverMode?.Head?.Trim(), "Meteor",
+                          StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// 이번 운전의 인쇄 설정을 만든다 — 오토런과 패턴 인쇄가 <b>같은 판정</b>을 쓴다.
+        ///
+        /// <para><b>Dry Run</b>: 명령 상대를 넘기지 않는다. 모션은 그대로 돌고 Meteor 단계는
+        /// 목록에 생기지도 않는다. 프린팅수는 레시피에서 사람이 정한 값을 쓴다.</para>
+        ///
+        /// <para><b>Print Run</b>: 올라간 인쇄 데이터가 있어야 한다. 없으면
+        /// <paramref name="blockedReason"/> 에 이유를 담아 돌려준다 — 그냥 돌면 모션만 돈 것을
+        /// 인쇄한 것으로 오해하게 되고, 그것이 어제 하루 종일 잡은 사고의 형태다.</para>
+        /// </summary>
+        /// <summary>
+        /// 메인화면 START 옆에 띄울 인쇄 데이터 한 줄.
+        ///
+        /// <para>Dry Run 에서는 "잉크가 안 나간다" 를 말해 주는 것이 더 중요하고, Print Run 에서는
+        /// "무엇이 올라가 있는가" 가 중요하다. 올라가 있으면 버퍼 번호까지 적어 엔진 로그와
+        /// 대조되게 한다.</para>
+        /// </summary>
+        private (string Title, string Detail, bool Blocked) DescribePrintData()
+        {
+            if (RecipeVM.ActiveIsDryRun)
+                return ("Dry Run", "모션만 동작 — 잉크가 나가지 않습니다", false);
+
+            var job = PrintJob.CurrentJob;
+            if (!PrintJob.HasPrintableBuffer || job == null)
+                return ("인쇄 데이터 없음",
+                        "패턴 인쇄 화면에서 [Load Print data] 를 먼저 하세요", true);
+
+            string name = System.IO.Path.GetFileName(
+                job.Folder.TrimEnd(System.IO.Path.DirectorySeparatorChar));
+            string at = PrintJob.LoadedAt is DateTime t ? $" · {t:HH:mm:ss} 적재" : "";
+
+            return (name,
+                    $"{job.Steps}스텝 × {job.Nozzles}노즐 · {job.Para.WidthMm:F1}×{job.Para.HeightMm:F1}mm · " +
+                    $"버퍼 #{PrintJob.BufferId}{at}",
+                    false);
+        }
+
+        /// <param name="blockedReason">시작하면 안 되는 이유. 시작해도 되면 null.</param>
+        public Application.Sequences.PrintRunOptions BuildPrintRunOptions(out string? blockedReason)
+        {
+            blockedReason = null;
+            bool bidi = RecipeVM.ActivePrintDirection == 1;
+
+            if (!RecipeVM.ActiveIsPrintRun)
+            {
+                // 드라이런 — 몇 번 왕복할지는 사람이 정한다(찍을 데이터가 없으니 정할 근거도 없다).
+                return new Application.Sequences.PrintRunOptions
+                {
+                    SwathCount    = RecipeVM.ActiveSwath,
+                    SwathPitchMm  = RecipeVM.ActiveSwathPitchMm,
+                    Bidirectional = bidi,
+                    Job           = null,
+                };
+            }
+
+            if (PrintCommands == null)
+            {
+                blockedReason =
+                    "Print Run 인데 실물 헤드가 아닙니다.\n\n" +
+                    "AppConfig.json 의 DriverMode.Head 가 \"Meteor\" 여야 인쇄 명령이 나갑니다.\n" +
+                    "시험만 하실 거면 레시피의 운전 모드를 Dry Run 으로 두세요.";
+                return new Application.Sequences.PrintRunOptions();
+            }
+
+            if (!PrintJob.HasPrintableBuffer)
+            {
+                blockedReason =
+                    "인쇄 데이터가 올라가 있지 않습니다 — 지금 Print Run 입니다.\n\n" +
+                    "패턴 인쇄 화면에서 [Load Print data] 로 먼저 올리세요.\n" +
+                    "(모션만 돌려 보시려면 레시피의 운전 모드를 Dry Run 으로 두세요)";
+                return new Application.Sequences.PrintRunOptions();
+            }
+
+            var job = PrintJob.CurrentJob!;
+            return new Application.Sequences.PrintRunOptions
+            {
+                // ★스와스 1 — 지금 패턴은 헤드 한 폭(노즐 수만큼)으로 만들어진다. 같은 그림을
+                //   옆으로 여러 번 찍을 이유가 없으므로 한 패스다. 더 넓게 찍으려면 패턴을
+                //   여러 폭으로 만드는 것이 먼저다(PrintPatternBuilder 가 아직 그러지 않는다).
+                SwathCount    = 1,
+                SwathPitchMm  = RecipeVM.ActiveSwathPitchMm,
+                Bidirectional = bidi,
+                Job           = PrintCommands,
+                BufferId      = PrintJob.BufferId!.Value,
+                WidthPx       = job.Nozzles,
+                Plane         = 1,          // 단일 plane 구성
+                JobId         = 1,
+            };
+        }
 
 
         private bool _hasActiveAlarm;
@@ -337,6 +449,21 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _slowTimer = new DispatcherTimer();
             _fastTimer = new DispatcherTimer();
 
+            // 전송 경로도 인쇄 명령도 DriverMode.Head 하나가 정한다 — 같은 헤드를 두 군데서
+            // 따로 판정하면 한쪽만 가상인 상태가 만들어진다.
+            // ※ 실물이 실패해도 가상으로 떨어지지 않는다. 안 올라간 데이터가 READY 로 보이는
+            //   쪽이 훨씬 위험하다.
+            bool meteor = IsMeteorHead();
+            _printJob = new Lazy<PrintJobController>(() => new PrintJobController(
+                meteor
+                    ? new Infrastructure.Print.Meteor.MeteorImageBufferDownloader(
+                          m => AddLog("[PRINT] " + m, LogLevel.Info))
+                    : new Infrastructure.Print.NullPrintDataDownloader()));
+
+            PrintCommands = meteor
+                ? new Infrastructure.Print.Meteor.MeteorPrintJob(m => AddLog("[PRINT] " + m, LogLevel.Info))
+                : null;
+
             InitializeSharedAxes();
 
             // _alarmVM 을 먼저 생성 — RecipeVM/MainDashboardVM 의 raiseAlarm 람다가
@@ -374,8 +501,21 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     getSwathPitchMm: () => RecipeVM.ActiveSwathPitchMm,
                     getPrintDirection: () => RecipeVM.ActivePrintDirection,
                     // 정렬 왕복을 그리려면 마크2 가 어느 쪽에 얼마나 떨어져 있는지를 알아야 한다.
-                    getFiducialPitchYMm: () => RecipeVM.FiducialPitchYMm
+                    getFiducialPitchYMm: () => RecipeVM.FiducialPitchYMm,
+                    // 운전 모드(Dry Run / Print Run)와 적재 상태를 아는 것은 이쪽이다.
+                    getPrintRun: () =>
+                    {
+                        var o = BuildPrintRunOptions(out string? blocked);
+                        return (o, blocked);
+                    },
+                    isDryRun: () => RecipeVM.ActiveIsDryRun,
+                    getPrintDataInfo: DescribePrintData
                 );
+
+            // 적재가 바뀌면 메인화면 표시도 바뀐다 — 패턴 인쇄 화면에서 올린 것을 여기서 본다.
+            PrintJob.StateChanged += _ => System.Windows.Application.Current?.Dispatcher.Invoke(
+                () => _mainDashboardVM.RefreshPrintDataInfo());
+            _mainDashboardVM.RefreshPrintDataInfo();
 
             RecipeVM.PropertyChanged += (s, e) =>
             {
@@ -383,6 +523,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 {
                     CurrentRecipeName = RecipeVM.ActiveRecipeName;
                     _mainDashboardVM.ActiveRecipeName = RecipeVM.ActiveRecipeName;
+                    // 레시피가 바뀌면 운전 모드도 같이 바뀐다 — 연속 운전 토글의 사용 조건이다.
+                    _mainDashboardVM.RefreshRunModeGating();
+                }
+                else if (e.PropertyName == nameof(RecipeViewModel.ActiveRunMode))
+                {
+                    _mainDashboardVM.RefreshRunModeGating();
                 }
             };
             RecipeVM.CurrentLanguage = this.CurrentLanguage;

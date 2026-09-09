@@ -572,21 +572,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // Meteor 가 파일을 읽는 게 아니다. PCC 는 PC 의 파일시스템을 모른다 —
         // 여기서 우리가 읽어 PCC 메모리로 올리고, Print 는 이미 올라간 것을 쏠 뿐이다.
         // 그래서 저장과 인쇄가 갈라져 있고, 저장해 둔 것을 나중에 여러 번 찍을 수 있다.
-        // 전송 경로는 설정(DriverMode.Head)이 고른다 — HeadVoltage 와 같은 스위치다. 같은 헤드를
-        // 두 군데서 따로 판정하면 한쪽만 가상인 상태가 만들어진다.
-        // ※ 실물이 실패해도 가상으로 떨어지지 않는다. 안 올라간 데이터가 READY 로 보이는 쪽이 훨씬 위험하다.
-        private readonly PrintJobController _printJob;
-
-        private PrintJobController CreatePrintJobController()
-        {
-            string mode = Infrastructure.Config.AppSettingsService.Current?.DriverMode?.Head?.Trim() ?? "None";
-            IPrintDataDownloader downloader =
-                string.Equals(mode, "Meteor", StringComparison.OrdinalIgnoreCase)
-                    ? new Infrastructure.Print.Meteor.MeteorImageBufferDownloader(
-                          m => _mainVM.AddLog("[PRINT] " + m, LogLevel.Info))
-                    : new NullPrintDataDownloader();
-            return new PrintJobController(downloader);
-        }
+        // ★적재 상태는 MainViewModel 이 들고 있다 — 엔진 버퍼는 프로세스에 하나뿐이라
+        //   "어디에 올라가 있는가" 가 화면마다 다르면 안 되고, 오토런도 같은 것을 봐야 한다.
+        //   (이 화면은 처음 들어갈 때 만들어져서, 자기 것을 들고 있으면 오토런이 볼 수 없었다)
+        private PrintJobController PrintJob => _mainVM.PrintJob;
 
         private string _printDataState = "대기";
         /// <summary>READY / 대기 / 오류 — 지금 PCC 에 무엇이 올라가 있는지.</summary>
@@ -611,7 +600,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
 
         /// <summary>인쇄 데이터가 PCC 에 올라가 있는가.</summary>
-        public bool IsPrintDataReady => _printJob.CanPrint;
+        public bool IsPrintDataReady => PrintJob.CanPrint;
 
         /// <summary>인쇄 데이터가 쌓이는 자리. 래스터라이저가 저장하는 곳과 같아야 한다.</summary>
         private static string PatternRoot => Print.DxfRasterizer.PatternRoot;
@@ -645,7 +634,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 foreach (var e in found) RecentPrintData.Add(e);
 
                 // 이미 올라가 있는 것이 목록에 있으면 그대로 짚어 둔다.
-                string? cur = _printJob.CurrentJob?.Folder;
+                string? cur = PrintJob.CurrentJob?.Folder;
                 _selectedPrintData = cur == null
                     ? null
                     : RecentPrintData.FirstOrDefault(e => string.Equals(e.Folder, cur,
@@ -658,11 +647,18 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         private void LoadPrintData()
         {
-            // 폴더를 고르게 하지 않는다 — 인쇄 직전에 날짜 폴더를 뒤지면 엉뚱한 걸 고르기 쉽다.
-            // 방금 저장한 것을 그대로 올린다. 옛것은 옆 목록에서 고른다.
             RefreshRecentPrintData();
 
-            string? folder = PrintJobFile.FindLatest(PatternRoot);
+            // 목록에 고른 것이 있으면 그것을, 없으면 가장 최근 것을 올린다.
+            //
+            // 예전에는 무조건 최신이었다. 그래서 목록에서 옛것을 골라 두고 이 버튼을 누르면
+            // 화면이 가리키는 것과 다른 게 조용히 올라갔다. 게다가 콤보는 이미 고른 항목을
+            // 다시 고를 수 없어서(값이 그대로면 이벤트가 안 온다), 최신이 아닌 것을 다시
+            // 올릴 방법이 없었다.
+            //
+            // 방금 저장하고 돌아온 직후에는 아직 아무것도 올라가 있지 않아 선택이 비어 있다
+            // — 그때는 예전처럼 최신이 잡힌다. 원래 의도(방금 만든 것을 그대로 올린다)는 그대로다.
+            string? folder = SelectedPrintData?.Folder ?? PrintJobFile.FindLatest(PatternRoot);
             if (folder == null)
             {
                 PrintDataStateText  = "없음";
@@ -688,20 +684,20 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private void LoadFrom(string folder)
         {
             _mainVM.AddLog($"[PRINT] 인쇄 데이터 로드: {folder}", LogLevel.Info);
-            var job = _printJob.LoadAndDownload(folder);
+            var job = PrintJob.LoadAndDownload(folder);
 
             if (job == null)
             {
                 PrintDataStateText  = "오류";
                 PrintDataStateBrush = "#F87171";
-                PrintDataSummary    = _printJob.Message +
-                    (_printJob.Problems.Count > 1 ? $" (그 밖 {_printJob.Problems.Count - 1}건)" : "");
-                _mainVM.AddLog("[PRINT] 인쇄 데이터 로드 실패 — " + _printJob.Message, LogLevel.Warning);
+                PrintDataSummary    = PrintJob.Message +
+                    (PrintJob.Problems.Count > 1 ? $" (그 밖 {PrintJob.Problems.Count - 1}건)" : "");
+                _mainVM.AddLog("[PRINT] 인쇄 데이터 로드 실패 — " + PrintJob.Message, LogLevel.Warning);
 
                 Dialogs.Show("인쇄 데이터를 불러오지 못했습니다.\n\n" +
                              $"{folder}\n\n" +
-                             string.Join("\n", _printJob.Problems.Count > 0
-                                               ? _printJob.Problems : new[] { _printJob.Message }),
+                             string.Join("\n", PrintJob.Problems.Count > 0
+                                               ? PrintJob.Problems : new[] { PrintJob.Message }),
                              "Load Print data",
                              System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
             }
@@ -713,13 +709,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 // 적재 시각과 버퍼 번호를 같이 띄운다. 이 둘이 없으면 <b>같은 폴더를 다시 올렸을 때
                 // 화면이 한 글자도 안 바뀌어</b> 눌린 건지 알 수가 없다. 버퍼 번호·DWORD 수는
                 // 엔진 로그의 "Allocated image buffer DWORDs=… ID=…" 와 그대로 대조된다.
-                string detail = _printJob.LastTransferDetail is { Length: > 0 } d ? " · " + d : "";
-                string at     = _printJob.LoadedAt is DateTime t ? $" · {t:HH:mm:ss} 적재" : "";
+                string detail = PrintJob.LastTransferDetail is { Length: > 0 } d ? " · " + d : "";
+                string at     = PrintJob.LoadedAt is DateTime t ? $" · {t:HH:mm:ss} 적재" : "";
                 PrintDataSummary    =
                     $"{System.IO.Path.GetFileName(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar))} · " +
                     $"{job.Steps}스텝 × {job.Nozzles}노즐 · " +
                     $"{job.Para.WidthMm:F1}×{job.Para.HeightMm:F1}mm · 방울 {job.DropCount:N0}개 · " +
-                    $"{_printJob.DownloaderName}{detail}{at}";
+                    $"{PrintJob.DownloaderName}{detail}{at}";
                 _mainVM.AddLog($"[PRINT] READY — {job}{detail}", LogLevel.Success);
             }
 
@@ -743,7 +739,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
         {
             _mainVM = mainVM;
             Monitor = new VisualMonitorViewModel(mainVM, "Drop");   // 드랍와쳐 기본
-            _printJob = CreatePrintJobController();   // _mainVM 이 있어야 로그를 넘길 수 있다
 
             PrintCommand          = new RelayCommand(async _ => await RunPatternPrintAsync(),
                                                      _ => IsOriginSet && !IsPrinting);
@@ -1060,7 +1055,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             if (st.Connected && !st.HasError)
             {
                 double pa = st.Pressure * PaPerKpa;
-                System.Windows.Application.Current?.Dispatcher.Invoke(() => MeniscusCurrent = pa);
+                bool running = st.Running;
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    MeniscusCurrent = pa;
+                    // 램프는 실물을 비춘다. 명령값을 그대로 켜 두면 RUN 이 안 먹은 상태가
+                    // 초록불로 보이고, 압력이 걸린 줄 알고 다음 단계로 넘어가게 된다.
+                    IsMeniscusOn = running;
+                });
             }
         }
 
@@ -1196,11 +1198,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 return;
             }
 
+            // 운전 모드가 Print Run 이면 올라간 인쇄 데이터가 있어야 한다 — 없는데 그냥 돌면
+            // 모션만 도는 것을 인쇄한 것으로 오해한다. 여기서 이유를 대고 멈춘다.
+            var runOpts = _mainVM.BuildPrintRunOptions(out string? blocked);
+            if (blocked != null)
+            {
+                _mainVM.AddLog("[SEQ] PATTERN PRINT — 중단 (" + blocked + ")", LogLevel.Warning);
+                Dialogs.Show(blocked, "PATTERN PRINT",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+
             IsPrinting = true;
             _mainVM.SetSequenceRunning(true);   // 실행 중 화면 전환 차단
 
             var motion = new MotionServiceAdapter(_mainVM);
-            var steps  = PatternPrintSequence.Build(machine, motion);
+            var steps  = PatternPrintSequence.Build(machine, motion, runOpts);
             _printCts  = new System.Threading.CancellationTokenSource();
             var token  = _printCts.Token;
 

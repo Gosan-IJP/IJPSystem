@@ -469,14 +469,35 @@
                                                        FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
                                         </StackPanel>
 
-                                        <!-- 프린팅수 (Swath) -->
+                                        <!-- 운전 모드 (0=Dry Run, 1=Print Run) — 이 카드의 주 스위치라 맨 위에 둔다.
+                                             Dry Run 은 모션·진공·정렬만 돌리고 잉크를 내지 않는다. -->
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                            <TextBlock Text="{DynamicResource Lbl_RunMode}" Foreground="#94A3B8" FontSize="13"
+                                                       Width="118" VerticalAlignment="Center"/>
+                                            <ComboBox Width="110" Height="32"
+                                                      Style="{StaticResource ModernComboBoxStyle}"
+                                                      SelectedIndex="{Binding RunModeIndex, Mode=TwoWay}">
+                                                <ComboBoxItem Content="{DynamicResource Opt_DryRun}"/>
+                                                <ComboBoxItem Content="{DynamicResource Opt_PrintRun}"/>
+                                            </ComboBox>
+                                        </StackPanel>
+
+                                        <!-- 프린팅수 (Swath) — Dry Run 에서만 사람이 정한다.
+                                             Print Run 에서는 인쇄 데이터의 폭이 몇 번 나눠 찍을지를 이미 정하고
+                                             있어서, 그와 다른 수를 손으로 넣으면 그림이 잘리거나 겹친다. -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16"
+                                                    IsEnabled="{Binding IsDryRun}">
                                             <TextBlock Text="{DynamicResource Lbl_Swath}" Foreground="#94A3B8" FontSize="13"
                                                        Width="118" VerticalAlignment="Center"/>
                                             <ComboBox Width="110" Height="32"
                                                       Style="{StaticResource ModernComboBoxStyle}"
                                                       ItemsSource="{Binding SwathOptions}"
                                                       SelectedItem="{Binding SwathCount, Mode=TwoWay}"/>
+                                            <!-- 왜 못 만지는지 말해 준다. 회색으로만 두면 고장으로 보인다. -->
+                                            <TextBlock Text="{DynamicResource Msg_SwathFromPrintData}"
+                                                       Foreground="#64748B" FontSize="11" Margin="8,0,0,0"
+                                                       VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="150"
+                                                       Visibility="{Binding IsPrintRun, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                         </StackPanel>
 
                                         <!-- Head 길이·폭은 [노즐 정보] 로 옮겼다(2026-08-13) — 헤드 치수라

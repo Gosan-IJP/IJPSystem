@@ -997,7 +997,7 @@
                                     Background="#1D4ED8" BorderBrush="#3B82F6"
                                     Content="Load Print data"
                                     Command="{Binding LoadPrintDataCommand}"
-                                    ToolTip="저장해 둔 폴더(.bmp + POS.dat + Print_Para.dat)를 읽어 엔진 메모리로 올립니다"/>
+                                    ToolTip="아래 목록에서 고른 것을 엔진 메모리로 올립니다(고른 것이 없으면 가장 최근 것). 같은 것을 다시 올릴 때도 이 버튼을 씁니다."/>
 
                             <!-- 옛 저장물 — 최근 5개. 버튼은 항상 최신을 올리므로,
                                  다른 것을 찍으려면 여기서 고른다. -->

@@ -52,11 +52,38 @@
                 <RowDefinition Height="100"/>
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Margin="20,10,20,5">
-                <TextBlock Text="MACHINE VISUALIZER" 
-                           Style="{StaticResource SectionHeaderStyle}" 
+            <Grid Grid.Row="0" Margin="20,10,20,5">
+                <TextBlock Text="MACHINE VISUALIZER"
+                           Style="{StaticResource SectionHeaderStyle}"
                            VerticalAlignment="Center"/>
-            </StackPanel>
+
+                <!-- 연속 운전 — 제목 줄 오른쪽 끝(2026-09-09 이동). 아래 [운전] 상자 자리는
+                     인쇄 데이터 정보에 내줬다. 무엇을 찍는지가 START 옆에 있어야 한다.
+                     ※ Dry Run 에서만 쓴다 — Print Run 의 무한 반복은 같은 자리에 겹쳐 찍는 것이다. -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                            IsEnabled="{Binding CanUseContinuous}">
+                    <StackPanel.ToolTip>
+                        <TextBlock>
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="{DynamicResource Lbl_ContinuousModeHint}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CanUseContinuous}" Value="False">
+                                            <Setter Property="Text" Value="{DynamicResource Lbl_ContinuousModeDryOnly}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel.ToolTip>
+                    <TextBlock Text="{DynamicResource Lbl_ContinuousMode}"
+                               Foreground="#94A3B8" FontSize="11" FontWeight="Bold"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ToggleButton VerticalAlignment="Center"
+                                  IsChecked="{Binding IsContinuousMode}"
+                                  Style="{StaticResource SwitchToggleStyle}"/>
+                </StackPanel>
+            </Grid>
 
             <Border Grid.Row="1" Background="#1E293B" CornerRadius="15" BorderBrush="#334155" BorderThickness="1.5" Margin="10,10,10,10">
                 <Grid>
@@ -396,18 +423,28 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <Grid Grid.Column="0">
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="{DynamicResource Lbl_ContinuousMode}"
-                                           Foreground="#E2E8F0" FontSize="14" FontWeight="Bold"/>
-                                <TextBlock Text="{DynamicResource Lbl_ContinuousModeHint}"
-                                           Foreground="#64748B" FontSize="10" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <ToggleButton HorizontalAlignment="Right" VerticalAlignment="Center"
-                                          Margin="0,0,16,0"
-                                          IsChecked="{Binding IsContinuousMode}"
-                                          Style="{StaticResource SwitchToggleStyle}"/>
-                        </Grid>
+                        <!-- 인쇄 데이터 — START 를 누르기 직전에 "무엇을 찍는가" 를 답한다.
+                             예전에는 이 화면에서 알 길이 없어 패턴 인쇄 화면까지 가야 했고,
+                             Print Run 인데 안 올라가 있으면 모션만 돈 것을 인쇄한 줄 알았다. -->
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                            <TextBlock Text="{Binding PrintDataTitle}"
+                                       FontSize="14" FontWeight="Bold" TextTrimming="CharacterEllipsis">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#E2E8F0"/>
+                                        <Style.Triggers>
+                                            <!-- 찍을 것이 없는데 Print Run 이면 눈에 띄어야 한다. -->
+                                            <DataTrigger Binding="{Binding PrintDataBlocked}" Value="True">
+                                                <Setter Property="Foreground" Value="#FB923C"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Text="{Binding PrintDataDetail}"
+                                       Foreground="#64748B" FontSize="10" Margin="0,2,0,0"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Content="{DynamicResource Btn_Start}" Command="{Binding StartCommand}"

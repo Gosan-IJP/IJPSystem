@@ -36,6 +36,18 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly Func<double>? _getSwathPitchMm;
         private readonly Func<int>? _getPrintDirection;   // 0=단방향, 1=양방향
 
+        /// <summary>
+        /// 이번 사이클의 인쇄 설정과, 시작하면 안 되는 이유. 운전 모드(Dry Run / Print Run)와
+        /// 적재 상태를 아는 것은 MainViewModel 쪽이라 위임으로 받는다.
+        /// </summary>
+        private readonly Func<(Application.Sequences.PrintRunOptions Opts, string? Blocked)>? _getPrintRun;
+
+        /// <summary>활성 레시피가 Dry Run 인가 — 연속 운전 토글의 사용 조건.</summary>
+        private readonly Func<bool>? _isDryRun;
+
+        /// <summary>START 옆에 띄울 인쇄 데이터 한 줄. 적재 상태를 아는 것은 MainViewModel 쪽이다.</summary>
+        private readonly Func<(string Title, string Detail, bool Blocked)>? _getPrintDataInfo;
+
         // 실장 구조 — 헤드: X(갠트리, 크로스스캔) + Z(승강) / 스테이지: Y(스캔 이송) + T(정렬 회전).
         // 메인 대시보드 애니메이션은 이 축들의 실측 위치·티칭 좌표로 구동한다.
         private const string ScanAxis  = "Y";   // 스캔(스테이지 이송)
@@ -349,7 +361,55 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public bool IsContinuousMode
         {
             get => _isContinuousMode;
-            set => SetProperty(ref _isContinuousMode, value);
+            set => SetProperty(ref _isContinuousMode, CanUseContinuous && value);
+        }
+
+        /// <summary>
+        /// 연속 운전을 쓸 수 있는가 — <b>Dry Run 에서만</b>.
+        ///
+        /// <para>Print Run 에서 무한 반복은 같은 그림을 같은 자리에 계속 겹쳐 찍는 것이다.
+        /// 글라스는 한 장인데 사이클만 도니 잉크만 쌓인다. 모션 확인용으로 돌리는 Dry Run
+        /// 에서만 뜻이 있다.</para>
+        /// </summary>
+        public bool CanUseContinuous => _isDryRun?.Invoke() ?? true;
+
+        /// <summary>
+        /// 운전 모드가 바뀌었을 때 부른다. Print Run 으로 넘어가면 <b>토글을 끈다</b> —
+        /// 회색으로 비활성만 시키고 값을 켠 채로 두면, 런 루프는 그 값을 그대로 읽어 반복한다.
+        /// </summary>
+        public void RefreshRunModeGating()
+        {
+            if (!CanUseContinuous && _isContinuousMode)
+                SetProperty(ref _isContinuousMode, false, nameof(IsContinuousMode));
+            OnPropertyChanged(nameof(CanUseContinuous));
+            RefreshPrintDataInfo();
+        }
+
+        // ── 인쇄 데이터 표시 ──────────────────────────────────────────────
+        //
+        // START 옆에서 "무엇을 찍는가" 에 답한다. 예전에는 이 화면에서 알 길이 없어
+        // 패턴 인쇄 화면까지 건너가야 했고, Print Run 인데 안 올라가 있으면 모션만 돈 것을
+        // 인쇄한 줄 알았다.
+
+        private string _printDataTitle = "인쇄 데이터";
+        public string PrintDataTitle { get => _printDataTitle; private set => SetProperty(ref _printDataTitle, value); }
+
+        private string _printDataDetail = "";
+        public string PrintDataDetail { get => _printDataDetail; private set => SetProperty(ref _printDataDetail, value); }
+
+        /// <summary>찍을 것이 없는데 Print Run 인가 — 이때만 눈에 띄게 칠한다.</summary>
+        private bool _printDataBlocked;
+        public bool PrintDataBlocked { get => _printDataBlocked; private set => SetProperty(ref _printDataBlocked, value); }
+
+        /// <summary>적재 상태가 바뀌었을 때 부른다(로드·언로드·운전 모드 변경).</summary>
+        public void RefreshPrintDataInfo()
+        {
+            var info = _getPrintDataInfo?.Invoke();
+            if (info == null) return;
+
+            PrintDataTitle   = info.Value.Title;
+            PrintDataDetail  = info.Value.Detail;
+            PrintDataBlocked = info.Value.Blocked;
         }
 
         #endregion
@@ -470,8 +530,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             Func<int>? getSwathCount = null,
             Func<double>? getSwathPitchMm = null,
             Func<int>? getPrintDirection = null,
-            Func<double>? getFiducialPitchYMm = null)
+            Func<double>? getFiducialPitchYMm = null,
+            Func<(Application.Sequences.PrintRunOptions Opts, string? Blocked)>? getPrintRun = null,
+            Func<bool>? isDryRun = null,
+            Func<(string Title, string Detail, bool Blocked)>? getPrintDataInfo = null)
         {
+            _getPrintRun       = getPrintRun;
+            _isDryRun          = isDryRun;
+            _getPrintDataInfo  = getPrintDataInfo;
             _getFiducialPitchYMm = getFiducialPitchYMm;
             _logAction       = logAction;
             _onAlarmChanged  = onAlarmChanged;
@@ -590,14 +656,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private void BuildSteps()
         {
             Steps.Clear();
-            int swath = _getSwathCount?.Invoke() ?? 1;
-            double swathPitch = _getSwathPitchMm?.Invoke() ?? 0;
-            bool bidi = (_getPrintDirection?.Invoke() ?? 1) == 1;   // 1=양방향, 0=단방향
+
+            // 인쇄 설정은 MainViewModel 이 판정한다(운전 모드·적재 상태를 아는 쪽). 위임이 없으면
+            // 예전처럼 레시피 값만으로 모션 시퀀스를 만든다 — 그 경우는 언제나 Dry Run 이다.
+            var opts = _getPrintRun?.Invoke().Opts
+                ?? new Application.Sequences.PrintRunOptions
+                {
+                    SwathCount    = _getSwathCount?.Invoke() ?? 1,
+                    SwathPitchMm  = _getSwathPitchMm?.Invoke() ?? 0,
+                    Bidirectional = (_getPrintDirection?.Invoke() ?? 1) == 1,
+                };
+
             // 애니메이션(OnFrameTick)이 참조하는 SwathCount/IsBidirectional 을 시퀀스 생성 시 1회 확정.
             // (센서 100ms 폴링으로 매번 읽지 않음 — 값은 사이클 시작 때만 바뀌므로 폴링 불필요)
-            SwathCount = swath;
-            IsBidirectional = bidi;
-            foreach (var def in AutoPrintSequence.Build(_machine, _motion, swath, swathPitch, bidi))
+            SwathCount = Math.Max(1, opts.SwathCount);
+            IsBidirectional = opts.Bidirectional;
+            foreach (var def in AutoPrintSequence.Build(_machine, _motion, opts))
             {
                 Steps.Add(new SequenceStep
                 {
@@ -910,6 +984,18 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 string msg = T("Log_PrereqNotHomed", string.Join(", ", notHomed));
                 _logAction?.Invoke(msg.Replace("\n\n", " — "), LogLevel.Error);
                 Dialogs.Show(msg, T("Log_PrereqDialogTitle"),
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                return false;
+            }
+
+            // Print Run 인데 올릴 데이터가 없으면 여기서 멈춘다. 그냥 돌면 모션만 돈 것을
+            // 인쇄한 것으로 오해한다 — 잉크가 안 나간 줄 모르고 다음 공정으로 넘어간다.
+            string? blocked = _getPrintRun?.Invoke().Blocked;
+            if (blocked != null)
+            {
+                _logAction?.Invoke("[SEQ] AUTO PRINT — 중단 (" + blocked.Replace("\n\n", " — ") + ")",
+                                   LogLevel.Error);
+                Dialogs.Show(blocked, "AUTO PRINT",
                     System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
                 return false;
             }
