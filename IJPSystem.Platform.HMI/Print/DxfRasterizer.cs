@@ -242,6 +242,18 @@ namespace IJPSystem.Platform.HMI.Print
                 _lastLayout     = layout;
                 _lastScanStepUm = scanStep;
 
+                // 스와스 — 지금 세지 않으면 영영 셀 수 없다.
+                //
+                // 노즐이 덮는 X 범위보다 그림이 넓으면 넘친 쪽은 <b>어떤 노즐도 읽지 않는다</b>
+                // (PrintPatternBuilder 의 `sx >= srcW` 는 반대 경우고, 이쪽은 애초에 노즐이 없다).
+                // 즉 조용히 잘린다. 게다가 저장되는 WidthMm 은 노즐 X 범위라, 파일을 나중에 열어
+                // 봐야 원본이 얼마나 넓었는지 알 수 없다 — 재료가 여기에만 있다.
+                double srcWidthMm = gray.GetLength(1) * umPxX / 1000.0;
+                double headSpanMm = ColumnSpanMm(pattern);
+                int    swaths     = headSpanMm > 0
+                    ? Math.Max(1, (int)Math.Ceiling(srcWidthMm / headSpanMm - 1e-6))
+                    : 1;
+
                 string folder = Path.Combine(OutputRoot, "IMG_TEMP", stamp);
                 PrintPatternFile.Save(folder, passes, new PrintPatternFile.PatternMeta
                 {
@@ -252,11 +264,25 @@ namespace IJPSystem.Platform.HMI.Print
                     CreatedAt      = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                     IgnoredNozzles = ignored,
                     PassOffsetXUm  = passOffset,
+                    SwathCount     = swaths,
+                    SwathPitchUm   = swaths > 1 ? headSpanMm * 1000.0 : 0,
+                    SourceWidthMm  = srcWidthMm,
                 });
                 patternPath = folder;
 
+                LastPrintInfo = new PatternPrintInfo(
+                    LengthMm:      pattern.Steps * scanStep / 1000.0,
+                    SourceWidthMm: srcWidthMm,
+                    HeadSpanMm:    headSpanMm,
+                    SwathCount:    swaths);
+
                 string body = $"토출 패턴 {pattern.Steps}스텝 × {pattern.Nozzles}노즐";
                 if (div > 1) body += $" · 간격 1/{div} ({div}패스, 패스간 {passOffset:0.##}µm)";
+                body += $" · 폭 {srcWidthMm:0.#}mm / 헤드 {headSpanMm:0.#}mm";
+                body += swaths > 1
+                    // 못 찍는 것을 못 찍는다고 말한다 — 예전에는 아무 말 없이 한 폭만 나갔다.
+                    ? $" · ★스와스 {swaths}회 필요 (지금은 첫 폭만 나갑니다)"
+                    : " · 스와스 1회";
                 if (ignored.Count > 0)
                     body += $" (헤드 범위 밖 {ignored.Count}개 제외: {string.Join(",", ignored)})";
                 PatternMessage = body;
@@ -271,6 +297,41 @@ namespace IJPSystem.Platform.HMI.Print
 
         /// <summary>마지막 패턴 생성 결과 설명(성공/실패/제외 노즐). 화면 상태줄에 그대로 쓴다.</summary>
         public string? PatternMessage { get; private set; }
+
+        /// <summary>
+        /// 방금 만든 패턴이 <b>어떻게 인쇄되는가</b> — 화면의 인쇄 정보 칸이 이 값을 쓴다.
+        ///
+        /// <para>여기서 보여 주지 않으면 확인할 자리가 없다. 저장되는 <c>WidthMm</c> 은 노즐
+        /// X 범위라 원본이 얼마나 넓었는지 되찾을 수 없고, 주행 거리는 인쇄를 걸어 봐야 안다.
+        /// 만든 <b>그 자리에서</b> 보여야 티칭을 다시 잡을지 패턴을 줄일지 판단할 수 있다.</para>
+        /// </summary>
+        public PatternPrintInfo? LastPrintInfo { get; private set; }
+
+        /// <summary>패턴 하나가 인쇄될 모양 — 길이·폭·스와스. 위치(시작·종료)는 티칭이 더해야 나온다.</summary>
+        public sealed record PatternPrintInfo(
+            double LengthMm,        // 스캔 방향 주행 거리 = 스텝 수 × 스캔 스텝
+            double SourceWidthMm,   // 원본 그림의 가로
+            double HeadSpanMm,      // 한 스와스로 덮는 가로 = 쓰는 노즐의 X 범위
+            int    SwathCount);     // 다 덮는 데 필요한 스와스 수
+
+        /// <summary>
+        /// 컬럼이 덮는 X 폭 [mm] — 첫 노즐과 끝 노즐 사이. 곧 <b>한 스와스로 찍을 수 있는 폭</b>이다.
+        ///
+        /// <para>노즐 <b>개수</b>가 아니라 X 좌표로 재는 이유: 사용자가 노즐 일부만 고를 수 있고,
+        /// 여러 헤드가 겹치면 개수와 폭이 비례하지 않는다.</para>
+        /// </summary>
+        private static double ColumnSpanMm(PrintPattern pattern)
+        {
+            if (pattern == null || pattern.Columns.Count == 0) return 0;
+
+            double min = double.MaxValue, max = double.MinValue;
+            foreach (var c in pattern.Columns)
+            {
+                if (c.XUm < min) min = c.XUm;
+                if (c.XUm > max) max = c.XUm;
+            }
+            return (max - min) / 1000.0;
+        }
 
         /// <summary>
         /// 헤드 노즐 배열. 수량·열 수는 <see cref="HeadSpec"/>(레시피의 노즐 정보)에서 오고,
@@ -415,17 +476,7 @@ namespace IJPSystem.Platform.HMI.Print
 
             // 인쇄물 크기는 이미지가 아니라 패턴에서 구한다 — 실제로 찍히는 것은 노즐이 닿는
             // 범위와 스텝 수이지, 원본 도면의 크기가 아니다.
-            double widthMm = 0;
-            if (pattern.Columns.Count > 0)
-            {
-                double min = double.MaxValue, max = double.MinValue;
-                foreach (var c in pattern.Columns)
-                {
-                    if (c.XUm < min) min = c.XUm;
-                    if (c.XUm > max) max = c.XUm;
-                }
-                widthMm = (max - min) / 1000.0;
-            }
+            double widthMm  = ColumnSpanMm(pattern);
             double heightMm = pattern.Steps * _lastScanStepUm / 1000.0;
 
             var para = new PrintDataSet.PrintPara

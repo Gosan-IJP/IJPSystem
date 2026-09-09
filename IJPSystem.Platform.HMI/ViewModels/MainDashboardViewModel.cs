@@ -46,7 +46,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private readonly Func<bool>? _isDryRun;
 
         /// <summary>START 옆에 띄울 인쇄 데이터 한 줄. 적재 상태를 아는 것은 MainViewModel 쪽이다.</summary>
-        private readonly Func<(string Title, string Detail, bool Blocked)>? _getPrintDataInfo;
+        private readonly Func<PrintDataInfo>? _getPrintDataInfo;
 
         // 실장 구조 — 헤드: X(갠트리, 크로스스캔) + Z(승강) / 스테이지: Y(스캔 이송) + T(정렬 회전).
         // 메인 대시보드 애니메이션은 이 축들의 실측 위치·티칭 좌표로 구동한다.
@@ -401,15 +401,54 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private bool _printDataBlocked;
         public bool PrintDataBlocked { get => _printDataBlocked; private set => SetProperty(ref _printDataBlocked, value); }
 
+        // 시작·종료·폭·스와스 — 패턴 생성 창의 Print Info 와 같은 네 줄이다.
+        // START 를 누르기 직전에 "어디서 어디까지, 얼마나 넓게" 를 여기서 답한다.
+        private string _printDataStart = "-";
+        public string PrintDataStart { get => _printDataStart; private set => SetProperty(ref _printDataStart, value); }
+
+        private string _printDataEnd = "-";
+        public string PrintDataEnd { get => _printDataEnd; private set => SetProperty(ref _printDataEnd, value); }
+
+        /// <summary>종료가 티칭 주행을 넘거나 티칭이 없는가 — 그대로 돌리면 뒤가 안 찍힌다.</summary>
+        private bool _printDataRangeWarn;
+        public bool PrintDataRangeWarn { get => _printDataRangeWarn; private set => SetProperty(ref _printDataRangeWarn, value); }
+
+        private string _printDataWidth = "-";
+        public string PrintDataWidth { get => _printDataWidth; private set => SetProperty(ref _printDataWidth, value); }
+
+        private string _printDataSwath = "-";
+        public string PrintDataSwath { get => _printDataSwath; private set => SetProperty(ref _printDataSwath, value); }
+
+        /// <summary>스와스가 2 이상인가 — 지금은 첫 폭만 나간다.</summary>
+        private bool _printDataSwathWarn;
+        public bool PrintDataSwathWarn { get => _printDataSwathWarn; private set => SetProperty(ref _printDataSwathWarn, value); }
+
+        /// <summary>
+        /// 인쇄 정보 네 줄을 보일 것인가 — Dry Run 이나 미적재면 의미가 없어 통째로 숨긴다.
+        ///
+        /// <para>비주얼라이저의 <see cref="HasPrintRange"/> 와 다른 것이다. 그쪽은 티칭 좌표로
+        /// 그림을 그릴 수 있는가이고, 이쪽은 적재된 데이터가 있는가다.</para>
+        /// </summary>
+        private bool _hasPrintDataRange;
+        public bool HasPrintDataRange { get => _hasPrintDataRange; private set => SetProperty(ref _hasPrintDataRange, value); }
+
         /// <summary>적재 상태가 바뀌었을 때 부른다(로드·언로드·운전 모드 변경).</summary>
         public void RefreshPrintDataInfo()
         {
             var info = _getPrintDataInfo?.Invoke();
             if (info == null) return;
 
-            PrintDataTitle   = info.Value.Title;
-            PrintDataDetail  = info.Value.Detail;
-            PrintDataBlocked = info.Value.Blocked;
+            PrintDataTitle   = info.Title;
+            PrintDataDetail  = info.Detail;
+            PrintDataBlocked = info.Blocked;
+
+            PrintDataStart     = info.Start;
+            PrintDataEnd       = info.End;
+            PrintDataRangeWarn = info.RangeWarn;
+            PrintDataWidth     = info.Width;
+            PrintDataSwath     = info.Swath;
+            PrintDataSwathWarn = info.SwathWarn;
+            HasPrintDataRange  = info.Start != "-";
         }
 
         #endregion
@@ -533,7 +572,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             Func<double>? getFiducialPitchYMm = null,
             Func<(Application.Sequences.PrintRunOptions Opts, string? Blocked)>? getPrintRun = null,
             Func<bool>? isDryRun = null,
-            Func<(string Title, string Detail, bool Blocked)>? getPrintDataInfo = null)
+            Func<PrintDataInfo>? getPrintDataInfo = null)
         {
             _getPrintRun       = getPrintRun;
             _isDryRun          = isDryRun;

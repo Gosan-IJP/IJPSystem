@@ -22,6 +22,18 @@ namespace IJPSystem.Platform.Application.Sequences
         /// <summary>패스 사이 X축 스텝오버[mm]. 0 이면 스텝 단계를 만들지 않는다.</summary>
         public double SwathPitchMm { get; init; }
 
+        /// <summary>
+        /// 정방향 스와스에서 스캔축이 갈 거리[mm]. <b>부호가 방향</b>이다(+면 좌표가 커지는 쪽).
+        ///
+        /// <para><b>0 이면 티칭된 PRINT END 까지 간다</b> — Dry Run 이 그렇다. 찍을 데이터가
+        /// 없으니 어디까지 갈지 정할 근거도 없고, 그때는 사람이 잡아 둔 자리가 답이다.</para>
+        ///
+        /// <para>Print Run 은 값이 들어온다 — <b>패턴 길이가 곧 주행 거리</b>다
+        /// (스텝 수 × 스캔 스텝). 끝점을 따로 티칭하면 진실이 둘이 되어, 패턴을 바꾼 뒤
+        /// 티칭이 낡아도 아무도 모르는 채 뒷부분이 안 찍힌다.</para>
+        /// </summary>
+        public double ScanTravelMm { get; init; }
+
         /// <summary>양방향이면 패스마다 방향을 교대한다. 단방향이면 매번 복귀 후 같은 방향.</summary>
         public bool Bidirectional { get; init; } = true;
 
@@ -100,18 +112,31 @@ namespace IJPSystem.Platform.Application.Sequences
                         }));
                 }
 
+                // ★끝점을 누가 정하는가가 운전 모드로 갈린다.
+                //   Print Run  거리가 들어온다 — 패턴 길이만큼만 간다(데이터가 정한다)
+                //   Dry Run    거리가 0 이다 — 티칭된 PRINT END 로 간다(사람이 정한다)
+                double travel = opts.ScanTravelMm;
                 steps.Add(new SequenceStepDef(++n, "Step_Print_Scan",
-                    ct => motion.MoveAxisToPointAsync(ScanAxisNo, scanTarget, ct, MotionProfileKind.Printing)));
+                    travel != 0
+                        ? ct => motion.MoveAxisRelativeAsync(
+                                    ScanAxisNo, forward ? travel : -travel, ct, MotionProfileKind.Printing)
+                        : ct => motion.MoveAxisToPointAsync(
+                                    ScanAxisNo, scanTarget, ct, MotionProfileKind.Printing)));
 
                 steps.Add(new SequenceStepDef(++n, "Step_Print_ScanDone",
                     ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 60_000, ct)));
 
                 // 단방향: 인쇄 후 시작점으로 복귀(비인쇄, Move 프로파일).
+                // 거리로 왔으면 거리로 돌아간다 — 티칭 점으로 돌아가면 방금 간 만큼과 어긋난다.
                 if (!opts.Bidirectional)
                 {
                     string returnTarget = forward ? PointNames.PrintOrigin : PointNames.PrintEnd;
                     steps.Add(new SequenceStepDef(++n, "Step_Print_Return",
-                        ct => motion.MoveAxisToPointAsync(ScanAxisNo, returnTarget, ct, MotionProfileKind.Move)));
+                        travel != 0
+                            ? ct => motion.MoveAxisRelativeAsync(
+                                        ScanAxisNo, forward ? -travel : travel, ct, MotionProfileKind.Move)
+                            : ct => motion.MoveAxisToPointAsync(
+                                        ScanAxisNo, returnTarget, ct, MotionProfileKind.Move)));
 
                     steps.Add(new SequenceStepDef(++n, "Step_Print_ReturnDone",
                         ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 60_000, ct)));

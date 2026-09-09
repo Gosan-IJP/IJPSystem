@@ -129,24 +129,61 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// "무엇이 올라가 있는가" 가 중요하다. 올라가 있으면 버퍼 번호까지 적어 엔진 로그와
         /// 대조되게 한다.</para>
         /// </summary>
-        private (string Title, string Detail, bool Blocked) DescribePrintData()
+        private PrintDataInfo DescribePrintData()
         {
             if (RecipeVM.ActiveIsDryRun)
-                return ("Dry Run", "모션만 동작 — 잉크가 나가지 않습니다", false);
+                return new PrintDataInfo("Dry Run", "모션만 동작 — 잉크가 나가지 않습니다");
 
             var job = PrintJob.CurrentJob;
             if (!PrintJob.HasPrintableBuffer || job == null)
-                return ("인쇄 데이터 없음",
-                        "패턴 인쇄 화면에서 [Load Print data] 를 먼저 하세요", true);
+                return new PrintDataInfo("인쇄 데이터 없음",
+                                         "패턴 인쇄 화면에서 [Load Print data] 를 먼저 하세요",
+                                         Blocked: true);
 
             string name = System.IO.Path.GetFileName(
                 job.Folder.TrimEnd(System.IO.Path.DirectorySeparatorChar));
             string at = PrintJob.LoadedAt is DateTime t ? $" · {t:HH:mm:ss} 적재" : "";
 
-            return (name,
-                    $"{job.Steps}스텝 × {job.Nozzles}노즐 · {job.Para.WidthMm:F1}×{job.Para.HeightMm:F1}mm · " +
-                    $"버퍼 #{PrintJob.BufferId}{at}",
-                    false);
+            // 가상이면 제목에서 바로 드러나야 한다 — 상세를 읽어야 아는 것으로는 늦다.
+            string title  = IsMeteorHead() ? name : $"[가상] {name}";
+            string buffer = IsMeteorHead() ? $" · 버퍼 #{PrintJob.BufferId}" : " · 명령만 로그에 남습니다";
+
+            var (start, end, rangeWarn) = DescribeScanRange(job.Para.HeightMm);
+
+            return new PrintDataInfo(
+                Title:     title,
+                Detail:    $"{job.Steps}스텝 × {job.Nozzles}노즐{buffer}{at}",
+                Blocked:   false,
+                Start:     start,
+                End:       end,
+                RangeWarn: rangeWarn,
+                Width:     job.SourceWidthMm > 0
+                               ? $"{job.SourceWidthMm:0.#} mm  (헤드 {job.Para.WidthMm:0.#} mm)"
+                               : $"{job.Para.WidthMm:0.#} mm",
+                Swath:     job.SwathCount > 1 ? $"{job.SwathCount} 회  ★첫 폭만 나갑니다" : "1 회",
+                SwathWarn: job.SwathCount > 1);
+        }
+
+        /// <summary>인쇄가 어디서 시작해 어디서 끝나는가 — 종료는 <b>계산값</b>이다(시작 + 패턴 길이).</summary>
+        private (string Start, string End, bool Warn) DescribeScanRange(double patternLenMm)
+        {
+            const string ScanAxis = "Y";
+            double? originY = _pointAxisMm?.Invoke(
+                Application.Sequences.PointNames.PrintOrigin, ScanAxis);
+            double? endY = _pointAxisMm?.Invoke(
+                Application.Sequences.PointNames.PrintEnd, ScanAxis);
+
+            if (originY == null || endY == null || Math.Abs(endY.Value - originY.Value) < 0.001)
+                return ("티칭 없음", $"길이 {patternLenMm:0.#} mm", true);
+
+            double taught = Math.Abs(endY.Value - originY.Value);
+            double stop   = originY.Value + Math.Sign(endY.Value - originY.Value) * patternLenMm;
+            bool   over   = patternLenMm > taught + 0.001;
+
+            return ($"Y {originY.Value:0.###} mm",
+                    $"Y {stop:0.###} mm  (길이 {patternLenMm:0.#} mm)" +
+                        (over ? $"  ★티칭 {taught:0.#} mm 초과" : ""),
+                    over);
         }
 
         /// <param name="blockedReason">시작하면 안 되는 이유. 시작해도 되면 null.</param>
@@ -167,6 +204,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 };
             }
 
+            // 헤드가 아예 없는 구성(None)에서만 막는다. 가상은 순서를 확인하러 일부러 고른
+            // 것이므로 끝까지 돈다 — 대신 화면이 "(가상)" 이라고 말한다.
             if (PrintCommands == null)
             {
                 blockedReason =
@@ -187,6 +226,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             }
 
             var job = PrintJob.CurrentJob!;
+
+            double travel = ScanTravelForPattern(job.Para.HeightMm, out blockedReason);
+            if (blockedReason != null) return new Application.Sequences.PrintRunOptions();
+
             return new Application.Sequences.PrintRunOptions
             {
                 // ★스와스 1 — 지금 패턴은 헤드 한 폭(노즐 수만큼)으로 만들어진다. 같은 그림을
@@ -195,6 +238,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 SwathCount    = 1,
                 SwathPitchMm  = RecipeVM.ActiveSwathPitchMm,
                 Bidirectional = bidi,
+                ScanTravelMm  = travel,
                 Job           = PrintCommands,
                 BufferId      = PrintJob.BufferId!.Value,
                 WidthPx       = job.Nozzles,
@@ -203,10 +247,68 @@ namespace IJPSystem.Platform.HMI.ViewModels
             };
         }
 
+        /// <summary>티칭 표에서 축 좌표를 읽는다("Y AXIS"/"Y" 이름 차이를 흡수한다).</summary>
+        private Func<string, string, double?>? _pointAxisMm;
+
+        /// <summary>같은 조회를 다른 화면도 쓴다 — 패턴 생성 창이 인쇄 시작·종료를 적는다.</summary>
+        public Func<string, string, double?>? PointAxisMm => _pointAxisMm;
+
+        /// <summary>
+        /// Print Run 에서 스캔축이 갈 거리[mm] — <b>패턴 길이가 정한다</b>. 부호가 방향이다.
+        ///
+        /// <para>끝점을 티칭값으로 두면 진실이 둘이 된다. 패턴을 바꾼 뒤 티칭이 낡아도 아무도
+        /// 모르는 채 뒷부분이 안 찍히고, 화면은 정상으로 보인다 — 스와스가 조용히 잘리던 것과
+        /// 같은 형태다. 그래서 거리는 데이터에서 뽑고, 티칭한 PRINT END 는 <b>여기까지는 가도
+        /// 된다</b>는 한계선으로만 쓴다.</para>
+        ///
+        /// <para>방향은 여전히 티칭이 정한다 — Y 가 커지는 쪽인지 작아지는 쪽인지는 데이터가
+        /// 알 수 없는 장비 사정이다.</para>
+        /// </summary>
+        private double ScanTravelForPattern(double patternLenMm, out string? blocked)
+        {
+            blocked = null;
+            const string ScanAxis = "Y";
+
+            double? originY = _pointAxisMm?.Invoke(
+                Application.Sequences.PointNames.PrintOrigin, ScanAxis);
+            double? endY = _pointAxisMm?.Invoke(
+                Application.Sequences.PointNames.PrintEnd, ScanAxis);
+
+            if (originY == null || endY == null)
+            {
+                blocked =
+                    "PRINT ORIGIN / PRINT END 티칭값을 읽지 못했습니다.\n\n" +
+                    "모터 티칭 화면에서 두 점을 잡고 레시피를 APPLY 하세요.\n" +
+                    "(인쇄 거리는 패턴이 정하지만, 어느 방향으로 갈지는 티칭이 정합니다)";
+                return 0;
+            }
+
+            double taught = endY.Value - originY.Value;
+            if (Math.Abs(taught) < 0.001)
+            {
+                blocked =
+                    "PRINT ORIGIN 과 PRINT END 의 Y 가 같습니다 — 인쇄 방향을 알 수 없습니다.\n\n" +
+                    $"두 점 모두 Y={originY.Value:F3}mm 입니다. PRINT END 를 인쇄가 끝나는 쪽에 잡으세요.";
+                return 0;
+            }
+
+            if (patternLenMm > Math.Abs(taught) + 0.001)
+            {
+                blocked =
+                    $"패턴이 티칭된 주행 거리보다 깁니다.\n\n" +
+                    $"· 패턴 길이       {patternLenMm:F1} mm\n" +
+                    $"· 티칭 주행 거리  {Math.Abs(taught):F1} mm  " +
+                    $"(Y {originY.Value:F1} → {endY.Value:F1})\n\n" +
+                    $"이대로 돌리면 뒤쪽 {patternLenMm - Math.Abs(taught):F1}mm 가 찍히지 않습니다.\n" +
+                    "PRINT END 를 더 멀리 잡거나, 패턴을 짧게 만드세요.";
+                return 0;
+            }
+
+            return Math.Sign(taught) * patternLenMm;
+        }
+
 
         private bool _hasActiveAlarm;
-            // 헤드가 아예 없는 구성(None)에서만 막는다. 가상은 순서를 확인하러 일부러 고른
-            // 것이므로 끝까지 돈다 — 대신 화면이 "(가상)" 이라고 말한다.
         public bool HasActiveAlarm
         {
             get => _hasActiveAlarm;
@@ -531,6 +633,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             Application.Sequences.GlassAlignServices.Current ??= new Services.GlassAlignService(this);
 
             var motionAdapter = new Services.MotionServiceAdapter(this);
+            _pointAxisMm = motionAdapter.GetAxisPositionMm;
             _mainDashboardVM = new MainDashboardViewModel(
                     this.AddLog,
                     this.UpdateSystemStatus,
@@ -568,11 +671,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     _mainDashboardVM.ActiveRecipeName = RecipeVM.ActiveRecipeName;
                     // 레시피가 바뀌면 운전 모드도 같이 바뀐다 — 연속 운전 토글의 사용 조건이다.
                     _mainDashboardVM.RefreshRunModeGating();
+                    RaiseRunModeText();
                 }
                 else if (e.PropertyName == nameof(RecipeViewModel.ActiveRunMode)
                       || e.PropertyName == nameof(RecipeViewModel.ActiveRunModeText))
                 {
                     _mainDashboardVM.RefreshRunModeGating();
+                    RaiseRunModeText();
                 }
             };
             RecipeVM.CurrentLanguage = this.CurrentLanguage;
@@ -672,12 +777,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private void InitializeSharedAxes()
         {
             var motionDriver = _controller?.GetMachine()?.Motion;
-                    RaiseRunModeText();
             var configs = _controller?.GetMachine()?.Config?.MotionAxisList;
 
             if (motionDriver != null && configs != null)
             {
-                    RaiseRunModeText();
                 foreach (var config in configs)
                     SharedAxisList.Add(new AxisViewModel(motionDriver, config, this));
             }

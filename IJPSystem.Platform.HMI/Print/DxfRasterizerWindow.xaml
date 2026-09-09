@@ -422,11 +422,29 @@
                 </DockPanel>
             </Border>
 
-            <!-- Paths -->
+            <!-- Paths
+                 ★StackPanel 이 아니라 Grid 다. 스택으로 쌓으면 내용이 늘어난 만큼 아래가 창 밖으로
+                 밀려난다 — Print Info 를 넣었더니 실제로 💾 Save 가 화면에서 사라졌다(2026-09-09).
+                 Save·상태줄은 마지막 행에 고정하고, 남는 높이는 Print Info 가 가져간다. -->
             <Border Grid.Column="2" Style="{StaticResource Card}" Padding="12">
-                <StackPanel>
-                    <TextBlock Text="DXF Path" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
-                    <Grid Margin="0,0,0,8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>   <!-- DXF Path 라벨 -->
+                        <RowDefinition Height="Auto"/>   <!-- DXF Path 줄 -->
+                        <RowDefinition Height="Auto"/>   <!-- BMP Path -->
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>   <!-- Pattern Path -->
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>   <!-- Print Info 라벨 -->
+                        <RowDefinition Height="*"/>      <!-- Print Info — 남는 높이를 가져간다 -->
+                        <RowDefinition Height="Auto"/>   <!-- Loading Complete -->
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>   <!-- Save -->
+                        <RowDefinition Height="Auto"/>   <!-- 상태줄 -->
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="DXF Path" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
+                    <Grid Grid.Row="1" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <Border Grid.Column="0" Style="{StaticResource ReadBox}">
                             <TextBox Style="{StaticResource BoxInput}" FontSize="12"
@@ -437,29 +455,71 @@
                                 Content="📂  Load" Command="{Binding LoadDxfCommand}"/>
                     </Grid>
 
-                    <TextBlock Text="BMP Path" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
-                    <Border Style="{StaticResource ReadBox}" MinHeight="44" Margin="0,0,0,8">
+                    <TextBlock Grid.Row="2" Text="BMP Path" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
+                    <Border Grid.Row="3" Style="{StaticResource ReadBox}" MinHeight="38" Margin="0,0,0,8">
                         <TextBlock Text="{Binding BmpPath}" Foreground="#E2E8F0" FontFamily="Consolas" FontSize="12"
                                    TextWrapping="Wrap" VerticalAlignment="Center"/>
                     </Border>
 
-                    <TextBlock Text="Pattern Path" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
-                    <Border Style="{StaticResource ReadBox}" MinHeight="44" Margin="0,0,0,8">
+                    <TextBlock Grid.Row="4" Text="Pattern Path" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
+                    <Border Grid.Row="5" Style="{StaticResource ReadBox}" MinHeight="38" Margin="0,0,0,8">
                         <TextBlock Text="{Binding PatternPath}" Foreground="#E2E8F0" FontFamily="Consolas" FontSize="12"
                                    TextWrapping="Wrap" VerticalAlignment="Center"/>
                     </Border>
 
-                    <TextBlock Text="Loading Complete" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
-                    <Border Background="#0B0F1A" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="2" Height="26" Margin="0,0,0,10">
+                    <!-- 인쇄 정보 — 만든 자리에서 "어떻게 찍히는가" 를 보여 준다.
+                         종료는 티칭값이 아니라 계산값이다(시작 + 패턴 길이). 여기서 안 보여 주면
+                         원본 폭도 주행 거리도 나중에는 되찾을 수 없다. -->
+                    <TextBlock Grid.Row="6" Text="Print Info" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
+                    <Border Grid.Row="7" Background="#0B0F1A" BorderBrush="#1E293B" BorderThickness="1"
+                            CornerRadius="2" Padding="10,8" Margin="0,0,0,8" VerticalAlignment="Top">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="시작"   Foreground="#64748B" FontSize="11"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="종료"   Foreground="#64748B" FontSize="11"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="폭"     Foreground="#64748B" FontSize="11"/>
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="스와스" Foreground="#64748B" FontSize="11"/>
+
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding PrintStartText}"
+                                       Foreground="#E2E8F0" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding PrintEndText}"
+                                       Foreground="#E2E8F0" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap"/>
+                            <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding PrintWidthText}"
+                                       Foreground="#E2E8F0" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap"/>
+                            <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding PrintSwathText}"
+                                       FontFamily="Consolas" FontSize="11" TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#E2E8F0"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding PrintSwathWarn}" Value="True">
+                                                <Setter Property="Foreground" Value="#FB923C"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Grid.Row="8" Text="Loading Complete" Style="{StaticResource SectionLabel}" Margin="0,0,0,3"/>
+                    <Border Grid.Row="9" Background="#0B0F1A" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="2" Height="26" Margin="0,0,0,10">
                         <ProgressBar Minimum="0" Maximum="1" Value="{Binding LoadingProgress}"
                                      Foreground="#22A341" Background="Transparent" BorderThickness="0"/>
                     </Border>
 
-                    <Button Style="{StaticResource NavyBtn}" Height="48" Content="💾   Save"
+                    <Button Grid.Row="10" Style="{StaticResource NavyBtn}" Height="48" Content="💾   Save"
                             Command="{Binding SaveCommand}"/>
-                    <TextBlock Text="{Binding StatusText}" Foreground="#64748B" FontSize="11"
+                    <TextBlock Grid.Row="11" Text="{Binding StatusText}" Foreground="#64748B" FontSize="11"
                                TextWrapping="Wrap" Margin="2,6,0,0"/>
-                </StackPanel>
+                </Grid>
             </Border>
         </Grid>
     </Grid>

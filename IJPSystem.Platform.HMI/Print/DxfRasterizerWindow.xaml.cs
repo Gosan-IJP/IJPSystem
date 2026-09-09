@@ -13,11 +13,16 @@ namespace IJPSystem.Platform.HMI.Print
     /// </summary>
     public partial class DxfRasterizerWindow : Window
     {
-        public DxfRasterizerWindow(string? initialDxfPath = null)
+        public DxfRasterizerWindow(string? initialDxfPath = null,
+                                   Func<string, string, double?>? getPointAxisMm = null)
         {
             InitializeComponent();
 
-            var vm = new DxfRasterizerViewModel(new DxfRasterizer());
+            var vm = new DxfRasterizerViewModel(new DxfRasterizer())
+            {
+                // 인쇄 시작·종료 <b>위치</b>를 적으려면 티칭값이 있어야 한다. 없으면 길이만 뜬다.
+                GetPointAxisMm = getPointAxisMm,
+            };
 
             // Nozzle Select → 노즐 선택 창을 띄우고, 선택 결과(전역)를 반환
             vm.NozzleSelectAction = () =>
@@ -68,6 +73,36 @@ namespace IJPSystem.Platform.HMI.Print
         }
 
         private DxfRasterizerViewModel? Vm => DataContext as DxfRasterizerViewModel;
+
+        /// <summary>
+        /// 변환만 하고 저장하지 않은 채 닫으려 하면 물어본다.
+        ///
+        /// <para>Convert 는 절반만 저장한다 — Print_Para.dat 와 노즐 위치가 없으면 인쇄 화면
+        /// 목록이 그 폴더를 후보에서 뺀다. "변환 완료" 만 보고 닫으면 방금 만든 것이 목록에
+        /// 없어 사라진 줄 안다(실장 2026-09-09).</para>
+        /// </summary>
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            if (Vm?.HasUnsavedPattern == true)
+            {
+                var answer = MessageBox.Show(this,
+                    "변환한 패턴을 아직 저장하지 않았습니다.\n\n" +
+                    "이대로 닫으면 인쇄 화면의 데이터 목록에 나타나지 않습니다.\n" +
+                    "지금 저장할까요?",
+                    "저장하지 않음",
+                    MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+
+                if (answer == MessageBoxResult.Cancel) { e.Cancel = true; return; }
+                if (answer == MessageBoxResult.Yes)
+                {
+                    Vm.SaveCommand.Execute(null);
+                    // 저장이 실패했으면 닫지 않는다 — 닫아 버리면 실패를 못 보고 지나간다.
+                    if (Vm.HasUnsavedPattern) { e.Cancel = true; return; }
+                }
+            }
+
+            base.OnClosing(e);
+        }
 
         private void Vm_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {

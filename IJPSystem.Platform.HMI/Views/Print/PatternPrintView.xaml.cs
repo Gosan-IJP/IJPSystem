@@ -84,7 +84,8 @@ namespace IJPSystem.Platform.HMI.Views
         private void PrintImageDesign_Click(object sender, System.Windows.RoutedEventArgs e)
         {
             var vm = DataContext as PatternPrintViewModel;
-            var win = new IJPSystem.Platform.HMI.Print.DxfRasterizerWindow(vm?.PrintDataPath)
+            var win = new IJPSystem.Platform.HMI.Print.DxfRasterizerWindow(
+                vm?.PrintDataPath, vm?.GetPointAxisMm)
             {
                 Owner = System.Windows.Window.GetWindow(this)
             };

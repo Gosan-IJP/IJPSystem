@@ -412,49 +412,86 @@
                         <StackPanel Grid.Column="1"/>
                     </Grid>
                 </Border>
-                <!-- 운전 — 연속 운전 토글(모드)과 START/STOP(액션)을 한 상자에 둔다.
-                     START 를 누르기 전에 연속 운전 여부를 정하는데, 예전에는 그 토글이 여기
-                     있고 버튼은 오른쪽 단계 목록 아래에 있어 눈이 화면을 가로질러야 했다.
-                     "무엇으로 돌릴지"와 "돌려라"는 같은 자리에 있어야 한다. -->
-                <Border Grid.Column="1" Background="#1E293B" CornerRadius="12" Padding="14,8" BorderBrush="#334155" BorderThickness="1">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                <!-- 인쇄 정보 — START 를 누르기 직전에 "무엇을, 어디서 어디까지, 얼마나 넓게"
+                     를 답한다. 예전에는 이 화면에서 알 길이 없어 패턴 인쇄 화면까지 가야 했고,
+                     Print Run 인데 안 올라가 있으면 모션만 돈 것을 인쇄한 줄 알았다.
 
-                        <!-- 인쇄 데이터 — START 를 누르기 직전에 "무엇을 찍는가" 를 답한다.
-                             예전에는 이 화면에서 알 길이 없어 패턴 인쇄 화면까지 가야 했고,
-                             Print Run 인데 안 올라가 있으면 모션만 돈 것을 인쇄한 줄 알았다. -->
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                            <TextBlock Text="{Binding PrintDataTitle}"
-                                       FontSize="14" FontWeight="Bold" TextTrimming="CharacterEllipsis">
+                     ★종료는 계산값이다(시작 + 패턴 길이) — 티칭된 PRINT END 가 아니다.
+                     START/STOP 은 오른쪽 단계 목록 아래로 옮겼다(2026-09-09) — 운전 중 눈이
+                     가 있는 곳이 그쪽이고, 이 자리는 읽는 자리이지 누르는 자리가 아니다. -->
+                <Border Grid.Column="1" Background="#1E293B" CornerRadius="12" Padding="14,10" BorderBrush="#334155" BorderThickness="1">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding PrintDataTitle}"
+                                   FontSize="14" FontWeight="Bold" TextTrimming="CharacterEllipsis">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="#E2E8F0"/>
+                                    <Style.Triggers>
+                                        <!-- 찍을 것이 없는데 Print Run 이면 눈에 띄어야 한다. -->
+                                        <DataTrigger Binding="{Binding PrintDataBlocked}" Value="True">
+                                            <Setter Property="Foreground" Value="#FB923C"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Text="{Binding PrintDataDetail}"
+                                   Foreground="#64748B" FontSize="10" Margin="0,2,0,0"
+                                   TextTrimming="CharacterEllipsis"/>
+
+                        <!-- 시작·종료·폭·스와스 — Dry Run 이나 미적재면 의미가 없어 통째로 숨긴다. -->
+                        <Grid Margin="0,8,0,0"
+                              Visibility="{Binding HasPrintDataRange, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="시작"   Foreground="#475569" FontSize="10"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="종료"   Foreground="#475569" FontSize="10"/>
+                            <TextBlock Grid.Row="0" Grid.Column="4" Text="폭"     Foreground="#475569" FontSize="10"/>
+                            <TextBlock Grid.Row="1" Grid.Column="4" Text="스와스" Foreground="#475569" FontSize="10"/>
+
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding PrintDataStart}"
+                                       Foreground="#94A3B8" FontFamily="Consolas" FontSize="10"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding PrintDataEnd}"
+                                       FontFamily="Consolas" FontSize="10" TextTrimming="CharacterEllipsis">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
-                                        <Setter Property="Foreground" Value="#E2E8F0"/>
+                                        <Setter Property="Foreground" Value="#94A3B8"/>
                                         <Style.Triggers>
-                                            <!-- 찍을 것이 없는데 Print Run 이면 눈에 띄어야 한다. -->
-                                            <DataTrigger Binding="{Binding PrintDataBlocked}" Value="True">
+                                            <DataTrigger Binding="{Binding PrintDataRangeWarn}" Value="True">
                                                 <Setter Property="Foreground" Value="#FB923C"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
-                            <TextBlock Text="{Binding PrintDataDetail}"
-                                       Foreground="#64748B" FontSize="10" Margin="0,2,0,0"
+                            <TextBlock Grid.Row="0" Grid.Column="6" Text="{Binding PrintDataWidth}"
+                                       Foreground="#94A3B8" FontFamily="Consolas" FontSize="10"
                                        TextTrimming="CharacterEllipsis"/>
-                        </StackPanel>
-
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="{DynamicResource Btn_Start}" Command="{Binding StartCommand}"
-                                    Style="{StaticResource MainDashboardButtonStyle}" Background="#059669"
-                                    Width="104" Height="46" FontSize="16"/>
-                            <Button Content="{DynamicResource Btn_Stop}" Command="{Binding StopCommand}"
-                                    Style="{StaticResource MainDashboardButtonStyle}" Background="#DC2626"
-                                    Width="104" Height="46" FontSize="16" Margin="10,0,0,0"/>
-                        </StackPanel>
-                    </Grid>
+                            <TextBlock Grid.Row="1" Grid.Column="6" Text="{Binding PrintDataSwath}"
+                                       FontFamily="Consolas" FontSize="10" TextTrimming="CharacterEllipsis">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#94A3B8"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding PrintDataSwathWarn}" Value="True">
+                                                <Setter Property="Foreground" Value="#FB923C"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </StackPanel>
                 </Border>
 
             </Grid>
@@ -540,9 +577,30 @@
 
                 <!-- 연속 운전 토글은 상단 상태 띠로 이동 -->
 
-                <!-- START / STOP 은 왼쪽 아래 '연속 운전' 상자로 옮겼다(2026-09-02) —
-                     운전 모드와 운전 명령을 한자리에 모은다. EMERGENCY RESET 은 여기 남는다:
-                     평소에는 숨어 있다가 오류가 났을 때만 나타나는, 성격이 다른 버튼이다. -->
+                <!-- START / STOP — 단계 목록 바로 아래(2026-09-09 복귀).
+                     2026-09-02 에 왼쪽으로 옮긴 이유는 "연속 운전 토글과 한자리에 모은다" 였는데,
+                     그 토글이 MACHINE VISUALIZER 헤더로 가면서 이유가 사라졌다. 운전 중에 눈이
+                     가 있는 곳은 단계 목록이고, STOP 은 보고 있는 자리에 있어야 한다.
+                     왼쪽 상자는 인쇄 정보가 차지한다 — 읽는 자리와 누르는 자리를 나눈다.
+
+                     ★EMERGENCY RESET <b>위</b>에 둔다. 그쪽은 오류일 때만 나타나므로, 아래에
+                     두면 오류가 날 때마다 START 가 밀려 내려간다. -->
+                <Grid Margin="0,15,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Content="{DynamicResource Btn_Start}" Command="{Binding StartCommand}"
+                            Style="{StaticResource MainDashboardButtonStyle}" Background="#059669"
+                            Height="50" FontSize="16"/>
+                    <Button Grid.Column="2" Content="{DynamicResource Btn_Stop}" Command="{Binding StopCommand}"
+                            Style="{StaticResource MainDashboardButtonStyle}" Background="#DC2626"
+                            Height="50" FontSize="16"/>
+                </Grid>
+
+                <!-- EMERGENCY RESET — 평소에는 숨어 있다가 오류가 났을 때만 나타나는,
+                     성격이 다른 버튼이다. -->
                 <Button Content="{DynamicResource Btn_EmergencyReset}" Command="{Binding ResetCommand}"
                         Background="#EF4444" Margin="0,15,0,0" Height="50" FontWeight="Bold">
                     <Button.Style>

@@ -329,7 +329,13 @@ namespace IJPSystem.Platform.HMI.Print
                 string msg = (_rip as DxfRasterizer)?.PatternMessage is string p and { Length: > 0 }
                            ? $"변환 완료 — {p}"
                            : "변환 완료";
-                ApplyResult(msg);
+
+                // ★Convert 는 절반만 저장한다 — pattern.json/bin 만 쓰고 Print_Para.dat 와
+                //   노즐 위치는 Save 가 쓴다. 그 둘이 없으면 인쇄 화면 목록이 이 폴더를
+                //   후보에서 걸러내므로(PrintJobFile.FindRecent), "변환 완료" 만 보고 창을 닫으면
+                //   방금 만든 것이 목록에 없어 사라진 줄 안다. 그래서 여기서 말해 준다.
+                _savedSinceConvert = false;
+                ApplyResult(msg + "  —  저장하려면 💾 Save 를 누르세요");
             }
             catch (Exception ex) { StatusText = "변환 실패: " + ex.Message; }
         }
@@ -403,6 +409,7 @@ namespace IJPSystem.Platform.HMI.Print
             {
                 var saved = _rip.Save(_lastResult);
                 PatternPath = saved.Folder;
+                _savedSinceConvert = true;
 
                 string files = $"{Path.GetFileName(saved.BmpPath)}\n" +
                                $"{Path.GetFileName(saved.NozzlePosPath)}\n" +
@@ -434,7 +441,94 @@ namespace IJPSystem.Platform.HMI.Print
             PatternPath = _lastResult.PatternPath ?? PatternPath;
             if (_lastResult.PreviewImage != null) PreviewImage = _lastResult.PreviewImage;
             StatusText = msg;
+            RefreshPrintInfo();
         }
+
+        // ── 인쇄 정보 — 만든 그 자리에서 "어떻게 찍히는가" 를 보여 준다 ──────────
+        //
+        // ★여기서 안 보여 주면 확인할 자리가 없다. 저장되는 WidthMm 은 노즐 X 범위라 원본이
+        //   얼마나 넓었는지 되찾을 수 없고, 주행 거리는 인쇄를 걸어 봐야 안다. 만든 자리에서
+        //   봐야 티칭을 다시 잡을지 패턴을 줄일지 지금 판단할 수 있다.
+
+        /// <summary>
+        /// 티칭값 조회(포인트명, 축명) — 인쇄 시작·종료 <b>위치</b>를 적으려면 필요하다.
+        /// 안 걸어 두면 위치 두 줄은 "티칭 없음" 으로 뜨고 나머지는 그대로 나온다.
+        /// </summary>
+        public Func<string, string, double?>? GetPointAxisMm { get; set; }
+
+        private string _printStartText = "-", _printEndText = "-", _printWidthText = "-", _printSwathText = "-";
+
+        /// <summary>인쇄 시작 위치 — 티칭된 PRINT ORIGIN 의 스캔축 좌표.</summary>
+        public string PrintStartText { get => _printStartText; private set { _printStartText = value; OnPropertyChanged(); } }
+
+        /// <summary>인쇄 종료 위치 — <b>계산값</b>이다. 시작 + 패턴 길이(방향은 티칭이 정한다).</summary>
+        public string PrintEndText { get => _printEndText; private set { _printEndText = value; OnPropertyChanged(); } }
+
+        /// <summary>원본 폭과 헤드가 한 번에 덮는 폭.</summary>
+        public string PrintWidthText { get => _printWidthText; private set { _printWidthText = value; OnPropertyChanged(); } }
+
+        /// <summary>필요한 스와스 수. 1 을 넘으면 지금은 첫 폭만 나간다.</summary>
+        public string PrintSwathText { get => _printSwathText; private set { _printSwathText = value; OnPropertyChanged(); } }
+
+        /// <summary>스와스가 2 이상인가 — 화면이 이 값으로 색을 바꾼다.</summary>
+        public bool PrintSwathWarn { get; private set; }
+
+        private void RefreshPrintInfo()
+        {
+            var info = (_rip as DxfRasterizer)?.LastPrintInfo;
+            if (info == null)
+            {
+                PrintStartText = PrintEndText = PrintWidthText = PrintSwathText = "-";
+                PrintSwathWarn = false;
+                OnPropertyChanged(nameof(PrintSwathWarn));
+                return;
+            }
+
+            PrintWidthText = $"{info.SourceWidthMm:0.#} mm  (헤드 {info.HeadSpanMm:0.#} mm)";
+            PrintSwathText = info.SwathCount > 1
+                ? $"{info.SwathCount} 회  ★지금은 첫 폭만 나갑니다"
+                : "1 회";
+            PrintSwathWarn = info.SwathCount > 1;
+            OnPropertyChanged(nameof(PrintSwathWarn));
+
+            // 위치는 티칭이 있어야 나온다 — 거리는 패턴이 정하지만, 어디서 시작해 어느 쪽으로
+            // 갈지는 장비 사정이라 데이터가 알 수 없다.
+            double? originY = GetPointAxisMm?.Invoke(
+                Application.Sequences.PointNames.PrintOrigin, ScanAxisName);
+            double? endY = GetPointAxisMm?.Invoke(
+                Application.Sequences.PointNames.PrintEnd, ScanAxisName);
+
+            if (originY == null || endY == null || Math.Abs(endY.Value - originY.Value) < 0.001)
+            {
+                PrintStartText = "티칭 없음";
+                PrintEndText   = $"길이 {info.LengthMm:0.#} mm (시작 위치를 알 수 없음)";
+                return;
+            }
+
+            int    sign   = Math.Sign(endY.Value - originY.Value);
+            double taught = Math.Abs(endY.Value - originY.Value);
+            double stop   = originY.Value + sign * info.LengthMm;
+
+            PrintStartText = $"Y {originY.Value:0.###} mm";
+            PrintEndText   = $"Y {stop:0.###} mm   (길이 {info.LengthMm:0.#} mm)" +
+                             (info.LengthMm > taught + 0.001
+                                 // 티칭이 짧으면 그대로 돌려도 뒤가 안 찍힌다 — 여기서 말해 준다.
+                                 ? $"   ★티칭 주행 {taught:0.#} mm 를 {info.LengthMm - taught:0.#} mm 넘습니다"
+                                 : "");
+        }
+
+        /// <summary>스캔축 이름 — 인쇄 주행을 맡는 축(PrintPassSequence 와 같아야 한다).</summary>
+        private const string ScanAxisName = "Y";
+
+        private bool _savedSinceConvert = true;
+
+        /// <summary>
+        /// 변환해 놓고 아직 저장하지 않았는가 — 창을 닫기 전에 물어볼 근거다.
+        ///
+        /// <para>Convert 는 pattern.json/bin 까지만 쓴다. Print_Para.dat 와 노즐 위치가 없으면
+        /// 인쇄 화면 목록이 그 폴더를 후보에서 뺀다 — 그대로 닫으면 만든 것이 사라진 줄 안다.</para>
+        /// </summary>
+        public bool HasUnsavedPattern => !_savedSinceConvert && _lastResult?.PatternPath != null;
 
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? n = null)

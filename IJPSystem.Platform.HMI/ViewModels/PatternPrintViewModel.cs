@@ -26,6 +26,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 공유 축 리스트. Motion State 위치 표시 및 조그 대상.
         public ObservableCollection<AxisViewModel> AxisList => _mainVM.SharedAxisList;
 
+        /// <summary>티칭값 조회 — 패턴 생성 창이 인쇄 시작·종료 위치를 적는 데 쓴다.</summary>
+        public Func<string, string, double?>? GetPointAxisMm => _mainVM.PointAxisMm;
+
         // 이름 부분일치로 축을 찾는다 (예: "T AXIS" → "T")
         public AxisViewModel? AxisX  => ResolveByTag("X");
         public AxisViewModel? AxisY  => ResolveByTag("Y");
