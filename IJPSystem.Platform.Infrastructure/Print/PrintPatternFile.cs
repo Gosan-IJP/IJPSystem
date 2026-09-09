@@ -70,6 +70,27 @@ namespace IJPSystem.Platform.Infrastructure.Print
             /// <summary>패스 사이 크로스스캔 이동량 [µm]. 1패스면 0.</summary>
             public double PassOffsetXUm { get; set; }
 
+            /// <summary>
+            /// 그림을 다 덮는 데 필요한 스와스(가로 타일) 수. 1 이면 헤드 한 폭에 들어간다.
+            ///
+            /// <para>
+            /// <b>패스와 다른 것이다.</b> <see cref="PassCount"/> 는 같은 자리를 촘촘하게
+            /// 만드는 인터레이스고, 이쪽은 <b>헤드보다 넓은 그림</b>을 한 폭씩 나눠 덮는 것이다.
+            /// </para>
+            /// <para>
+            /// ★생성 때 계산해 두는 이유: 이 값을 만들 재료가 <b>이 시점에만</b> 있다.
+            /// 저장되는 <c>WidthMm</c> 은 노즐 X 범위(=헤드 폭)라서, 파일만 나중에 열면
+            /// 원본이 얼마나 넓었는지 알 방법이 없다 — 넘친 부분은 이미 잘린 뒤다.
+            /// </para>
+            /// </summary>
+            public int SwathCount { get; set; } = 1;
+
+            /// <summary>스와스 사이 크로스스캔 이동량 [µm] = 쓰는 노즐의 X 범위. 1스와스면 0.</summary>
+            public double SwathPitchUm { get; set; }
+
+            /// <summary>원본 그림의 실제 가로 [mm]. 잘렸는지 따지려면 이것과 헤드 폭을 견줘야 한다.</summary>
+            public double SourceWidthMm { get; set; }
+
             /// <summary>어떤 이미지에서 나왔는지 — 결과를 의심할 때 되짚을 유일한 실마리다.</summary>
             public string? SourceImage { get; set; }
             public double  SourceDpiX  { get; set; }

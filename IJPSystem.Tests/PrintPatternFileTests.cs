@@ -39,6 +39,42 @@ namespace IJPSystem.Tests
             return new PrintPattern { Levels = levels, Columns = columns, ScanStepUm = 42.35 };
         }
 
+        /// <summary>
+        /// 스와스 수는 <b>생성 때만</b> 셀 수 있다 — 저장되는 WidthMm 은 노즐 X 범위라
+        /// 원본이 얼마나 넓었는지는 파일에서 되찾을 수 없다. 그래서 메타에 실어 두는 것이고,
+        /// 이 왕복이 깨지면 넓은 그림이 다시 조용히 잘린다.
+        /// </summary>
+        [Fact]
+        public void 스와스_정보가_메타에_남는다()
+        {
+            var p = Sample();
+            PrintPatternFile.Save(_dir, p, new PrintPatternFile.PatternMeta
+            {
+                DropLevels    = 4,
+                SwathCount    = 3,
+                SwathPitchUm  = 120184.0,
+                SourceWidthMm = 355.0,
+            });
+
+            var (_, meta) = PrintPatternFile.Load(_dir);
+
+            Assert.Equal(3, meta.SwathCount);
+            Assert.Equal(120184.0, meta.SwathPitchUm, 3);
+            Assert.Equal(355.0, meta.SourceWidthMm, 3);
+        }
+
+        /// <summary>스와스를 안 적은 옛 패턴은 1로 읽힌다 — 0이면 루프가 아예 안 돈다.</summary>
+        [Fact]
+        public void 스와스가_없는_옛_패턴은_1이다()
+        {
+            PrintPatternFile.Save(_dir, Sample(), new PrintPatternFile.PatternMeta { DropLevels = 2 });
+
+            var (_, meta) = PrintPatternFile.Load(_dir);
+
+            Assert.Equal(1, meta.SwathCount);
+            Assert.Equal(0, meta.SwathPitchUm);
+        }
+
         [Fact]
         public void 저장한_패턴이_그대로_돌아온다()
         {

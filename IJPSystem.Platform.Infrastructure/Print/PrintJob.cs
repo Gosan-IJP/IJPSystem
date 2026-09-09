@@ -41,6 +41,17 @@ namespace IJPSystem.Platform.Infrastructure.Print
 
         public PatternSource Source { get; init; }
 
+        /// <summary>
+        /// 그림을 다 덮는 데 필요한 스와스 수. 패턴 메타에서 온다(비트맵만 있으면 1).
+        ///
+        /// <para>생성 때 세지 않으면 영영 셀 수 없다 — <see cref="PrintDataSet.PrintPara.WidthMm"/>
+        /// 는 노즐 X 범위라 원본이 얼마나 넓었는지 여기서는 알 수 없다.</para>
+        /// </summary>
+        public int SwathCount { get; init; } = 1;
+
+        /// <summary>원본 그림의 실제 가로[mm]. 패턴 메타에서 온다. 0 이면 기록이 없는 옛 저장물이다.</summary>
+        public double SourceWidthMm { get; init; }
+
         public int Steps => Pattern.Steps;
         public int Nozzles => Pattern.Nozzles;
 
@@ -118,12 +129,19 @@ namespace IJPSystem.Platform.Infrastructure.Print
 
             PrintPattern pattern;
             PatternSource source;
+            int swaths = 1;
+            double srcWidthMm = 0;
 
             string patternBin = Path.Combine(folder, PrintPatternFile.DataFileName);
             if (File.Exists(patternBin))
             {
-                pattern = PrintPatternFile.Load(folder).Pattern;
-                source  = PatternSource.PatternFile;
+                // 메타도 같이 받는다 — 스와스 수와 원본 폭은 <b>생성 때만</b> 알 수 있어
+                // 여기 실려 온 것이 유일한 사본이다. 버리면 인쇄 화면에서 되찾을 방법이 없다.
+                var loaded = PrintPatternFile.Load(folder);
+                pattern    = loaded.Pattern;
+                swaths     = Math.Max(1, loaded.Meta.SwathCount);
+                srcWidthMm = loaded.Meta.SourceWidthMm;
+                source     = PatternSource.PatternFile;
             }
             else if (bmp != null && File.Exists(bmp))
             {
@@ -156,6 +174,8 @@ namespace IJPSystem.Platform.Infrastructure.Print
                 NozzleXUm     = xs,
                 Pattern       = pattern,
                 Source        = source,
+                SwathCount    = swaths,
+                SourceWidthMm = srcWidthMm,
             };
         }
 
