@@ -505,13 +505,16 @@
                          장비 고장으로 의심하기 전에 화면이 먼저 말해야 한다. 그래서 주황으로 띄운다.
                          (SWATH 표기는 뺐다 — Dry Run 에서만 사람이 정하는 값이라 상시 표시할 값이 아니다) -->
                     <TextBlock Text="MODE :  " Foreground="#94A3B8" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding RecipeVM.ActiveRunModeText, Mode=OneWay}"
+                    <!-- "Print Run" 만으로는 부족하다 — 실물인지 가상인지까지 적는다.
+                         잉크가 안 나가는 운전(Dry Run·가상)은 전부 주황이다. 파랑은 실제로
+                         찍히는 경우 하나뿐이어야 한다. -->
+                    <TextBlock Text="{Binding RunModeText, Mode=OneWay}"
                                FontSize="12" FontWeight="Bold" VerticalAlignment="Center">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="#60A5FA"/>
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding RecipeVM.ActiveIsDryRun}" Value="True">
+                                    <DataTrigger Binding="{Binding IsSimulatedRun}" Value="True">
                                         <Setter Property="Foreground" Value="#FB923C"/>
                                     </DataTrigger>
                                 </Style.Triggers>

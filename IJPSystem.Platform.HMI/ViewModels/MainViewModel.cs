@@ -73,14 +73,44 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public PrintJobController PrintJob => _printJob.Value;
 
         /// <summary>
-        /// 인쇄 명령을 낼 상대. <b>실물 헤드일 때만</b> 만들어진다(DriverMode.Head=Meteor).
-        /// null 이면 인쇄 시퀀스가 Meteor 단계를 만들지 않는다 — 즉 모션만 돈다.
+        /// 인쇄 명령을 낼 상대. 실물(Meteor)이면 엔진으로 나가고, 가상이면 로그로만 남는다.
+        /// <b>헤드가 없는 구성(None)에서만 null</b> 이고, 그때는 시퀀스가 인쇄 단계를 만들지 않는다.
         /// </summary>
         public IJPSystem.Platform.Domain.Models.Printing.IPrintJobCommands? PrintCommands { get; }
 
+        private static string HeadMode() =>
+            AppSettingsService.Current?.DriverMode?.Head?.Trim() ?? "";
+
         private static bool IsMeteorHead() =>
-            string.Equals(AppSettingsService.Current?.DriverMode?.Head?.Trim(), "Meteor",
-                          StringComparison.OrdinalIgnoreCase);
+            string.Equals(HeadMode(), "Meteor", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// 가상 헤드 구성인가 — <b>일부러 고른</b> 것이라 인쇄 순서를 끝까지 돌려 볼 수 있다.
+        ///
+        /// <para>실물이 실패해서 여기로 떨어지는 일은 없다. 그건 안 올라간 데이터를 READY 로
+        /// 보이게 만드는 쪽이라 훨씬 위험하다 — 설정이 Virtual 일 때만 참이다.</para>
+        /// </summary>
+        private static bool IsVirtualHead() =>
+            string.Equals(HeadMode(), "Virtual", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// 상태 표시줄에 쓸 운전 모드 — <b>무엇으로</b> Print Run 인지까지 말한다.
+        ///
+        /// <para>"Print Run 이냐" 만으로는 부족하다. 실기에서 Head 를 Virtual 로 잘못 둔 채
+        /// "찍은 줄 알았는데 안 찍힘" 이 나는 것을 막는 것은 이 괄호뿐이다.</para>
+        /// </summary>
+        public string RunModeText => RecipeVM.ActiveIsPrintRun
+            ? RecipeVM.ActiveRunModeText + (IsMeteorHead() ? " (실물)" : " (가상)")
+            : RecipeVM.ActiveRunModeText;
+
+        /// <summary>잉크가 나가지 않는 운전인가 — Dry Run 이거나 가상 헤드다. 표시 색이 이 값으로 갈린다.</summary>
+        public bool IsSimulatedRun => RecipeVM.ActiveIsDryRun || !IsMeteorHead();
+
+        private void RaiseRunModeText()
+        {
+            OnPropertyChanged(nameof(RunModeText));
+            OnPropertyChanged(nameof(IsSimulatedRun));
+        }
 
         /// <summary>
         /// 이번 운전의 인쇄 설정을 만든다 — 오토런과 패턴 인쇄가 <b>같은 판정</b>을 쓴다.
@@ -140,9 +170,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             if (PrintCommands == null)
             {
                 blockedReason =
-                    "Print Run 인데 실물 헤드가 아닙니다.\n\n" +
-                    "AppConfig.json 의 DriverMode.Head 가 \"Meteor\" 여야 인쇄 명령이 나갑니다.\n" +
-                    "시험만 하실 거면 레시피의 운전 모드를 Dry Run 으로 두세요.";
+                    $"Print Run 인데 헤드가 없는 구성입니다 (DriverMode.Head=\"{HeadMode()}\").\n\n" +
+                    "· 실제로 찍으려면 \"Meteor\" 로 두세요.\n" +
+                    "· 인쇄 순서만 확인하시려면 \"Virtual\" 로 두면 명령이 로그에 남습니다.\n" +
+                    "· 모션만 돌리시려면 레시피의 운전 모드를 Dry Run 으로 두세요.";
                 return new Application.Sequences.PrintRunOptions();
             }
 
@@ -174,6 +205,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
 
         private bool _hasActiveAlarm;
+            // 헤드가 아예 없는 구성(None)에서만 막는다. 가상은 순서를 확인하러 일부러 고른
+            // 것이므로 끝까지 돈다 — 대신 화면이 "(가상)" 이라고 말한다.
         public bool HasActiveAlarm
         {
             get => _hasActiveAlarm;
@@ -449,20 +482,30 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _slowTimer = new DispatcherTimer();
             _fastTimer = new DispatcherTimer();
 
-            // 전송 경로도 인쇄 명령도 DriverMode.Head 하나가 정한다 — 같은 헤드를 두 군데서
-            // 따로 판정하면 한쪽만 가상인 상태가 만들어진다.
+            // ★전송기와 명령 상대는 <b>한 번에</b> 고른다 — 같은 헤드를 두 군데서 따로 판정하면
+            //   한쪽만 가상인 상태, 즉 가짜 버퍼 번호가 실제 엔진 명령에 실리는 상태가 생긴다.
+            //
+            //   세 갈래다:
+            //     Meteor  실물   엔진 버퍼에 올리고 엔진으로 명령을 낸다
+            //     Virtual 가상   올린 척하고 명령을 로그로만 남긴다 — 순서를 하드웨어 없이 본다
+            //     그 외   없음   버퍼 번호를 안 내주므로 Print Run 자체가 막힌다
+            //
             // ※ 실물이 실패해도 가상으로 떨어지지 않는다. 안 올라간 데이터가 READY 로 보이는
-            //   쪽이 훨씬 위험하다.
-            bool meteor = IsMeteorHead();
-            _printJob = new Lazy<PrintJobController>(() => new PrintJobController(
-                meteor
-                    ? new Infrastructure.Print.Meteor.MeteorImageBufferDownloader(
-                          m => AddLog("[PRINT] " + m, LogLevel.Info))
-                    : new Infrastructure.Print.NullPrintDataDownloader()));
+            //   쪽이 훨씬 위험하다. 가상은 설정으로 <b>일부러 고른</b> 경우뿐이다.
+            bool meteor  = IsMeteorHead();
+            bool virtualHead = IsVirtualHead();
+            void PrintLog(string m) => AddLog("[PRINT] " + m, LogLevel.Info);
 
-            PrintCommands = meteor
-                ? new Infrastructure.Print.Meteor.MeteorPrintJob(m => AddLog("[PRINT] " + m, LogLevel.Info))
-                : null;
+            _printJob = new Lazy<PrintJobController>(() => new PrintJobController(
+                meteor      ? new Infrastructure.Print.Meteor.MeteorImageBufferDownloader(PrintLog)
+                : virtualHead ? new Infrastructure.Print.VirtualPrintDataDownloader(PrintLog)
+                              : (Infrastructure.Print.IPrintDataDownloader)
+                                new Infrastructure.Print.NullPrintDataDownloader()));
+
+            PrintCommands =
+                meteor      ? new Infrastructure.Print.Meteor.MeteorPrintJob(PrintLog)
+                : virtualHead ? new Infrastructure.Print.VirtualPrintJob(PrintLog)
+                              : (IJPSystem.Platform.Domain.Models.Printing.IPrintJobCommands?)null;
 
             InitializeSharedAxes();
 
@@ -526,7 +569,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     // 레시피가 바뀌면 운전 모드도 같이 바뀐다 — 연속 운전 토글의 사용 조건이다.
                     _mainDashboardVM.RefreshRunModeGating();
                 }
-                else if (e.PropertyName == nameof(RecipeViewModel.ActiveRunMode))
+                else if (e.PropertyName == nameof(RecipeViewModel.ActiveRunMode)
+                      || e.PropertyName == nameof(RecipeViewModel.ActiveRunModeText))
                 {
                     _mainDashboardVM.RefreshRunModeGating();
                 }
@@ -628,10 +672,12 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private void InitializeSharedAxes()
         {
             var motionDriver = _controller?.GetMachine()?.Motion;
+                    RaiseRunModeText();
             var configs = _controller?.GetMachine()?.Config?.MotionAxisList;
 
             if (motionDriver != null && configs != null)
             {
+                    RaiseRunModeText();
                 foreach (var config in configs)
                     SharedAxisList.Add(new AxisViewModel(motionDriver, config, this));
             }

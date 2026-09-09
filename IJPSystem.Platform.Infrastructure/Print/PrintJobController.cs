@@ -90,10 +90,14 @@ namespace IJPSystem.Platform.Infrastructure.Print
     }
 
     /// <summary>
-    /// 보내는 척만 한다. 헤드가 없는 자리(사무실·테스트)에서 화면 흐름을 그대로 밟아 보려고 둔다.
+    /// 보내는 척만 한다 — <b>헤드가 없는 구성(DriverMode.Head=None)</b> 자리다.
     ///
     /// <para><b>실물처럼 보이면 안 된다</b> — 이름에 [가상] 을 달아 화면에 그대로 뜨게 한다.
     /// 준비됐다는 초록 표시만 보고 실제로 올라간 줄 알면 그게 사고다.</para>
+    ///
+    /// <para>인쇄 순서를 하드웨어 없이 돌려 보려는 것이라면 이쪽이 아니라
+    /// <see cref="VirtualPrintDataDownloader"/> 다. 그쪽은 버퍼 번호를 내주어 Print Run 이
+    /// 끝까지 돈다 — 헤드가 <b>없는</b> 것과 <b>가상인</b> 것은 다른 구성이다.</para>
     /// </summary>
     public sealed class NullPrintDataDownloader : IPrintDataDownloader
     {
@@ -110,7 +114,7 @@ namespace IJPSystem.Platform.Infrastructure.Print
         /// <summary>올린 적이 없으니 대조할 값도 없다.</summary>
         public string? LastTransferDetail => null;
 
-        /// <summary>가상은 버퍼를 만들지 않는다 — null 이라 인쇄 명령도 나갈 수 없다.</summary>
+        /// <summary>헤드가 없으니 버퍼도 없다 — null 이라 인쇄 명령이 아예 못 나간다.</summary>
         public uint? BufferId => null;
     }
 
@@ -159,8 +163,12 @@ namespace IJPSystem.Platform.Infrastructure.Print
         /// <summary>
         /// 지금 인쇄를 걸 수 있는가 — READY 이고 <b>실제 버퍼가 있어야</b> 한다.
         ///
-        /// <para><see cref="CanPrint"/> 는 상태만 본다. 가상 전송기는 READY 까지 가면서도
-        /// 버퍼를 만들지 않으므로, 인쇄 명령을 내려는 쪽은 이쪽을 봐야 한다.</para>
+        /// <para><see cref="CanPrint"/> 는 상태만 본다. <see cref="NullPrintDataDownloader"/> 는
+        /// READY 까지 가면서도 버퍼를 만들지 않으므로, 인쇄 명령을 내려는 쪽은 이쪽을 봐야 한다.</para>
+        ///
+        /// <para>가상 헤드(<see cref="VirtualPrintDataDownloader"/>)는 번호를 내주므로 여기서
+        /// 참이 된다 — 의도한 것이다. 순서를 끝까지 돌려 보려고 고른 구성이고, 대신 그 번호는
+        /// 엔진 번호와 눈으로 구분된다.</para>
         /// </summary>
         public bool HasPrintableBuffer => CanPrint && BufferId != null && CurrentJob != null;
 
