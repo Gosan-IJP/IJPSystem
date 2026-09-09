@@ -35,6 +35,18 @@ namespace IJPSystem.Platform.Infrastructure.Print
         /// </summary>
         public static string PassFileName(int pass) => pass <= 0 ? DataFileName : $"pattern.p{pass}.bin";
 
+        /// <summary>
+        /// 스와스 <paramref name="swath"/>, 패스 <paramref name="pass"/> 의 본체 파일명.
+        ///
+        /// <para>스와스 0 은 <see cref="PassFileName"/> 과 <b>같은 이름</b>을 쓴다 — 한 폭짜리
+        /// 저장물이 대부분이고, 그 흔한 경우의 파일 이름을 다중 스와스 때문에 바꾸지 않는다.
+        /// 덕분에 예전에 저장한 폴더도 그대로 읽힌다.</para>
+        /// </summary>
+        public static string ImageFileName(int swath, int pass)
+            => swath <= 0 ? PassFileName(pass)
+             : pass  <= 0 ? $"pattern.s{swath}.bin"
+                          : $"pattern.s{swath}.p{pass}.bin";
+
         /// <summary>한 컬럼(=노즐 하나)의 위치. 열 순서는 <c>pattern.bin</c> 의 열 순서와 1:1.</summary>
         public sealed class ColumnInfo
         {
@@ -115,23 +127,33 @@ namespace IJPSystem.Platform.Infrastructure.Print
             => Save(folder, new[] { pattern ?? throw new ArgumentNullException(nameof(pattern)) }, meta);
 
         /// <summary>
-        /// 여러 패스를 한 폴더에 저장한다. 패스는 모두 <b>같은 스텝 수·같은 컬럼</b>이어야 한다 —
+        /// 여러 장을 한 폴더에 저장한다. 모두 <b>같은 스텝 수·같은 컬럼</b>이어야 한다 —
         /// 헤드가 X 로만 옮겨 다니므로 노즐 구성이 달라질 이유가 없고, 달라졌다면 만든 쪽이 틀린 것이다.
+        ///
+        /// <para><b>순서는 스와스 우선</b>이다 — <c>[스와스0 패스0, 스와스0 패스1, 스와스1 패스0, …]</c>.
+        /// 장 수는 <c>SwathCount × PassCount</c> 여야 하고, <see cref="PatternMeta.SwathCount"/> 는
+        /// 부르는 쪽이 채워 둔다(그 값을 셀 수 있는 곳은 만드는 자리뿐이다). PassCount 는 여기서 나눈다.</para>
         /// </summary>
-        public static string Save(string folder, IReadOnlyList<PrintPattern> passes, PatternMeta meta)
+        public static string Save(string folder, IReadOnlyList<PrintPattern> images, PatternMeta meta)
         {
             if (string.IsNullOrWhiteSpace(folder)) throw new ArgumentException("폴더 경로가 비었습니다.", nameof(folder));
-            if (passes == null || passes.Count == 0) throw new ArgumentException("패스가 없습니다.", nameof(passes));
+            if (images == null || images.Count == 0) throw new ArgumentException("패턴이 없습니다.", nameof(images));
             if (meta   == null) throw new ArgumentNullException(nameof(meta));
 
-            var first = passes[0] ?? throw new ArgumentException("패스가 비었습니다.", nameof(passes));
+            int swaths = Math.Max(1, meta.SwathCount);
+            if (images.Count % swaths != 0)
+                throw new ArgumentException(
+                    $"패턴 {images.Count}장이 스와스 {swaths}개로 나누어떨어지지 않습니다 — " +
+                    "스와스마다 같은 수의 패스가 있어야 합니다.", nameof(images));
+
+            var first = images[0] ?? throw new ArgumentException("패턴이 비었습니다.", nameof(images));
             int steps = first.Steps, cols = first.Nozzles;
-            for (int i = 1; i < passes.Count; i++)
+            for (int i = 1; i < images.Count; i++)
             {
-                var p = passes[i] ?? throw new ArgumentException($"패스 {i} 가 비었습니다.", nameof(passes));
+                var p = images[i] ?? throw new ArgumentException($"패턴 {i} 가 비었습니다.", nameof(images));
                 if (p.Steps != steps || p.Nozzles != cols)
                     throw new ArgumentException(
-                        $"패스 {i} 크기가 다릅니다 — {p.Steps}×{p.Nozzles}, 기대 {steps}×{cols}.", nameof(passes));
+                        $"패턴 {i} 크기가 다릅니다 — {p.Steps}×{p.Nozzles}, 기대 {steps}×{cols}.", nameof(images));
             }
 
             Directory.CreateDirectory(folder);
@@ -139,7 +161,8 @@ namespace IJPSystem.Platform.Infrastructure.Print
             meta.Steps      = steps;
             meta.Nozzles    = cols;
             meta.ScanStepUm = first.ScanStepUm;
-            meta.PassCount  = passes.Count;
+            meta.SwathCount = swaths;
+            meta.PassCount  = images.Count / swaths;
 
             var columns = new List<ColumnInfo>(cols);
             foreach (var c in first.Columns)
@@ -147,13 +170,14 @@ namespace IJPSystem.Platform.Infrastructure.Print
             meta.Columns = columns;
 
             // 본체를 먼저 쓴다 — 메타만 있고 데이터가 없는 폴더가 남으면 읽는 쪽이 헛돈다.
-            for (int i = 0; i < passes.Count; i++)
+            for (int i = 0; i < images.Count; i++)
             {
-                using var fs = File.Create(Path.Combine(folder, PassFileName(i)));
+                string name = ImageFileName(i / meta.PassCount, i % meta.PassCount);
+                using var fs = File.Create(Path.Combine(folder, name));
                 var row = new byte[cols];
                 for (int s = 0; s < steps; s++)
                 {
-                    for (int c = 0; c < cols; c++) row[c] = passes[i].Levels[s, c];
+                    for (int c = 0; c < cols; c++) row[c] = images[i].Levels[s, c];
                     fs.Write(row, 0, cols);
                 }
             }
@@ -170,8 +194,13 @@ namespace IJPSystem.Platform.Infrastructure.Print
             return (passes[0], meta);
         }
 
-        /// <summary>저장된 패턴을 패스까지 전부 읽는다.</summary>
-        public static (IReadOnlyList<PrintPattern> Passes, PatternMeta Meta) LoadAll(string folder)
+        /// <summary>
+        /// 저장된 패턴을 <b>전부</b> 읽는다 — 스와스 × 패스, 스와스 우선 순서.
+        ///
+        /// <para>인쇄는 장마다 버퍼가 따로 필요하다. 첫 장만 읽으면 나머지 폭·패스는 올라가지
+        /// 않은 채 같은 그림이 되풀이 찍힌다.</para>
+        /// </summary>
+        public static (IReadOnlyList<PrintPattern> Images, PatternMeta Meta) LoadAll(string folder)
         {
             string metaPath = Path.Combine(folder, MetaFileName);
             if (!File.Exists(metaPath)) throw new FileNotFoundException("패턴 메타가 없습니다.", metaPath);
@@ -183,21 +212,25 @@ namespace IJPSystem.Platform.Infrastructure.Print
             foreach (var c in meta.Columns)
                 columns.Add(new NozzlePosition(c.Nozzle, c.Head, c.Row, 0, c.XUm));
 
-            var passes = new List<PrintPattern>(Math.Max(1, meta.PassCount));
-            for (int i = 0; i < Math.Max(1, meta.PassCount); i++)
-                passes.Add(new PrintPattern
-                {
-                    Levels     = ReadPass(folder, i, meta),
-                    Columns    = columns,
-                    ScanStepUm = meta.ScanStepUm,
-                });
+            int swaths = Math.Max(1, meta.SwathCount);
+            int passes = Math.Max(1, meta.PassCount);
 
-            return (passes, meta);
+            var images = new List<PrintPattern>(swaths * passes);
+            for (int s = 0; s < swaths; s++)
+                for (int k = 0; k < passes; k++)
+                    images.Add(new PrintPattern
+                    {
+                        Levels     = ReadImage(folder, s, k, meta),
+                        Columns    = columns,
+                        ScanStepUm = meta.ScanStepUm,
+                    });
+
+            return (images, meta);
         }
 
-        private static byte[,] ReadPass(string folder, int pass, PatternMeta meta)
+        private static byte[,] ReadImage(string folder, int swath, int pass, PatternMeta meta)
         {
-            string dataPath = Path.Combine(folder, PassFileName(pass));
+            string dataPath = Path.Combine(folder, ImageFileName(swath, pass));
             if (!File.Exists(dataPath)) throw new FileNotFoundException("패턴 데이터가 없습니다.", dataPath);
 
             long expect = (long)meta.Steps * meta.Nozzles;

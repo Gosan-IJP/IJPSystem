@@ -566,7 +566,7 @@ namespace IJPSystem.Tests
             public void Download(PrintJob job) => throw new InvalidOperationException("불려서는 안 된다");
             public void Release() { }
             public string? LastTransferDetail => null;
-            public uint? BufferId => null;
+            public System.Collections.Generic.IReadOnlyList<uint> BufferIds => System.Array.Empty<uint>();
         }
 
         private sealed class ThrowingDownloader : IPrintDataDownloader
@@ -577,7 +577,7 @@ namespace IJPSystem.Tests
             public void Download(PrintJob job) => throw new IOException("버퍼를 못 잡았다");
             public void Release() { }
             public string? LastTransferDetail => null;
-            public uint? BufferId => null;
+            public System.Collections.Generic.IReadOnlyList<uint> BufferIds => System.Array.Empty<uint>();
         }
     }
 }

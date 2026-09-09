@@ -80,13 +80,16 @@ namespace IJPSystem.Platform.Infrastructure.Print
         string? LastTransferDetail { get; }
 
         /// <summary>
-        /// 올라가 있는 엔진 버퍼 번호. 없으면 null.
+        /// 올라가 있는 엔진 버퍼 번호들 — <b>스와스 × 패스, 스와스 우선</b> 순서. 없으면 빈 목록.
         ///
         /// <para>인쇄 명령이 <b>이 번호로</b> 그림을 가리킨다. 화면 표시용 문자열
         /// (<see cref="LastTransferDetail"/>)과 따로 두는 이유는, 명령을 조립하는 쪽은
         /// 사람이 읽는 글이 아니라 숫자가 필요하기 때문이다.</para>
+        ///
+        /// <para><b>목록인 이유</b>: 스와스마다 그림이 다르다. 왼쪽 120mm 와 그다음 120mm 는
+        /// 다른 데이터라, 번호 하나를 되풀이 보내면 같은 그림이 옆으로 여러 번 찍힌다.</para>
         /// </summary>
-        uint? BufferId { get; }
+        IReadOnlyList<uint> BufferIds { get; }
     }
 
     /// <summary>
@@ -114,8 +117,8 @@ namespace IJPSystem.Platform.Infrastructure.Print
         /// <summary>올린 적이 없으니 대조할 값도 없다.</summary>
         public string? LastTransferDetail => null;
 
-        /// <summary>헤드가 없으니 버퍼도 없다 — null 이라 인쇄 명령이 아예 못 나간다.</summary>
-        public uint? BufferId => null;
+        /// <summary>헤드가 없으니 버퍼도 없다 — 비어 있어 인쇄 명령이 아예 못 나간다.</summary>
+        public IReadOnlyList<uint> BufferIds => Array.Empty<uint>();
     }
 
     /// <summary>
@@ -157,8 +160,11 @@ namespace IJPSystem.Platform.Infrastructure.Print
         /// <summary>직전에 실제로 올라간 것의 식별값(버퍼 번호·크기). 엔진 로그와 대조용. 없으면 null.</summary>
         public string? LastTransferDetail => _downloader.LastTransferDetail;
 
-        /// <summary>인쇄 명령이 가리킬 엔진 버퍼 번호. 없으면 찍을 것이 없다는 뜻이다.</summary>
-        public uint? BufferId => _downloader.BufferId;
+        /// <summary>인쇄 명령이 가리킬 엔진 버퍼 번호들 — 스와스 × 패스 순서. 비면 찍을 것이 없다.</summary>
+        public IReadOnlyList<uint> BufferIds => _downloader.BufferIds;
+
+        /// <summary>첫 버퍼 번호 — 화면에 한 개만 적을 때 쓴다. 없으면 null.</summary>
+        public uint? BufferId => BufferIds.Count > 0 ? BufferIds[0] : null;
 
         /// <summary>
         /// 지금 인쇄를 걸 수 있는가 — READY 이고 <b>실제 버퍼가 있어야</b> 한다.
@@ -170,7 +176,7 @@ namespace IJPSystem.Platform.Infrastructure.Print
         /// 참이 된다 — 의도한 것이다. 순서를 끝까지 돌려 보려고 고른 구성이고, 대신 그 번호는
         /// 엔진 번호와 눈으로 구분된다.</para>
         /// </summary>
-        public bool HasPrintableBuffer => CanPrint && BufferId != null && CurrentJob != null;
+        public bool HasPrintableBuffer => CanPrint && BufferIds.Count > 0 && CurrentJob != null;
 
         /// <summary>마지막으로 적재가 끝난 시각. 같은 데이터를 다시 올려도 이 값은 바뀐다.</summary>
         public DateTime? LoadedAt { get; private set; }

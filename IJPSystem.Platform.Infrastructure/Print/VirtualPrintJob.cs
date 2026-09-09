@@ -95,7 +95,7 @@ namespace IJPSystem.Platform.Infrastructure.Print
     /// </summary>
     public sealed class VirtualPrintDataDownloader : IPrintDataDownloader
     {
-        /// <summary>가상 버퍼 번호. 로그에 이 값이 보이면 실물이 아니라는 뜻이다.</summary>
+        /// <summary>가상 버퍼 번호(첫 장). 로그에 이 값이 보이면 실물이 아니라는 뜻이다.</summary>
         public const uint VirtualBufferId = 0xFA0E_0001;
 
         private readonly Action<string>? _log;
@@ -109,18 +109,34 @@ namespace IJPSystem.Platform.Infrastructure.Print
         /// <summary>마지막으로 받은 것 — 화면·검사에서 무엇이 넘어왔는지 확인한다.</summary>
         public PrintJob? Last { get; private set; }
 
-        public uint? BufferId => Last == null ? null : VirtualBufferId;
+        /// <summary>
+        /// 장 수만큼 번호를 내준다 — 실물과 <b>같은 개수</b>여야 인쇄가 같은 순서로 돈다.
+        /// 하나만 주면 스와스가 여럿일 때 가상에서만 다른 경로를 타 시험이 헛돈다.
+        /// </summary>
+        public IReadOnlyList<uint> BufferIds => _bufferIds;
+        private uint[] _bufferIds = Array.Empty<uint>();
 
-        public string? LastTransferDetail =>
-            Last == null ? null : $"가상 버퍼 · {Last.Steps:N0}스텝 × {Last.Nozzles}노즐";
+        public string? LastTransferDetail => Last == null
+            ? null
+            : $"가상 버퍼 {_bufferIds.Length}장 · {Last.Steps:N0}스텝 × {Last.Nozzles}노즐";
 
         public void Download(PrintJob job)
         {
             Last = job ?? throw new ArgumentNullException(nameof(job));
-            _log?.Invoke($"[가상] 적재 완료 — {job.Steps:N0}스텝 × {job.Nozzles}노즐 " +
+
+            int count = Math.Max(1, job.ImageCount);
+            _bufferIds = new uint[count];
+            for (int i = 0; i < count; i++) _bufferIds[i] = VirtualBufferId + (uint)i;
+
+            _log?.Invoke($"[가상] 적재 완료 — {count}장(스와스 {job.SwathCount} × 패스 {job.PassCount}), " +
+                         $"{job.Steps:N0}스텝 × {job.Nozzles}노즐 " +
                          "(엔진으로 나가지 않았습니다. 순서 확인용입니다)");
         }
 
-        public void Release() => Last = null;
+        public void Release()
+        {
+            Last = null;
+            _bufferIds = Array.Empty<uint>();
+        }
     }
 }

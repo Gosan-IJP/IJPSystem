@@ -47,8 +47,9 @@ namespace IJPSystem.Tests
         [Fact]
         public void 스와스_정보가_메타에_남는다()
         {
-            var p = Sample();
-            PrintPatternFile.Save(_dir, p, new PrintPatternFile.PatternMeta
+            // 스와스 3개면 그림도 3장이다 — 폭마다 다른 그림이라 한 장으로는 못 찍는다.
+            var images = new[] { Sample(), Sample(), Sample() };
+            PrintPatternFile.Save(_dir, images, new PrintPatternFile.PatternMeta
             {
                 DropLevels    = 4,
                 SwathCount    = 3,
@@ -59,6 +60,7 @@ namespace IJPSystem.Tests
             var (_, meta) = PrintPatternFile.Load(_dir);
 
             Assert.Equal(3, meta.SwathCount);
+            Assert.Equal(1, meta.PassCount);
             Assert.Equal(120184.0, meta.SwathPitchUm, 3);
             Assert.Equal(355.0, meta.SourceWidthMm, 3);
         }
@@ -187,7 +189,7 @@ namespace IJPSystem.Tests
             var ex = Assert.Throws<ArgumentException>(() => PrintPatternFile.Save(
                 _dir, new[] { Sample(steps: 5), Sample(steps: 6) }, new PrintPatternFile.PatternMeta()));
 
-            Assert.Contains("패스 1", ex.Message);
+            Assert.Contains("패턴 1", ex.Message);
         }
 
         [Fact]

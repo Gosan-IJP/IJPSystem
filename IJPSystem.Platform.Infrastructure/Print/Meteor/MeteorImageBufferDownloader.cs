@@ -131,7 +131,8 @@ namespace IJPSystem.Platform.Infrastructure.Print.Meteor
         private readonly Action<string>? _log;
         private readonly object _io = new();
 
-        private uint _bufferId = NoBuffer;
+        /// <summary>올라가 있는 버퍼 번호들 — 스와스 × 패스 순서. 인쇄가 이 순서로 꺼내 쓴다.</summary>
+        private readonly List<uint> _bufferIds = new();
 
         public MeteorImageBufferDownloader(Action<string>? log = null) => _log = log;
 
@@ -158,9 +159,12 @@ namespace IJPSystem.Platform.Infrastructure.Print.Meteor
               "(헤드 장착·전원과는 무관합니다 — 버퍼는 PC 메모리에 올라갑니다)";
 
         /// <summary>지금 올라가 있는 버퍼 ID. 없으면 null — 화면·검사에서 확인용.</summary>
-        public uint? BufferId => _bufferId == NoBuffer ? null : _bufferId;
+        public IReadOnlyList<uint> BufferIds
+        {
+            get { lock (_io) return _bufferIds.ToArray(); }
+        }
 
-        private int _lastDwords;
+        private long _lastDwords;
 
         /// <summary>
         /// 엔진 로그와 <b>글자 그대로 대조</b>할 수 있는 값.
@@ -169,9 +173,20 @@ namespace IJPSystem.Platform.Infrastructure.Print.Meteor
         /// 화면에 같은 두 숫자를 띄워 두면, 방금 누른 것이 그 줄이 맞는지 눈으로 확인된다.
         /// 스텝·노즐 수는 <b>읽은 파일</b>을 말할 뿐이라 이 확인을 대신하지 못한다.</para>
         /// </summary>
-        public string? LastTransferDetail => _bufferId == NoBuffer
-            ? null
-            : $"버퍼 #{_bufferId} · {_lastDwords:N0} DWORD";
+        public string? LastTransferDetail
+        {
+            get
+            {
+                lock (_io)
+                {
+                    if (_bufferIds.Count == 0) return null;
+                    string ids = string.Join(",", _bufferIds.ConvertAll(b => "#" + b));
+                    return _bufferIds.Count == 1
+                        ? $"버퍼 {ids} · {_lastDwords:N0} DWORD"
+                        : $"버퍼 {ids} ({_bufferIds.Count}장) · {_lastDwords:N0} DWORD";
+                }
+            }
+        }
 
         public void Download(PrintJob job)
         {
@@ -183,37 +198,49 @@ namespace IJPSystem.Platform.Infrastructure.Print.Meteor
                 throw new InvalidOperationException($"빈 패턴입니다({height}스텝 × {width}노즐).");
 
             int bpp = ResolveBitsPerPixel(job);
-            var packed = MeteorImageBuffer.Pack(job.Pattern.Levels, bpp);
-            uint[] data = packed.Data;
+
+            // ★장마다 버퍼 하나다. 스와스 3개면 왼쪽·가운데·오른쪽이 서로 다른 그림이라,
+            //   버퍼 하나를 세 번 보내면 같은 그림이 옆으로 세 번 찍힌다 — 덜 찍히는 것보다
+            //   나쁘다(눈에 안 띄고 잉크·글라스를 버린다). 인터레이스 패스도 마찬가지다.
+            var images = job.Images.Count > 0 ? job.Images : new[] { job.Pattern };
 
             lock (_io)
             {
                 Release();   // 앞의 것을 반납하지 않으면 엔진 메모리가 계속 쌓인다
 
-                var p = new ImageBufferAllocParams
-                {
-                    StructureSizeBytes = (uint)Marshal.SizeOf<ImageBufferAllocParams>(),
-                    ImageBufferID      = NoBuffer,
-                    SizeDwords         = (uint)data.Length,
-                    BitsPerPixel       = (uint)bpp,
-                    WidthPixels        = (uint)width,
-                    HeightPixels       = (uint)height,
-                };
-
-                Check(PrinterInterfaceCLS.PiAllocateImageBufferEx(ref p), "PiAllocateImageBufferEx");
-                if (p.ImageBufferID == NoBuffer)
-                    throw new InvalidOperationException("버퍼는 할당됐다는데 ID 가 비어 있습니다.");
-
-                _bufferId = p.ImageBufferID;
-
+                long totalDwords = 0;
                 try
                 {
-                    Check(PrinterInterfaceCLS.PiFillImageBuffer(_bufferId, 0, (uint)data.Length, data),
-                          "PiFillImageBuffer");
+                    foreach (var image in images)
+                    {
+                        uint[] data = MeteorImageBuffer.Pack(image.Levels, bpp).Data;
+
+                        var p = new ImageBufferAllocParams
+                        {
+                            StructureSizeBytes = (uint)Marshal.SizeOf<ImageBufferAllocParams>(),
+                            ImageBufferID      = NoBuffer,
+                            SizeDwords         = (uint)data.Length,
+                            BitsPerPixel       = (uint)bpp,
+                            WidthPixels        = (uint)width,
+                            HeightPixels       = (uint)height,
+                        };
+
+                        Check(PrinterInterfaceCLS.PiAllocateImageBufferEx(ref p), "PiAllocateImageBufferEx");
+                        if (p.ImageBufferID == NoBuffer)
+                            throw new InvalidOperationException("버퍼는 할당됐다는데 ID 가 비어 있습니다.");
+
+                        // 목록에 먼저 넣는다 — 채우다 실패해도 이 버퍼가 반납 대상에 들어 있어야 샌 것이 없다.
+                        _bufferIds.Add(p.ImageBufferID);
+
+                        Check(PrinterInterfaceCLS.PiFillImageBuffer(p.ImageBufferID, 0, (uint)data.Length, data),
+                              "PiFillImageBuffer");
+
+                        totalDwords += data.Length;
+                    }
                 }
                 catch
                 {
-                    // 채우다 실패하면 버퍼가 엔진에 남는다 — 여기서 되돌리지 않으면 샌다.
+                    // 도중에 실패하면 여태 잡은 것이 엔진에 남는다 — 여기서 되돌리지 않으면 샌다.
                     Release();
                     throw;
                 }
@@ -221,12 +248,14 @@ namespace IJPSystem.Platform.Infrastructure.Print.Meteor
                 // ★"PCC 전송" 이 아니다. 버퍼는 PC 의 엔진 메모리에 있고, PCC 하드웨어로는
                 //   인쇄 명령(PCMD_IMAGE_BUFFER)을 낼 때 간다. 여기서 "PCC 로 갔다" 고 적으면
                 //   PCC 화면에서 그 데이터를 찾게 된다 — 거기엔 아직 아무것도 없다.
-                _lastDwords = data.Length;
+                _lastDwords = totalDwords;
                 // DWORD 수와 버퍼 ID 를 그대로 적는다 — 엔진이 자기 로그에 남기는 값과 같아서
                 // 두 줄을 나란히 놓고 대조할 수 있다("Allocated image buffer DWORDs=… ID=…").
-                _log?.Invoke($"엔진 버퍼 적재 완료 — 버퍼 #{_bufferId}, {data.Length:N0} DWORD, " +
-                             $"{height}스텝 × {width}노즐, {bpp}bpp, {data.Length * 4L / 1024}KB " +
-                             "(PC 엔진 메모리. PCC 로는 인쇄할 때 나간다)");
+                string ids = string.Join(", ", _bufferIds.ConvertAll(b => "#" + b));
+                _log?.Invoke($"엔진 버퍼 적재 완료 — 버퍼 {ids} ({images.Count}장: " +
+                             $"스와스 {job.SwathCount} × 패스 {job.PassCount}), " +
+                             $"{totalDwords:N0} DWORD, {height}스텝 × {width}노즐, {bpp}bpp, " +
+                             $"{totalDwords * 4L / 1024}KB (PC 엔진 메모리. PCC 로는 인쇄할 때 나간다)");
             }
         }
 
@@ -238,10 +267,13 @@ namespace IJPSystem.Platform.Infrastructure.Print.Meteor
         {
             lock (_io)
             {
-                if (_bufferId == NoBuffer) return;
-                try { PrinterInterfaceCLS.PiSynchronousImageBufferFree(_bufferId); }
-                catch { /* 반납 실패로 화면을 막지 않는다 — 엔진 재시작이면 어차피 사라진다 */ }
-                _bufferId   = NoBuffer;
+                // 하나만 반납하면 나머지가 엔진 메모리에 남는다 — 전부 돈다.
+                foreach (uint id in _bufferIds)
+                {
+                    try { PrinterInterfaceCLS.PiSynchronousImageBufferFree(id); }
+                    catch { /* 반납 실패로 화면을 막지 않는다 — 엔진 재시작이면 어차피 사라진다 */ }
+                }
+                _bufferIds.Clear();
                 _lastDwords = 0;
             }
         }

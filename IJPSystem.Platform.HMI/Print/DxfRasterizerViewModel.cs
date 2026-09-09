@@ -486,9 +486,9 @@ namespace IJPSystem.Platform.HMI.Print
 
             PrintWidthText = $"{info.SourceWidthMm:0.#} mm  (헤드 {info.HeadSpanMm:0.#} mm)";
             PrintSwathText = info.SwathCount > 1
-                ? $"{info.SwathCount} 회  ★지금은 첫 폭만 나갑니다"
+                ? $"{info.SwathCount} 회  (폭간 {info.HeadSpanMm:0.#} mm)"
                 : "1 회";
-            PrintSwathWarn = info.SwathCount > 1;
+            PrintSwathWarn = false;
             OnPropertyChanged(nameof(PrintSwathWarn));
 
             // 위치는 티칭이 있어야 나온다 — 거리는 패턴이 정하지만, 어디서 시작해 어느 쪽으로

@@ -64,6 +64,7 @@ namespace IJPSystem.Tests
                 SwathCount = 2,
                 Bidirectional = true,
                 Job = job,
+                BufferIds = new uint[] { 1, 2 },
                 WidthPx = 800,
             }, startNumber: 1);
 
@@ -84,14 +85,32 @@ namespace IJPSystem.Tests
         {
             var d = new VirtualPrintDataDownloader();
 
-            Assert.Null(d.BufferId);                    // 올리기 전에는 없다
+            Assert.Empty(d.BufferIds);                  // 올리기 전에는 없다
 
             d.Download(new PrintJob());
-            Assert.Equal(VirtualPrintDataDownloader.VirtualBufferId, d.BufferId);
-            Assert.True(d.BufferId > 1000, "엔진은 작은 번호를 준다 — 눈으로 구분돼야 한다.");
+            Assert.Equal(new[] { VirtualPrintDataDownloader.VirtualBufferId }, d.BufferIds);
+            Assert.True(d.BufferIds[0] > 1000, "엔진은 작은 번호를 준다 — 눈으로 구분돼야 한다.");
 
             d.Release();
-            Assert.Null(d.BufferId);
+            Assert.Empty(d.BufferIds);
+        }
+
+        /// <summary>
+        /// 장 수만큼 번호를 내준다 — 실물과 개수가 같아야 인쇄가 같은 경로를 탄다.
+        /// 하나만 주면 가상에서만 다른 길로 가서 시험이 헛돈다.
+        /// </summary>
+        [Fact]
+        public void 가상_전송기는_장_수만큼_번호를_준다()
+        {
+            var d = new VirtualPrintDataDownloader();
+
+            d.Download(new PrintJob
+            {
+                Images = new[] { new PrintPattern(), new PrintPattern(), new PrintPattern() },
+            });
+
+            Assert.Equal(3, d.BufferIds.Count);
+            Assert.Equal(3, d.BufferIds.Distinct().Count());   // 번호가 겹치면 같은 그림이 나간다
         }
 
         /// <summary>헤드 없는 구성(None)은 그대로 막혀야 한다 — 가상과 갈라 둔 이유다.</summary>
@@ -102,7 +121,7 @@ namespace IJPSystem.Tests
 
             d.Download(new PrintJob());
 
-            Assert.Null(d.BufferId);
+            Assert.Empty(d.BufferIds);
         }
     }
 }

@@ -36,8 +36,18 @@ namespace IJPSystem.Platform.Infrastructure.Print
         /// <summary>노즐 X 위치 [µm]. 컬럼 순서와 1:1 이다.</summary>
         public IReadOnlyList<double> NozzleXUm { get; init; } = Array.Empty<double>();
 
-        /// <summary>발사 지도. 이것이 실제로 PCC 로 올라간다.</summary>
+        /// <summary>발사 지도 — <b>첫 장</b>. 크기·방울 수처럼 장마다 같은 값을 볼 때 쓴다.</summary>
         public PrintPattern Pattern { get; init; } = new();
+
+        /// <summary>
+        /// 발사 지도 <b>전부</b> — 스와스 × 패스, 스와스 우선 순서. 이것이 버퍼 하나씩 올라간다.
+        ///
+        /// <para>비어 있으면 <see cref="Pattern"/> 한 장짜리로 본다(비트맵 저장물이 그렇다).</para>
+        /// </summary>
+        public IReadOnlyList<PrintPattern> Images { get; init; } = Array.Empty<PrintPattern>();
+
+        /// <summary>올려야 할 장 수 = 스와스 × 패스.</summary>
+        public int ImageCount => Images.Count > 0 ? Images.Count : 1;
 
         public PatternSource Source { get; init; }
 
@@ -51,6 +61,18 @@ namespace IJPSystem.Platform.Infrastructure.Print
 
         /// <summary>원본 그림의 실제 가로[mm]. 패턴 메타에서 온다. 0 이면 기록이 없는 옛 저장물이다.</summary>
         public double SourceWidthMm { get; init; }
+
+        /// <summary>
+        /// 인터레이스 패스 수 — 한 스와스 안에서 헤드를 피치의 1/N 씩 옮겨 몇 번 지나가는가.
+        /// <b>스와스와 다른 것이다</b>: 이쪽은 같은 자리를 촘촘하게, 스와스는 옆자리를 덮는다.
+        /// </summary>
+        public int PassCount { get; init; } = 1;
+
+        /// <summary>스와스 사이 크로스스캔 이동량[mm] = 한 폭. 1스와스면 0.</summary>
+        public double SwathPitchMm { get; init; }
+
+        /// <summary>인터레이스 패스 사이 크로스스캔 이동량[mm]. 1패스면 0.</summary>
+        public double PassPitchMm { get; init; }
 
         public int Steps => Pattern.Steps;
         public int Nozzles => Pattern.Nozzles;
@@ -129,18 +151,26 @@ namespace IJPSystem.Platform.Infrastructure.Print
 
             PrintPattern pattern;
             PatternSource source;
-            int swaths = 1;
-            double srcWidthMm = 0;
+            int swaths = 1, passCount = 1;
+            double srcWidthMm = 0, swathPitchMm = 0, passPitchMm = 0;
+            IReadOnlyList<PrintPattern> images = Array.Empty<PrintPattern>();
 
             string patternBin = Path.Combine(folder, PrintPatternFile.DataFileName);
             if (File.Exists(patternBin))
             {
+                // ★전부 읽는다. 첫 장만 읽으면 나머지 폭·패스가 올라가지 않은 채 같은 그림이
+                //   되풀이 찍힌다 — 덜 찍히는 것보다 나쁘다(눈에 안 띄고 잉크·글라스를 버린다).
+                //
                 // 메타도 같이 받는다 — 스와스 수와 원본 폭은 <b>생성 때만</b> 알 수 있어
                 // 여기 실려 온 것이 유일한 사본이다. 버리면 인쇄 화면에서 되찾을 방법이 없다.
-                var loaded = PrintPatternFile.Load(folder);
-                pattern    = loaded.Pattern;
+                var loaded = PrintPatternFile.LoadAll(folder);
+                images     = loaded.Images;
+                pattern    = loaded.Images[0];
                 swaths     = Math.Max(1, loaded.Meta.SwathCount);
+                passCount  = Math.Max(1, loaded.Meta.PassCount);
                 srcWidthMm = loaded.Meta.SourceWidthMm;
+                swathPitchMm = loaded.Meta.SwathPitchUm  / 1000.0;
+                passPitchMm  = loaded.Meta.PassOffsetXUm / 1000.0;
                 source     = PatternSource.PatternFile;
             }
             else if (bmp != null && File.Exists(bmp))
@@ -173,9 +203,13 @@ namespace IJPSystem.Platform.Infrastructure.Print
                 Para          = para,
                 NozzleXUm     = xs,
                 Pattern       = pattern,
+                Images        = images,
                 Source        = source,
                 SwathCount    = swaths,
+                PassCount     = passCount,
                 SourceWidthMm = srcWidthMm,
+                SwathPitchMm  = swathPitchMm,
+                PassPitchMm   = passPitchMm,
             };
         }
 

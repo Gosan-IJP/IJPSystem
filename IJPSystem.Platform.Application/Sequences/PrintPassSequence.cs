@@ -43,8 +43,24 @@ namespace IJPSystem.Platform.Application.Sequences
         /// </summary>
         public IPrintJobCommands? Job { get; init; }
 
-        /// <summary>올려 둔 인쇄 데이터의 버퍼 번호. Print Run 이면 반드시 있어야 한다.</summary>
-        public uint BufferId { get; init; }
+        /// <summary>
+        /// 올려 둔 인쇄 데이터의 버퍼 번호들 — <b>스와스 × 패스, 스와스 우선</b> 순서.
+        /// Print Run 이면 <c>SwathCount × PassCount</c> 개가 있어야 한다.
+        ///
+        /// <para><b>번호가 하나가 아닌 이유</b>: 스와스마다 그림이 다르다. 왼쪽 폭과 그다음
+        /// 폭은 다른 데이터라, 번호 하나를 되풀이 보내면 같은 그림이 옆으로 여러 번 찍힌다 —
+        /// 덜 찍히는 것보다 나쁘다(눈에 안 띄고 잉크·글라스를 버린다).</para>
+        /// </summary>
+        public IReadOnlyList<uint> BufferIds { get; init; } = Array.Empty<uint>();
+
+        /// <summary>
+        /// 스와스 하나 안에서 도는 인터레이스 패스 수. 노즐 피치를 못 줄이므로 헤드를
+        /// 피치의 1/N 씩 옮겨 N 번 지나간다 — <b>스와스와 다른 축</b>이다.
+        /// </summary>
+        public int PassCount { get; init; } = 1;
+
+        /// <summary>인터레이스 패스 사이 크로스스캔 이동량[mm]. 1패스면 0.</summary>
+        public double PassPitchMm { get; init; }
 
         /// <summary>인쇄 폭[화소] — 명령의 Width. 보통 패턴의 노즐 수.</summary>
         public int WidthPx { get; init; }
@@ -93,60 +109,90 @@ namespace IJPSystem.Platform.Application.Sequences
                     ct => { job.StartJob(opts.JobId); return Task.CompletedTask; }));
             }
 
-            for (int pass = 1; pass <= swaths; pass++)
+            // ★루프가 둘이다 — 바깥은 스와스(옆자리를 덮는다), 안쪽은 인터레이스 패스(같은
+            //   자리를 촘촘하게 만든다). 이동량이 서로 다르다: 스와스는 헤드 한 폭(수십 mm),
+            //   패스는 노즐 피치의 1/N(수십 µm). 하나로 뭉치면 둘 중 하나가 틀린 거리로 간다.
+            int passes = Math.Max(1, opts.PassCount);
+            int traverse = 0;   // 지금까지 몇 번 왕복했는가 — 양방향 교대는 이 수로 정한다
+
+            for (int swath = 1; swath <= swaths; swath++)
             {
-                bool forward = opts.Bidirectional ? (pass % 2 == 1) : true;
-                string scanTarget = forward ? PointNames.PrintEnd : PointNames.PrintOrigin;
-
-                // ★이동보다 먼저 — 트리거가 엔코더로 자동 발생하므로 데이터가 먼저 큐에 있어야 한다.
-                if (job != null)
+                for (int pass = 1; pass <= passes; pass++)
                 {
-                    bool fwd = forward;
-                    steps.Add(new SequenceStepDef(++n, "Step_Print_StartSwath",
-                        ct =>
-                        {
-                            job.StartSwath(fwd);
-                            job.SendImage(opts.BufferId, opts.Plane, xLeftPx: 0, yTopPx: 0, widthPx: opts.WidthPx);
-                            job.EndSwath();
-                            return Task.CompletedTask;
-                        }));
-                }
+                    bool forward = opts.Bidirectional ? (traverse % 2 == 0) : true;
+                    traverse++;
+                    string scanTarget = forward ? PointNames.PrintEnd : PointNames.PrintOrigin;
 
-                // ★끝점을 누가 정하는가가 운전 모드로 갈린다.
-                //   Print Run  거리가 들어온다 — 패턴 길이만큼만 간다(데이터가 정한다)
-                //   Dry Run    거리가 0 이다 — 티칭된 PRINT END 로 간다(사람이 정한다)
-                double travel = opts.ScanTravelMm;
-                steps.Add(new SequenceStepDef(++n, "Step_Print_Scan",
-                    travel != 0
-                        ? ct => motion.MoveAxisRelativeAsync(
-                                    ScanAxisNo, forward ? travel : -travel, ct, MotionProfileKind.Printing)
-                        : ct => motion.MoveAxisToPointAsync(
-                                    ScanAxisNo, scanTarget, ct, MotionProfileKind.Printing)));
+                    // ★이동보다 먼저 — 트리거가 엔코더로 자동 발생하므로 데이터가 먼저 큐에 있어야 한다.
+                    if (job != null)
+                    {
+                        bool fwd = forward;
+                        // 스와스 우선 순서로 담겨 있다 — [스와스0 패스0, 스와스0 패스1, 스와스1 패스0, …]
+                        int index = (swath - 1) * passes + (pass - 1);
+                        uint buffer = index < opts.BufferIds.Count
+                            ? opts.BufferIds[index]
+                            : throw new InvalidOperationException(
+                                  $"버퍼가 모자랍니다 — 스와스 {swath}/{swaths}, 패스 {pass}/{passes} 에 " +
+                                  $"{index + 1}번째가 필요한데 {opts.BufferIds.Count}개뿐입니다.");
 
-                steps.Add(new SequenceStepDef(++n, "Step_Print_ScanDone",
-                    ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 60_000, ct)));
+                        steps.Add(new SequenceStepDef(++n, "Step_Print_StartSwath",
+                            ct =>
+                            {
+                                job.StartSwath(fwd);
+                                job.SendImage(buffer, opts.Plane, xLeftPx: 0, yTopPx: 0, widthPx: opts.WidthPx);
+                                job.EndSwath();
+                                return Task.CompletedTask;
+                            }));
+                    }
 
-                // 단방향: 인쇄 후 시작점으로 복귀(비인쇄, Move 프로파일).
-                // 거리로 왔으면 거리로 돌아간다 — 티칭 점으로 돌아가면 방금 간 만큼과 어긋난다.
-                if (!opts.Bidirectional)
-                {
-                    string returnTarget = forward ? PointNames.PrintOrigin : PointNames.PrintEnd;
-                    steps.Add(new SequenceStepDef(++n, "Step_Print_Return",
+                    // ★끝점을 누가 정하는가가 운전 모드로 갈린다.
+                    //   Print Run  거리가 들어온다 — 패턴 길이만큼만 간다(데이터가 정한다)
+                    //   Dry Run    거리가 0 이다 — 티칭된 PRINT END 로 간다(사람이 정한다)
+                    double travel = opts.ScanTravelMm;
+                    steps.Add(new SequenceStepDef(++n, "Step_Print_Scan",
                         travel != 0
                             ? ct => motion.MoveAxisRelativeAsync(
-                                        ScanAxisNo, forward ? -travel : travel, ct, MotionProfileKind.Move)
+                                        ScanAxisNo, forward ? travel : -travel, ct, MotionProfileKind.Printing)
                             : ct => motion.MoveAxisToPointAsync(
-                                        ScanAxisNo, returnTarget, ct, MotionProfileKind.Move)));
+                                        ScanAxisNo, scanTarget, ct, MotionProfileKind.Printing)));
 
-                    steps.Add(new SequenceStepDef(++n, "Step_Print_ReturnDone",
+                    steps.Add(new SequenceStepDef(++n, "Step_Print_ScanDone",
                         ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 60_000, ct)));
+
+                    // 단방향: 인쇄 후 시작점으로 복귀(비인쇄, Move 프로파일).
+                    // 거리로 왔으면 거리로 돌아간다 — 티칭 점으로 돌아가면 방금 간 만큼과 어긋난다.
+                    if (!opts.Bidirectional)
+                    {
+                        string returnTarget = forward ? PointNames.PrintOrigin : PointNames.PrintEnd;
+                        steps.Add(new SequenceStepDef(++n, "Step_Print_Return",
+                            travel != 0
+                                ? ct => motion.MoveAxisRelativeAsync(
+                                            ScanAxisNo, forward ? -travel : travel, ct, MotionProfileKind.Move)
+                                : ct => motion.MoveAxisToPointAsync(
+                                            ScanAxisNo, returnTarget, ct, MotionProfileKind.Move)));
+
+                        steps.Add(new SequenceStepDef(++n, "Step_Print_ReturnDone",
+                            ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 60_000, ct)));
+                    }
+
+                    // 인터레이스: 다음 패스로 피치의 1/N 만큼(헤드는 내린 채).
+                    if (pass < passes && opts.PassPitchMm > 0)
+                    {
+                        steps.Add(new SequenceStepDef(++n, "Step_Print_PassStep",
+                            ct => motion.MoveAxisRelativeAsync(StepAxisNo, opts.PassPitchMm, ct)));
+
+                        steps.Add(new SequenceStepDef(++n, "Step_Print_PassStepDone",
+                            ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct)));
+                    }
                 }
 
-                // 마지막 패스가 아니면 X축을 헤드길이만큼 스텝오버(헤드는 내린 채).
-                if (pass < swaths && opts.SwathPitchMm > 0)
+                // 다음 스와스로 헤드 한 폭 — 단, 인터레이스로 이미 옮겨 온 만큼은 뺀다.
+                // 안 빼면 패스를 돌 때마다 스와스가 조금씩 오른쪽으로 밀린다.
+                if (swath < swaths && opts.SwathPitchMm > 0)
                 {
+                    double step = opts.SwathPitchMm - (passes - 1) * opts.PassPitchMm;
                     steps.Add(new SequenceStepDef(++n, "Step_Print_SwathStep",
-                        ct => motion.MoveAxisRelativeAsync(StepAxisNo, opts.SwathPitchMm, ct)));
+                        ct => motion.MoveAxisRelativeAsync(StepAxisNo, step, ct)));
 
                     steps.Add(new SequenceStepDef(++n, "Step_Print_SwathStepDone",
                         ct => WaitHelper.ForAllMotionDone(machine.Motion, timeoutMs: 20_000, ct)));

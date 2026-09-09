@@ -216,46 +216,60 @@ namespace IJPSystem.Platform.HMI.Print
                 double umPxX = 25400.0 / Math.Max(1e-6, param.DropPerInchX);
                 double umPxY = 25400.0 / Math.Max(1e-6, param.DropPerInchY);
 
-                // 가로는 노즐 피치가 하드웨어라 한 번 지나가서는 못 좁힌다. 헤드를 피치의 1/div 만큼
-                // 옮겨 div 번 지나간다 — 패스 k 는 자기 노즐 X 에서 k×오프셋 만큼 옆의 화소를 읽는다.
-                // (OriginXUm 은 "이미지 원점" 이라 헤드가 오른쪽으로 가는 것과 부호가 반대다)
-                var passes  = new List<PrintPattern>(div);
+                // ★한 장씩 만드는 함수 — 두 축이 <b>같은 장치</b>를 쓴다.
+                //   OriginXUm 을 밀면 노즐이 이미지의 다른 자리를 읽는다(`xUm = 노즐X − OriginXUm`).
+                //     인터레이스: 피치의 1/div 씩 밀어 가로를 촘촘하게
+                //     스와스    : 헤드 한 폭씩 밀어 옆자리를 덮게
+                //   (OriginXUm 은 "이미지 원점" 이라 헤드가 오른쪽으로 가는 것과 부호가 반대다)
                 IReadOnlyList<int> ignored = Array.Empty<int>();
-                for (int k = 0; k < div; k++)
+                PrintPattern BuildAt(double originXUm)
                 {
                     var s = new RipSettings
                     {
                         DropLevels     = settings.DropLevels,
                         ScanStepUm     = settings.ScanStepUm,
-                        OriginXUm      = -k * passOffset,
+                        OriginXUm      = originXUm,
                         BlendHeadSeams = settings.BlendHeadSeams,
                     };
-                    passes.Add(PrintPatternBuilder.Build(gray, umPxX, umPxY, layout, used, s, out ignored));
+                    return PrintPatternBuilder.Build(gray, umPxX, umPxY, layout, used, s, out ignored);
                 }
 
-                var pattern = passes[0];
+                // 스와스 수를 알려면 헤드 폭이 필요하고, 헤드 폭은 컬럼 X 범위다 — 원점을 밀어도
+                // 변하지 않으므로 첫 장을 만들어 재면 된다.
+                var pattern = BuildAt(0);
+
+                // 스와스 — 지금 세지 않으면 영영 셀 수 없다.
+                //
+                // 노즐이 덮는 X 범위보다 그림이 넓으면 넘친 쪽은 <b>어떤 노즐도 읽지 않는다</b>
+                // (PrintPatternBuilder 의 `sx >= srcW` 는 반대 경우고, 이쪽은 애초에 노즐이 없다).
+                // 게다가 저장되는 WidthMm 은 노즐 X 범위라, 파일을 나중에 열어 봐야 원본이
+                // 얼마나 넓었는지 알 수 없다 — 재료가 여기에만 있다.
+                double srcWidthMm = gray.GetLength(1) * umPxX / 1000.0;
+                double headSpanMm = ColumnSpanMm(pattern);
+                int    swaths     = headSpanMm > 0
+                    ? Math.Max(1, (int)Math.Ceiling(srcWidthMm / headSpanMm - 1e-6))
+                    : 1;
+                double headSpanUm = headSpanMm * 1000.0;
+
+                // 스와스 우선 순서로 담는다 — [스와스0 패스0, 스와스0 패스1, 스와스1 패스0, …].
+                // 인쇄가 이 순서 그대로 버퍼를 만들고 꺼내 쓴다.
+                var images = new List<PrintPattern>(swaths * div);
+                for (int sw = 0; sw < swaths; sw++)
+                    for (int k = 0; k < div; k++)
+                        images.Add(sw == 0 && k == 0
+                            ? pattern
+                            : BuildAt(-(sw * headSpanUm + k * passOffset)));
+
                 LastIgnoredNozzles = ignored;
-                LastPasses = passes;
+                LastPasses = images;
                 steps = pattern.Steps;
 
                 _lastParam      = param;
                 _lastLayout     = layout;
                 _lastScanStepUm = scanStep;
 
-                // 스와스 — 지금 세지 않으면 영영 셀 수 없다.
-                //
-                // 노즐이 덮는 X 범위보다 그림이 넓으면 넘친 쪽은 <b>어떤 노즐도 읽지 않는다</b>
-                // (PrintPatternBuilder 의 `sx >= srcW` 는 반대 경우고, 이쪽은 애초에 노즐이 없다).
-                // 즉 조용히 잘린다. 게다가 저장되는 WidthMm 은 노즐 X 범위라, 파일을 나중에 열어
-                // 봐야 원본이 얼마나 넓었는지 알 수 없다 — 재료가 여기에만 있다.
-                double srcWidthMm = gray.GetLength(1) * umPxX / 1000.0;
-                double headSpanMm = ColumnSpanMm(pattern);
-                int    swaths     = headSpanMm > 0
-                    ? Math.Max(1, (int)Math.Ceiling(srcWidthMm / headSpanMm - 1e-6))
-                    : 1;
-
                 string folder = Path.Combine(OutputRoot, "IMG_TEMP", stamp);
-                PrintPatternFile.Save(folder, passes, new PrintPatternFile.PatternMeta
+                PrintPatternFile.Save(folder, images, new PrintPatternFile.PatternMeta
                 {
                     DropLevels     = settings.DropLevels,
                     SourceImage    = imagePath,
@@ -265,7 +279,7 @@ namespace IJPSystem.Platform.HMI.Print
                     IgnoredNozzles = ignored,
                     PassOffsetXUm  = passOffset,
                     SwathCount     = swaths,
-                    SwathPitchUm   = swaths > 1 ? headSpanMm * 1000.0 : 0,
+                    SwathPitchUm   = swaths > 1 ? headSpanUm : 0,
                     SourceWidthMm  = srcWidthMm,
                 });
                 patternPath = folder;
@@ -280,8 +294,7 @@ namespace IJPSystem.Platform.HMI.Print
                 if (div > 1) body += $" · 간격 1/{div} ({div}패스, 패스간 {passOffset:0.##}µm)";
                 body += $" · 폭 {srcWidthMm:0.#}mm / 헤드 {headSpanMm:0.#}mm";
                 body += swaths > 1
-                    // 못 찍는 것을 못 찍는다고 말한다 — 예전에는 아무 말 없이 한 폭만 나갔다.
-                    ? $" · ★스와스 {swaths}회 필요 (지금은 첫 폭만 나갑니다)"
+                    ? $" · 스와스 {swaths}회 (그림 {images.Count}장, 폭간 {headSpanMm:0.#}mm)"
                     : " · 스와스 1회";
                 if (ignored.Count > 0)
                     body += $" (헤드 범위 밖 {ignored.Count}개 제외: {string.Join(",", ignored)})";

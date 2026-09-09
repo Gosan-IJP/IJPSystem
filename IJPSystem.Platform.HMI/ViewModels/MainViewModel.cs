@@ -160,8 +160,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 Width:     job.SourceWidthMm > 0
                                ? $"{job.SourceWidthMm:0.#} mm  (헤드 {job.Para.WidthMm:0.#} mm)"
                                : $"{job.Para.WidthMm:0.#} mm",
-                Swath:     job.SwathCount > 1 ? $"{job.SwathCount} 회  ★첫 폭만 나갑니다" : "1 회",
-                SwathWarn: job.SwathCount > 1);
+                Swath:     job.PassCount > 1
+                               ? $"{job.SwathCount} 회 × 패스 {job.PassCount}"
+                               : $"{job.SwathCount} 회",
+                SwathWarn: false);
         }
 
         /// <summary>인쇄가 어디서 시작해 어디서 끝나는가 — 종료는 <b>계산값</b>이다(시작 + 패턴 길이).</summary>
@@ -230,17 +232,29 @@ namespace IJPSystem.Platform.HMI.ViewModels
             double travel = ScanTravelForPattern(job.Para.HeightMm, out blockedReason);
             if (blockedReason != null) return new Application.Sequences.PrintRunOptions();
 
+            // ★스와스·패스·이동량은 <b>전부 데이터가 정한다</b>. 레시피의 프린팅수·스와스피치는
+            //   Dry Run 전용이다 — Print Run 에서 사람이 정하면 그림과 어긋난 거리로 간다.
+            var buffers = PrintJob.BufferIds;
+            int need = Math.Max(1, job.SwathCount) * Math.Max(1, job.PassCount);
+            if (buffers.Count < need)
+            {
+                blockedReason =
+                    $"올라간 버퍼가 모자랍니다 — {need}장이 필요한데 {buffers.Count}개뿐입니다.\n\n" +
+                    $"(스와스 {job.SwathCount} × 패스 {job.PassCount})\n" +
+                    "패턴 인쇄 화면에서 [Load Print data] 로 다시 올리세요.";
+                return new Application.Sequences.PrintRunOptions();
+            }
+
             return new Application.Sequences.PrintRunOptions
             {
-                // ★스와스 1 — 지금 패턴은 헤드 한 폭(노즐 수만큼)으로 만들어진다. 같은 그림을
-                //   옆으로 여러 번 찍을 이유가 없으므로 한 패스다. 더 넓게 찍으려면 패턴을
-                //   여러 폭으로 만드는 것이 먼저다(PrintPatternBuilder 가 아직 그러지 않는다).
-                SwathCount    = 1,
-                SwathPitchMm  = RecipeVM.ActiveSwathPitchMm,
+                SwathCount    = Math.Max(1, job.SwathCount),
+                SwathPitchMm  = job.SwathPitchMm,
+                PassCount     = Math.Max(1, job.PassCount),
+                PassPitchMm   = job.PassPitchMm,
                 Bidirectional = bidi,
                 ScanTravelMm  = travel,
                 Job           = PrintCommands,
-                BufferId      = PrintJob.BufferId!.Value,
+                BufferIds     = buffers,
                 WidthPx       = job.Nozzles,
                 Plane         = 1,          // 단일 plane 구성
                 JobId         = 1,
