@@ -1,0 +1,37 @@
+{
+  "_comment0": "★11호기 사본 — 앱은 이 파일을 읽지 않는다. 11호기 제어PC 의 Config\\StrobeConfig.json 이 날아가거나 핫픽스(-Config)로 덮였을 때 이 파일을 그 이름으로 복사해 되돌린다. 저장소의 StrobeConfig.json 은 9(=10)호기 값이다.",
+  "_comment0a": "StrobeConfig.json 과 다른 값은 ComPort 하나다(COM12 → COM9). 나머지는 모델 값이라 같다. 본 파일의 설명을 고치면 여기도 같이 고칠 것.",
+  "_comment0b": "Devices 의 CAM_DW RunMode 는 2(Pulse)로 둔다. 헤드가 없는 동안 조명을 켜 보려면 잠시 1 로 바꿨다가 반드시 2 로 되돌릴 것(_comment7b).",
+
+  "_comment1": "iCore iPulse LED 컨트롤러(모델 1P1S-100A). 한 포트에 2대가 sID 1(DWC)/2(GVC) 로 물려 있다.",
+  "_comment1a": "★ComPort 는 호기마다 다르다 — 옮겨 적지 말 것. USB 시리얼은 꽂는 순서로 번호가 정해진다(9호기 COM12, 11호기 COM9). 보레이트 115200 과 sID 1/2, 레지스터 주소는 모델 값이라 안 바뀐다.",
+  "_comment1b": "★확인법: 앱을 닫고 Tools\\SerialScan → '한 포트에 UnitId 1과 2가 115200 으로 응답' 하면 그게 iCore 다. 못을 박으려면 0x200(Slave Address)을 읽어 자기 번호가 나오는지 본다(2026-09-07 11호기 COM9: 0x200=1, 0x300=2 확인).",
+  "_comment3": "★시간 파라미터는 IEEE-754 float32(하위 워드 먼저). Duration [0,16672]=0x41200000=10.0us, Period=10000.0us 로 정확히 떨어져 확정.",
+  "_comment5": "★밝기·정격전류(Rated Current)는 여기서 다루지 않는다. 매뉴얼에 주소가 없고 정격 초과 시 LED 가 파손된다 → iPulse Configurator 로 설정하고 Save Parameter.",
+  "_comment6": "★LED Enable(채널)이 꺼져 있으면 Operation 을 바꿔도 불이 안 들어온다. 이것도 Configurator 전용.",
+
+  "ComPort": "COM9",
+  "BaudRate": 115200,
+  "Parity": 0,
+  "DataBits": 8,
+  "StopBits": 1,
+  "TimeoutMs": 1000,
+
+  "OperationRegister": 768,
+  "DelayRegister": 788,
+  "DelayIsFloat32": true,
+  "HighWordFirst": false,
+  "SettleMs": 50,
+
+  "_comment7": "Camera = CameraId(VisionConfig 와 같은 키). RunMode = 켤 때 쓸 Operation 값 — DWC 는 토출 동기가 필요해 Pulse(2), GVC 는 육안 조명이라 Continuous(1).",
+  "_comment7a": "★★'LIGHT ON 했는데 불이 안 들어온다' 의 1순위 원인은 고장이 아니라 <b>Pulse(2) 모드</b>다. Pulse 는 트리거가 들어와야 한 번 발광하므로, 트리거 체인이 멈춰 있으면 0x300 쓰기·리드백이 모두 성공하고도 LED 는 계속 어둡다(2026-09-07 11호기).",
+  "_comment7b": "LED·전원만 따로 확인하려면 CAM_DW 의 RunMode 를 잠시 1(Continuous)로 두고 재시작 → LIGHT ON. <b>확인 후 반드시 2 로 되돌릴 것</b> — Continuous 로는 액적이 정지해 보이지 않아 측정이 안 된다.",
+  "_comment7c": "★2026-09-07 11호기 실측 — Continuous(1) 에서 점등 확인. LED·전원·배선·Configurator 의 LED Enable 채널·정격전류가 모두 정상이다. 어두웠던 원인은 Pulse 모드에 발광 트리거가 없던 것 하나뿐이다.",
+  "_comment7d": "★Pulse 발광은 사슬의 맨 끝이다: 헤드/잉크 → 스핏 → PCC FireOut → PFI5 → ctr1(÷100) → ctr0 → LED. 헤드 미장착 상태에서 DWC 조명이 어두운 것은 정상이며 고칠 대상이 아니다.",
+  "_comment7e": "★11호기 제어PC 에는 C:\\Windows\\SysWOW64\\nicaiu.dll(2.81MB, 2019-09-16) 이 <b>이미 있다</b>(2026-09-07 확인). 10호기(런타임 없음) 기록을 옮겨 적어 '미설치' 로 단정하지 말 것.",
+  "_comment8": "sID 배정(2026-08-06 확정): DWC = sID 1(토출마다 발광 · 지연 설정 대상), GVC = sID 2.",
+  "Devices": [
+    { "Camera": "CAM_DW", "UnitId": 1, "RunMode": 2 },
+    { "Camera": "CAM_GV", "UnitId": 2, "RunMode": 1 }
+  ]
+}
