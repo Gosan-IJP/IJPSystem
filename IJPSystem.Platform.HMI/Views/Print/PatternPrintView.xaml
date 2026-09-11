@@ -877,9 +877,9 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <!-- DataContext 가 문자열(포인트 이름)이라 Command 는 화면 VM 을 거슬러 찾는다 -->
-                                        <!-- 높이 30·간격 4 — 다섯 개가 스크롤 없이 한 카드에 들어오는 값이다.
+                                        <!-- 높이 34·간격 4 — 다섯 개가 스크롤 없이 한 카드에 들어오는 값이다.
                                              더 늘릴 자리가 필요하면 여기가 아니라 목록을 줄이는 쪽이 맞다. -->
-                                        <Button Style="{StaticResource ActionBtn}" Height="30" Margin="0,0,0,4"
+                                        <Button Style="{StaticResource ActionBtn}" Height="34" Margin="0,0,0,4"
                                                 Background="#1E293B" BorderBrush="#475569"
                                                 Command="{Binding DataContext.MovePointCommand,
                                                           RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -954,7 +954,7 @@
                             <!-- 창을 닫고 나면 선택 결과가 아무 데도 안 남아, Spit 을 눌러 실패해야
                                  알 수 있었다. 개수를 라벨에 붙이고 미선택이면 주황으로 띄운다.
                                  번호는 툴팁에 — 3200개까지 갈 수 있어 라벨에는 못 넣는다. -->
-                            <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,5"
+                            <Button Style="{StaticResource ActionBtn}" Height="32" Margin="0,0,0,5"
                                     Click="NozzleSelect_Click" ToolTip="{Binding NozzleSel.Detail}">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="Nozzle Select" VerticalAlignment="Center"/>
@@ -973,7 +973,7 @@
                                     </TextBlock>
                                 </StackPanel>
                             </Button>
-                            <Button Height="28" Margin="0,0,0,5" Content="Spit"
+                            <Button Height="32" Margin="0,0,0,5" Content="Spit"
                                     Command="{Binding SpitCommand}">
                                 <Button.Style>
                                     <Style TargetType="Button" BasedOn="{StaticResource ActionBtn}">
@@ -993,7 +993,7 @@
                                  여기서다 — 이걸 눌러야 READY 가 되고, Print 는 이미 올라간
                                  데이터를 쏠 뿐 파일을 다시 읽지 않는다.
                                  ※ 엔진 메모리는 PC 쪽이다. PCC 하드웨어로는 인쇄 명령 때 나간다. -->
-                            <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,5"
+                            <Button Style="{StaticResource ActionBtn}" Height="32" Margin="0,0,0,5"
                                     Background="#1D4ED8" BorderBrush="#3B82F6"
                                     Content="Load Print data"
                                     Command="{Binding LoadPrintDataCommand}"
@@ -1019,10 +1019,10 @@
                                 </StackPanel>
                             </Border>
 
-                            <Button Style="{StaticResource ActionBtn}" Height="28" Margin="0,0,0,5"
+                            <Button Style="{StaticResource ActionBtn}" Height="32" Margin="0,0,0,5"
                                     Background="#1D4ED8" BorderBrush="#3B82F6" Content="Set Print Origin"
                                     Click="SetPrintOrigin_Click"/>
-                            <Button Style="{StaticResource ActionBtn}" Height="28"
+                            <Button Style="{StaticResource ActionBtn}" Height="32"
                                     Background="#1D4ED8" BorderBrush="#3B82F6" Content="Print Image Design"
                                     Click="PrintImageDesign_Click"/>
                         </StackPanel>
