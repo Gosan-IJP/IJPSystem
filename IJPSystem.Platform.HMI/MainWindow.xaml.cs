@@ -14,15 +14,19 @@ namespace IJPSystem.Platform.HMI
             InitializeComponent();
             // 창 제목에 본체 DLL 의 수정시각을 붙인다 — 실장에서 DLL 을 복사한 뒤
             // 로그를 열지 않고도 "그 파일이 실제로 도는지"를 바로 확인하기 위해서다.
-            Title = $"{Title} — {BuildInfo.Stamp}";
-            BuildStampText.Text = BuildInfo.Stamp;
+            // 호기도 같이 붙인다 — Config 폴더는 호기마다 모양이 같아서, 다른 호기 파일이 섞여도
+            // 첫 화면에서는 알 수 없었다(AppConfig.json 의 MachineNo).
+            string machine = IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Current?.MachineNoText
+                             ?? "호기 미지정";
+            Title = $"{Title} — {machine} — {BuildInfo.Stamp}";
+            BuildStampText.Text = $"{machine} · {BuildInfo.Stamp}";
 
             // DLL 을 손으로 복사하다 일부만 바꾸면 어긋난 조합이 되고, 그 조합은 한참 뒤
             // 엉뚱한 화면에서 MethodNotFound 로 죽는다. 여기서 눈에 띄게 세워 둔다.
             string? mismatch = BuildInfo.MismatchSummary();
             if (mismatch != null)
             {
-                BuildStampText.Text = $"⚠ {BuildInfo.Stamp} · 빌드 불일치";
+                BuildStampText.Text = $"⚠ {machine} · {BuildInfo.Stamp} · 빌드 불일치";
                 BuildStampText.Foreground = System.Windows.Media.Brushes.Tomato;
                 BuildStampText.ToolTip = mismatch;
                 IJPSystem.Platform.Common.Utilities.LoggerService.WriteToFile("WARN", "[BOOT] " + mismatch);

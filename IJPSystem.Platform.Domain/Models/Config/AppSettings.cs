@@ -9,6 +9,20 @@ namespace IJPSystem.Platform.Domain.Models.Config
     public class AppSettings
     {
         public string MachineType       { get; set; } = "PULSE";
+
+        /// <summary>
+        /// 이 Config 폴더가 <b>어느 호기 것인가</b>(예: "10호기"). 표시·기록용이며 동작은 바꾸지 않는다.
+        /// <para>COM 포트·카메라 MAC·NIC 이름은 호기마다 다른데 Config 폴더는 모양이 똑같아서,
+        /// 다른 호기 파일이 섞여 들어가도 알 길이 없었다(2026-09-11 10호기에 11호기의 COM10 이 들어가
+        /// 'Could not find file COM10'). 창 제목과 기동 로그에 나오므로 첫 화면에서 바로 보인다.</para>
+        /// <para>비우면 "호기 미지정" 으로 보인다. 설치 후 그 PC 에서 한 번 적는다.</para>
+        /// </summary>
+        public string MachineNo         { get; set; } = "";
+
+        /// <summary>화면·로그에 쓸 호기 표기. 비어 있으면 "호기 미지정".</summary>
+        /// <remarks>저장하지 않는다 — 설정 저장(도어 사용 토글 등) 때 파일에 이 키가 끼어들지 않게.</remarks>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string MachineNoText => string.IsNullOrWhiteSpace(MachineNo) ? "호기 미지정" : MachineNo.Trim();
         public string AdminPassword     { get; set; } = "admin";
         public string EngineerPassword  { get; set; } = "engineer";
         public string OperatorPassword  { get; set; } = "operator";

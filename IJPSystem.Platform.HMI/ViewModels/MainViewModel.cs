@@ -733,9 +733,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // → Virtual 로 뜨면 "이 경로의 파일"을 Comizoa 로 고쳐야 함이 즉시 드러남.
             try
             {
-                var dm = IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Current?.DriverMode;
+                var app = IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Current;
+                var dm  = app?.DriverMode;
                 string cfgPath = IJPSystem.Platform.Common.Utilities.PathUtils.GetConfigPath("AppConfig.json");
-                AddLog($"[CONFIG] {cfgPath} → IO={dm?.IO}, Motion={dm?.Motion}, Vision={dm?.Vision}", LogLevel.Info);
+                AddLog($"[CONFIG] {app?.MachineNoText ?? "호기 미지정"} · {cfgPath} → " +
+                       $"IO={dm?.IO}, Motion={dm?.Motion}, Vision={dm?.Vision}", LogLevel.Info);
             }
             catch { /* 진단 로그 실패는 무시 */ }
 

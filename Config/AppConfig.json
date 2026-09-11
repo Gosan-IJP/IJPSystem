@@ -2,7 +2,9 @@
   "_comment1": "장비 공통 설정. 장치별 배선/레지스터는 각 장치 파일에 있다 — MotorConfig.json(Comizoa) / IO.json / VisionConfig.json / StrobeConfig.json / DropWatcherConfig.json / TriggerChainConfig.json / MeniscusConfig.json.",
   "_comment2": "DriverMode = '실물이 달렸나' 판정만 모아 둔 곳. 가상↔실장 전환은 여기 한 곳만 고치면 된다.",
 
+  "_comment6": "★MachineNo = 이 Config 폴더가 어느 호기 것인가(예: \"10호기\"). 창 제목과 기동 로그에 나온다 — 다른 호기 파일이 섞였는지 첫 화면에서 알아보려는 것. 동작은 바꾸지 않는다. 설치 후 그 PC 에서 적을 것(비우면 '호기 미지정').",
   "MachineType": "PULSE",
+  "MachineNo": "",
   "AdminPassword": "admin",
   "ChartFontFile": "none",
   "EngineerPassword": "00",
