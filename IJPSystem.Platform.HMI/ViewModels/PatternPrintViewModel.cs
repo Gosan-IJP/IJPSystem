@@ -192,7 +192,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // 연결 성공 시 상태머신이 백그라운드 폴링/쓰기를 실제 장치로 수행, 실패 시 mock.
         // UI 는 Pa, 상태머신은 kPa → 1 kPa = 1000 Pa 환산.
         private IJPSystem.Platform.Infrastructure.Devices.Meniscus.MeniscusStateMachine? _meniscus;
-        private bool _meniscusConnected;
         private bool _meniscusErrLogged;
         private const double PaPerKpa = 1000.0;
 
@@ -908,18 +907,21 @@ namespace IJPSystem.Platform.HMI.ViewModels
         }
 
         // ── Meniscus 압력 (실장치 연동 + mock 폴백) ───────────────────
-        /// <summary>Set Value — 셋팅값을 Meniscus 압력 명령으로 적용. 연결 시 DMD에 쓰기, 미연결 시 mock.</summary>
+        /// <summary>
+        /// Set Value — 목표압력을 DMD 에 쓰고 <b>RUN 까지 건다</b>(랩뷰 "DMD Set" 과 같은 한 동작).
+        /// 미연결이면 mock.
+        /// </summary>
         private void ApplyMeniscusSetpoint()
         {
             _meniscusApplied = MeniscusSetpoint;
 
-            if (_meniscusConnected && _meniscus != null)
+            if (IsMeniscusDevice)
             {
                 double kpa = MeniscusSetpoint / PaPerKpa;
-                var sm = _meniscus;
+                var sm = _meniscus!;
                 System.Threading.Tasks.Task.Run(() => sm.SetPressure(kpa));
-                _mainVM.AddLog($"[MENISCUS] setpoint = {MeniscusSetpoint:F0} Pa ({kpa:F3} kPa)", LogLevel.Info);
-                // 현재값은 상태머신 폴링(StateChanged)이 실제 측정값으로 갱신
+                _mainVM.AddLog($"[MENISCUS] setpoint = {MeniscusSetpoint:F0} Pa ({kpa:F3} kPa) + RUN", LogLevel.Info);
+                // 현재값·램프는 상태머신 폴링(StateChanged)이 실물 값으로 갱신
             }
             else
             {
@@ -927,23 +929,44 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 _mainVM.AddLog($"[PRESSURE] Meniscus setpoint = {MeniscusSetpoint:F0} Pa (mock)", LogLevel.Info);
             }
         }
-        /// <summary>Toggle Meniscus — 출력 ON/OFF. 연결 시 제어 레지스터 쓰기, 미연결 시 mock.</summary>
+
+        /// <summary>
+        /// Toggle Meniscus — 메니스커스 적용/해제(디지털). <b>DMD 가 아니다.</b>
+        ///
+        /// <para>랩뷰에서 이 버튼은 SV Meni 솔레노이드 밸브(EtherCAT DO, TOG_MENI) 또는 Meteor
+        /// SIG_TOGGLE_MENISCUS 를 켜고 끈다. 예전 코드는 DMD 의 RUN/STOP(주소 0)을 썼고, 목표압력 없이
+        /// RUN 만 들어가 장비가 STOP 으로 남았다(2026-09-11 10호기).</para>
+        ///
+        /// <para>어느 쪽에 물렸는지와 DO 채널이 확정되기 전에는 실장비에서 아무것도 움직이지 않는다 —
+        /// <see cref="Print.VvDoChannel"/> 의 번호는 placeholder 라 틀린 번호로 켜면 엉뚱한 밸브가 동작한다.</para>
+        /// </summary>
         private void ToggleMeniscus()
         {
-            IsMeniscusOn = !IsMeniscusOn;
+            if (IsMeniscusDevice)
+            {
+                _mainVM.AddLog("[MENISCUS] Toggle Meniscus — 대상(SV Meni 밸브 / Meteor 신호)이 확정되지 않아 " +
+                               "동작하지 않습니다. 압력 제어 RUN 은 [Set Value] 가 켭니다.", LogLevel.Warning);
+                return;
+            }
 
-            if (_meniscusConnected && _meniscus != null)
-            {
-                bool on = IsMeniscusOn;
-                var sm = _meniscus;
-                System.Threading.Tasks.Task.Run(() => sm.SetControl(on));
-                _mainVM.AddLog($"[MENISCUS] {(on ? "ON" : "OFF")}", LogLevel.Info);
-            }
-            else
-            {
-                MeniscusCurrent = IsMeniscusOn ? _meniscusApplied : 0.0;
-                _mainVM.AddLog($"[PRESSURE] Meniscus {(IsMeniscusOn ? "ON" : "OFF")} (mock)", LogLevel.Info);
-            }
+            IsMeniscusOn = !IsMeniscusOn;
+            MeniscusCurrent = IsMeniscusOn ? _meniscusApplied : 0.0;
+            _mainVM.AddLog($"[PRESSURE] Meniscus {(IsMeniscusOn ? "ON" : "OFF")} (mock)", LogLevel.Info);
+        }
+
+        /// <summary>
+        /// 실장 DMD 가 붙어 있는가. 에러 표시와 무관하게 연결 여부만 본다 — 경고 한 번에
+        /// mock 경로로 빠지면 실장비 앞에서 가짜 값이 화면에 뜬다.
+        /// </summary>
+        private bool IsMeniscusDevice => _meniscus?.State.Connected == true;
+
+        /// <summary>앱 종료 — 랩뷰 "DMD Stop" 처럼 압력 제어를 멈추고 포트를 닫는다.</summary>
+        public void ShutdownMeniscus()
+        {
+            var sm = _meniscus;
+            _meniscus = null;
+            if (sm == null) return;
+            try { sm.Shutdown(); sm.Dispose(); } catch { /* 종료 중 — 막지 않는다 */ }
         }
 
         // ── 메니스커스 장치 연결 / 폴링(상태머신) ─────────────────────
@@ -985,7 +1008,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    _meniscusConnected = false;
                     _mainVM.AddLog($"[MENISCUS] 연결 실패(mock 전환): {ex.Message}", LogLevel.Warning);
                 }
             });
@@ -1042,8 +1064,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// <summary>상태머신 상태 변경 알림 → 연결 플래그 갱신 + 현재 압력(Pa) UI 반영.</summary>
         private void OnMeniscusStateChanged(IJPSystem.Platform.Infrastructure.Devices.Meniscus.DmdState st)
         {
-            _meniscusConnected = st.Connected && !st.HasError;
-
             // 에러는 발생 전이(edge)에서만 1회 로깅(폴링 스팸 방지)
             if (st.HasError && !_meniscusErrLogged)
             {

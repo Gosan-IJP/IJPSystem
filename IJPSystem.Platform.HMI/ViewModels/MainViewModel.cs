@@ -1515,6 +1515,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // Meteor 프린터 점유 해제(열려 있었다면 PiClosePrinter)
             _headMonitor?.Dispose();
 
+            // 메니스커스 DMD 정지 — 랩뷰도 종료 때 "DMD Stop"(주소 0 = 0)을 보낸다
+            _patternPrintVM?.ShutdownMeniscus();
+
             // 종료 전 램프 소등 (드라이버 정리는 App.OnExit에서 일괄 처리)
             _controller?.GetMachine()?.SetSystemStatus(MachineState.Idle);
         }
