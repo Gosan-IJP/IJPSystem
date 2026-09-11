@@ -1,6 +1,6 @@
 {
-  "_comment0": "★11호기 사본 — 앱은 이 파일을 읽지 않는다. 11호기 제어PC 의 Config\\StrobeConfig.json 이 날아가거나 핫픽스(-Config)로 덮였을 때 이 파일을 그 이름으로 복사해 되돌린다. 저장소의 StrobeConfig.json 은 9(=10)호기 값이다.",
-  "_comment0a": "StrobeConfig.json 과 다른 값은 ComPort 하나다(COM12 → COM9). 나머지는 모델 값이라 같다. 본 파일의 설명을 고치면 여기도 같이 고칠 것.",
+  "_comment0": "★11호기 사본 — 앱은 이 파일을 읽지 않는다. 11호기 제어PC 의 Config\\StrobeConfig.json 이 날아가거나 핫픽스(-Config)로 덮였을 때 이 파일을 그 이름으로 복사해 되돌린다. 저장소의 StrobeConfig.json 은 10호기 값이다.",
+  "_comment0a": "StrobeConfig.json 과 다른 값은 ComPort 하나다(10호기 COM7 → 11호기 COM9). 나머지는 모델 값이라 같다. 본 파일의 설명을 고치면 여기도 같이 고칠 것.",
   "_comment0b": "Devices 의 CAM_DW RunMode 는 2(Pulse)로 둔다. 헤드가 없는 동안 조명을 켜 보려면 잠시 1 로 바꿨다가 반드시 2 로 되돌릴 것(_comment7b).",
 
   "_comment1": "iCore iPulse LED 컨트롤러(모델 1P1S-100A). 한 포트에 2대가 sID 1(DWC)/2(GVC) 로 물려 있다.",

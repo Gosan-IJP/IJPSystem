@@ -13,21 +13,22 @@
 
   "_seq": "사용 순서 (랩뷰와 동일) — ① 연결 ② SV 목표압력 쓰기(주소 1) + RUN(주소 0 = 1) ③ PV 주기 폴링(주소 51)으로 감시 ④ 종료 시 STOP(주소 0 = 0).",
 
-  "_comment4": "★COM 포트는 호기마다 다르다 — 옮겨 적지 말고 반드시 확인할 것. USB 시리얼은 꽂는 순서로 번호가 정해진다. 아래 값은 11호기 실측(2026-09-07)이다. 보레이트·UnitId 는 장비 설정이라 잘 안 바뀌지만, 그것도 응답으로 확인하고 쓸 것. (옛 AppConfig=COM3, 9호기 랩뷰=COM6)",
-  "_comment4a": "★★11호기에서 COM6 은 'Intel(R) Active Management Technology - SOL' 이었다 — 메인보드가 만드는 가상 포트다. 포트가 열리므로 로그에 'DMD 연결됨 — COM6' 이 찍히고 바로 'Read 실패: timed out' 이 난다. 배선/레지스터를 의심하기 전에 장치 관리자에서 그 COM 이 무엇인지부터 볼 것.",
+  "_comment4": "★COM 포트와 UnitId 는 호기마다 다르다 — 옮겨 적지 말고 반드시 확인할 것. 아래 값은 <b>10호기 실측</b>(2026-09-11 SerialScan: COM8 · 115200 · UnitId 1). 11호기는 COM10 · UnitId 3 이라 MeniscusConfig_11호기.json 사본에 따로 둔다. 11호기 값을 10호기에 그대로 쓰면 'Could not find file COM10' 또는 'Read 실패: timed out' 이 난다(2026-09-11).",
+  "_comment4a": "★★두 호기 모두 COM6 은 'Intel(R) Active Management Technology - SOL' — 메인보드가 만드는 가상 포트다. 포트가 열리므로 로그에 'DMD 연결됨' 이 찍히고 바로 'Read 실패: timed out' 이 난다. 옛 기록의 '9호기 랩뷰=COM6' 은 틀렸다. 배선/레지스터를 의심하기 전에 장치 관리자에서 그 COM 이 무엇인지부터 볼 것.",
+  "_comment4c": "★'DMD 연결됨' 은 포트가 열렸다는 뜻뿐이다 — 장치가 대답한다는 증거가 아니다. 추측으로 포트·UnitId 를 바꿔 가며 재시작하지 말고 SerialScan 을 한 번 돌릴 것. DMD 는 주소 0 이 쓰기 전용이라 스캔 결과가 'Modbus 예외: 2' 로 나오는 것이 정상이다. 같은 USB 시리얼 중 UnitId 1·2 가 둘 다 대답하는 포트는 iCore 조명이다.",
   "_comment4b": "★포트 찾기: Tools\\SerialScan (self-contained, .NET 설치 불필요). 앱을 닫고 'SerialScan.exe --ports COM8,COM9,COM10'. 'Modbus 예외' 로 나와도 성공이다 — 장치는 있고 주소만 다르다는 뜻이다.",
   "_comment5": "VV 패널의 Meni/Pump 출력은 이 계통이 아니라 EtherCAT DO 코일(ComiEcatDigitalIo)이다. 여기를 꺼도 밸브 동작에는 영향이 없다.",
   "_comment6": "Parity 0=None 1=Odd 2=Even 3=Mark 4=Space · StopBits 0=None 1=One 2=Two 3=OnePointFive (StrobeConfig.json 과 같은 규약).",
   "_comment7": "남은 확인 — 잉크를 채운 뒤 PV 표시가 실제 압력계와 맞는지 대조할 것. 어긋나면 PressureOffset 을 먼저 의심한다(스케일은 랩뷰에서 확인된 값이다).",
 
-  "ComPort": "COM10",
+  "ComPort": "COM8",
   "BaudRate": 115200,
   "Parity": 0,
   "DataBits": 8,
   "StopBits": 1,
   "TimeoutMs": 1000,
 
-  "UnitId": 3,
+  "UnitId": 1,
 
   "PressureReadAddress": 51,
   "PressureSetAddress": 1,

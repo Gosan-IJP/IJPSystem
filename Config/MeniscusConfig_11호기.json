@@ -1,0 +1,37 @@
+{
+  "_comment0": "★11호기 사본 — 앱은 이 파일을 읽지 않는다. 11호기 제어PC 의 Config\\MeniscusConfig.json 이 날아가거나 덮였을 때 이 파일을 그 이름으로 복사해 되돌린다. 저장소의 MeniscusConfig.json 은 10호기 값이다.",
+  "_comment0a": "MeniscusConfig.json 과 다른 값은 ComPort(COM8 → COM10) · UnitId(1 → 3) 둘이다. 보레이트·레지스터 주소·스케일은 같다. 본 파일의 설명을 고치면 여기도 같이 고칠 것.",
+
+  "_comment1": "메니스커스 압력 컨트롤러(DMD) — Modbus RTU / RS-485(Non-Echo). 패턴 인쇄 화면의 압력 표시·설정과 VV 패널의 MPC AL 램프가 이 값을 쓴다.",
+  "_comment2": "★붙일지 말지는 여기가 아니라 AppConfig.json 의 DriverMode.Meniscus 가 정한다 (Virtual | Dmd). 이 파일은 '어떻게 붙을지'만 담는다.",
+
+  "_map1": "★레지스터 맵 — 랩뷰 'DMD Control and State.vi' 에서 확인(2026-09-08).",
+  "_map2": "읽기 (FC03/04, read-only)   50 = RUN/STOP 상태(1/0) · 51 = PV 현재압력 · 52 = SV 되읽기",
+  "_map3": "쓰기 (FC06, write-only)      0 = RUN/STOP 명령(1/0) · 1 = SV 목표압력",
+  "_map4": "★★쓰기 주소 0·1 은 write-only 다. 읽으면 Illegal Data Address 가 난다. 읽기로 훑는 스캐너에는 write-only 레지스터가 원리적으로 안 보인다.",
+
+  "_scale1": "★장비 레지스터는 0.1Pa 단위다. 클라이언트 바깥 규약이 kPa 이므로 PressureScale 은 0.1Pa→kPa 인 0.0001 이다.",
+
+  "_comment4": "★11호기 실측(2026-09-07 SerialScan): COM10 @ 115200 · UnitId 3. COM6 은 'Intel(R) Active Management Technology - SOL' 가상 포트라 DMD 가 아니다.",
+  "_comment5": "VV 패널의 Meni/Pump 출력은 이 계통이 아니라 EtherCAT DO 코일(ComiEcatDigitalIo)이다.",
+  "_comment6": "Parity 0=None 1=Odd 2=Even 3=Mark 4=Space · StopBits 0=None 1=One 2=Two 3=OnePointFive.",
+
+  "ComPort": "COM10",
+  "BaudRate": 115200,
+  "Parity": 0,
+  "DataBits": 8,
+  "StopBits": 1,
+  "TimeoutMs": 1000,
+
+  "UnitId": 3,
+
+  "PressureReadAddress": 51,
+  "PressureSetAddress": 1,
+  "ControlAddress": 0,
+
+  "RunStateAddress": 50,
+  "SetpointReadAddress": 52,
+
+  "PressureScale": 0.0001,
+  "PressureOffset": 0.0
+}
