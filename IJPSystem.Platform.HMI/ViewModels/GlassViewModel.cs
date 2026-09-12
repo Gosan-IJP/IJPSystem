@@ -339,12 +339,13 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand StopAutoAlignCommand   { get; }
         public ICommand MoveMark1Command       { get; }
         public ICommand MoveMark2Command       { get; }
+        public ICommand MoveReadyCommand       { get; }
         public ICommand SaveCurrentAsMark1Command { get; }
 
         // 정렬 버튼들은 조건이 바뀌면 <b>직접 흔들어 줘야</b> 다시 판정한다 — 여기 RelayCommand 는
         // CommandManager 를 쓰지 않아서 InvalidateRequerySuggested 로는 꿈쩍도 하지 않는다.
         // (그래서 정렬이 도는 동안 [Stop] 이 계속 꺼져 있었다 — 세울 수가 없었다)
-        private readonly RelayCommand _autoAlign, _stopAutoAlign, _moveMark1, _moveMark2, _teachMark1;
+        private readonly RelayCommand _autoAlign, _stopAutoAlign, _moveMark1, _moveMark2, _moveReady, _teachMark1;
 
         /// <summary>정렬이 시작·종료됐다 — 표시와 버튼을 함께 갱신한다. 둘을 갈라 놓으면
         /// 언젠가 한쪽만 부르는 자리가 생기고, 그 자리에서 [Stop] 이 안 켜진다.</summary>
@@ -365,6 +366,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             _stopAutoAlign?.RaiseCanExecuteChanged();
             _moveMark1?.RaiseCanExecuteChanged();
             _moveMark2?.RaiseCanExecuteChanged();
+            _moveReady?.RaiseCanExecuteChanged();
             _teachMark1?.RaiseCanExecuteChanged();
             _calibScale?.RaiseCanExecuteChanged();
             _calibT?.RaiseCanExecuteChanged();
@@ -577,6 +579,11 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                                 _ => AutoAlignEnabled && !IsAutoAligning && !IsBusy);
             MoveMark2Command = _moveMark2 = new RelayCommand(async _ => await MoveToMarkAsync(2),
                                                 _ => AutoAlignEnabled && !IsAutoAligning && !IsBusy);
+
+            // READY 는 정렬 설정(AutoAlignEnabled)을 보지 않는다 — 빠져나오는 길은 정렬을 안 쓰는
+            // 레시피에서도 있어야 한다. 정렬·이동이 도는 동안만 잠근다.
+            MoveReadyCommand = _moveReady = new RelayCommand(async _ => await MoveToReadyAsync(),
+                                                _ => !IsAutoAligning && !IsBusy);
 
             SaveCurrentAsMark1Command = _teachMark1 = new RelayCommand(_ => SaveCurrentAsMark1(),
                                                 _ => AutoAlignEnabled && !IsAutoAligning && !IsBusy);
@@ -848,6 +855,42 @@ namespace IJPSystem.Platform.HMI.ViewModels
             catch (Exception ex)
             {
                 AutoAlignStatus = $"마크{slot} 이동 실패 — {ex.Message}";
+                _mainVM.AddLog($"[ALIGN] {AutoAlignStatus}", LogLevel.Error);
+            }
+            finally
+            {
+                _alignCts?.Dispose();
+                _alignCts = null;
+                NotifyAligningChanged();
+            }
+        }
+
+        /// <summary>
+        /// READY 로 돌아간다 — Z 를 먼저 보내 선 것을 확인한 뒤 나머지 축을 움직인다
+        /// (<see cref="Services.MotionServiceAdapter.MoveToPointZFirstAsync"/>).
+        /// <para>마크 이동과 같은 <c>_alignCts</c> 를 쓴다 — [Stop] 으로 세울 수 있고, 도는 동안
+        /// 다른 정렬 버튼이 잠긴다. Z 를 기다리는 중에 세우면 나머지 축은 출발하지 않는다.</para>
+        /// </summary>
+        private async Task MoveToReadyAsync()
+        {
+            _alignCts = new CancellationTokenSource();
+            NotifyAligningChanged();
+            try
+            {
+                AutoAlignStatus = "READY 로 이동 — Z 먼저";
+                await new Services.MotionServiceAdapter(_mainVM)
+                    .MoveToPointZFirstAsync(Application.Sequences.PointNames.Ready, _alignCts.Token);
+
+                AutoAlignStatus = "READY 도착";
+                _mainVM.AddLog("[ALIGN] READY 이동 완료 (Z 먼저)", LogLevel.Info);
+            }
+            catch (OperationCanceledException)
+            {
+                AutoAlignStatus = "중지 — READY 이동";
+            }
+            catch (Exception ex)
+            {
+                AutoAlignStatus = $"READY 이동 실패 — {ex.Message}";
                 _mainVM.AddLog($"[ALIGN] {AutoAlignStatus}", LogLevel.Error);
             }
             finally

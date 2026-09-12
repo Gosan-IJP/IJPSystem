@@ -741,6 +741,10 @@
                                     <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
 
                                 <Button Grid.Column="0" Command="{Binding MoveMark1Command}"
                                         Content="Go to Mark1" Height="34"
@@ -756,6 +760,14 @@
                                         Background="#1E293B" Foreground="#CBD5E1"
                                         FontSize="11" FontWeight="Bold"
                                         ToolTip="지금 자리에서 피듀셜 간격만큼 -Y 로만 이동한 뒤, 마크1 과 견줘 정렬 여부를 알려 줍니다."/>
+
+                                <!-- 마크 자리에서 빠져나오는 길. 헤드가 글라스 가까이 있을 수 있어 Z 를 먼저 올린다. -->
+                                <Button Grid.Row="1" Grid.Column="2" Command="{Binding MoveReadyCommand}"
+                                        Content="Go to Ready" Height="34" Margin="0,8,0,0"
+                                        Style="{StaticResource MutedActionButtonStyle}"
+                                        Background="#1E293B" Foreground="#CBD5E1"
+                                        FontSize="11" FontWeight="Bold"
+                                        ToolTip="레시피의 READY 티칭 자리로 이동합니다. Z 가 먼저 이동을 마친 뒤 나머지 축이 움직입니다."/>
                             </Grid>
 
                             <!-- 조그로 마크를 시야 한가운데 맞춰 놓고 그 자리를 그대로 굳히는 자리.

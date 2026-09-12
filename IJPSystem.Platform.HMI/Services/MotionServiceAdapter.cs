@@ -142,8 +142,32 @@ namespace IJPSystem.Platform.HMI.Services
         private static bool IsZAxis(AxisViewModel ax)
             => string.Equals(ax.Info?.AxisNo, "Z", System.StringComparison.OrdinalIgnoreCase);
 
-        public async Task MoveToPointAsync(string pointName, CancellationToken ct,
+        /// <summary>Z 를 나머지 축과 어떤 순서로 움직이는가.</summary>
+        private enum ZOrder { Together, Last, First }
+
+        public Task MoveToPointAsync(string pointName, CancellationToken ct,
+                                     MotionProfileKind profile = MotionProfileKind.Move)
+            => MoveToPointCoreAsync(pointName, ct, profile,
+                                    MovesZLast(pointName) ? ZOrder.Last : ZOrder.Together);
+
+        /// <summary>
+        /// Z 를 <b>먼저</b> 포인트 높이로 보내고, 선 것을 확인한 뒤 나머지 축을 움직인다.
+        ///
+        /// <para>글라스 화면 [Go to Ready] 용 — 마크 자리에서는 헤드가 글라스 가까이 있을 수 있어,
+        /// 스테이지를 먼저 빼면 낮은 헤드 밑으로 글라스가 흐른다. 높이부터 되돌린다.</para>
+        ///
+        /// <para><see cref="MoveToPointAsync"/> 의 READY 는 바꾸지 않았다 — 자동 인쇄는 헤드 상승
+        /// (PRINT HEAD UP)과 READY 복귀를 동시에 돌리도록 짜여 있어, 거기에 순서를 넣으면 사이클만 는다.</para>
+        ///
+        /// <para>Z 가 InPosition 에 못 들면 나머지 축은 <b>움직이지 않고</b> 예외로 끝낸다 — 순서를
+        /// 지키려는 이동이라, Z 가 섰는지 모르는 채 뒤를 걸면 의미가 없다.</para>
+        /// </summary>
+        public Task MoveToPointZFirstAsync(string pointName, CancellationToken ct,
                                            MotionProfileKind profile = MotionProfileKind.Move)
+            => MoveToPointCoreAsync(pointName, ct, profile, ZOrder.First);
+
+        private async Task MoveToPointCoreAsync(string pointName, CancellationToken ct,
+                                                MotionProfileKind profile, ZOrder zOrder)
         {
             var usedAxes = GetUsedAxesForPoint(pointName);
 
@@ -209,18 +233,41 @@ namespace IJPSystem.Platform.HMI.Services
                 .Where(ax => usedAxes.ContainsKey(ax.Info.Name))
                 .ToList();
 
-            // Z 를 뒤로 미루는 포인트면 두 묶음으로 나눈다. 아니면 전부 한 묶음이라 예전 그대로다.
-            var zAxes  = MovesZLast(pointName) ? moving.Where(IsZAxis).ToList() : new List<AxisViewModel>();
+            // Z 를 따로 떼는 이동이면 두 묶음으로 나눈다. 아니면 전부 한 묶음이라 예전 그대로다.
+            var zAxes  = zOrder != ZOrder.Together ? moving.Where(IsZAxis).ToList() : new List<AxisViewModel>();
             var others = moving.Where(ax => !zAxes.Contains(ax)).ToList();
+
+            // Z 먼저를 부탁받았는데 포인트에 Z 가 없으면, 순서는 지켜진 셈이지만 사람이 기대한 "Z 상승"은
+            // 일어나지 않는다. 조용히 넘기면 헤드가 낮은 채 스테이지가 움직인 이유를 못 찾는다.
+            if (zOrder == ZOrder.First && zAxes.Count == 0)
+                _mainVM.AddLog(
+                    $"[MOTION] {pointName} — 이 포인트에 Z 가 사용축으로 없어 Z 는 움직이지 않습니다(레시피 티칭 확인).",
+                    LogLevel.Warning);
 
             // 3. 전체 완료 대기 (이곳에 브레이크를 걸어 전체 종료를 확인하세요)
             var sw = Stopwatch.StartNew();
+            var results = new List<(string Axis, double Target, double Actual, bool InPos)>();
+
+            if (zOrder == ZOrder.First && zAxes.Count > 0)
+            {
+                // Z 가 <b>선 뒤에</b> 나머지를 건다. MoveOneAsync 는 InPosition 까지 기다렸다 돌아온다.
+                results.AddRange(await Task.WhenAll(zAxes.Select(MoveOneAsync).ToList()));
+
+                var notInPos = results.FirstOrDefault(r => !r.InPos);
+                if (notInPos.Axis != null)
+                    throw new InvalidOperationException(
+                        $"{pointName} — Z 가 InPosition 에 들지 않아 나머지 축을 움직이지 않았습니다 " +
+                        $"(Z={notInPos.Actual:F3}, 목표 {notInPos.Target:F3})");
+
+                _mainVM.AddLog(
+                    $"[MOTION] {pointName} — Z 정지 확인, 이어서 나머지 축 이동(간섭 회피)", LogLevel.Info);
+            }
 
             // Select 는 지연 실행이라 ToList 로 <b>여기서</b> 시작시킨다 — 안 그러면 WhenAll 이
             // 열거하는 시점에야 돌기 시작해, 나누는 의미는 있어도 앞 묶음이 늦게 출발한다.
-            var results = (await Task.WhenAll(others.Select(MoveOneAsync).ToList())).ToList();
+            results.AddRange(await Task.WhenAll(others.Select(MoveOneAsync).ToList()));
 
-            if (zAxes.Count > 0)
+            if (zOrder == ZOrder.Last && zAxes.Count > 0)
             {
                 // 앞 축이 <b>다 선 뒤에</b> Z 를 건다. MoveOneAsync 는 InPosition 까지 기다렸다
                 // 돌아오므로, 여기서 이어 붙이면 실제로 순서가 지켜진다(HomeAllAsync 의 Y→T 와 같은 근거).
