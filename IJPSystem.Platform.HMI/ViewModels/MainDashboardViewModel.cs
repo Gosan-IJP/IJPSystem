@@ -890,7 +890,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         {
                             await SequenceStepLogger.RunAsync(
                                 step.Number, step.NameKey, step.Action,
-                                "AutoPrint", _stepCts.Token, _logAction);
+                                "AutoPrint", _stepCts.Token, _logAction!);   // 생성자가 null 아닌 값을 받는다 — 위의 ?.Invoke 때문에 컴파일러만 null 로 본다
                             sw.Stop();
                             step.Elapsed = $"{sw.Elapsed.TotalSeconds:F1}s";
                             step.Status  = StepStatus.Done;

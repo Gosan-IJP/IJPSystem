@@ -11,6 +11,10 @@
 	  <DesignerDisableShadowCopy>true</DesignerDisableShadowCopy>
     <!-- Comizoa WDM 드라이버 접근용 관리자 권한 요청 -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- NU1701: LiveCharts 가 끌고 오는 SkiaSharp.Views.WPF · OpenTK · OpenTK.GLWpfControl 이
+         .NET Framework 용으로만 올라와 있어 net8 에서 "호환 안 될 수 있음" 경고가 뜬다.
+         차트는 제어 PC 에서 실제로 돌고 있어 끈다. 패키지 버전을 바꿀 때만 다시 볼 것. -->
+    <NoWarn>$(NoWarn);NU1701</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

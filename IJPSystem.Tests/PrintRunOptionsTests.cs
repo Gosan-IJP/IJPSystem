@@ -97,7 +97,7 @@ namespace IJPSystem.Tests
 
         /// <summary>한 스와스의 명령은 시작 → 이미지 → 끝 순서로 한 묶음이어야 한다.</summary>
         [Fact]
-        public void 스와스_한_묶음의_명령_순서가_맞다()
+        public async Task 스와스_한_묶음의_명령_순서가_맞다()
         {
             var job = new RecordingJob();
             var steps = PrintPassSequence.Embedded(null!, null!,
@@ -107,7 +107,7 @@ namespace IJPSystem.Tests
             foreach (var s in steps.Where(s => s.Name is "Step_Print_StartJob"
                                                       or "Step_Print_StartSwath"
                                                       or "Step_Print_EndJob"))
-                s.Action(default).GetAwaiter().GetResult();
+                await s.Action(default);
 
             Assert.Equal(new[] { "StartJob", "StartSwath(FWD)", "SendImage", "EndSwath", "EndJob" },
                          job.Calls);
@@ -116,14 +116,14 @@ namespace IJPSystem.Tests
         // ── 방향 ─────────────────────────────────────────────────────────
 
         [Fact]
-        public void 양방향이면_패스마다_방향이_바뀐다()
+        public async Task 양방향이면_패스마다_방향이_바뀐다()
         {
             var job = new RecordingJob();
             var steps = PrintPassSequence.Embedded(null!, null!,
                 new PrintRunOptions { SwathCount = 3, Bidirectional = true, Job = job, BufferIds = Buffers }, 1);
 
             foreach (var s in steps.Where(s => s.Name == "Step_Print_StartSwath"))
-                s.Action(default).GetAwaiter().GetResult();
+                await s.Action(default);
 
             Assert.Equal(new[] { "StartSwath(FWD)", "SendImage", "EndSwath",
                                  "StartSwath(REV)", "SendImage", "EndSwath",
@@ -131,14 +131,14 @@ namespace IJPSystem.Tests
         }
 
         [Fact]
-        public void 단방향이면_늘_정방향이고_복귀_단계가_생긴다()
+        public async Task 단방향이면_늘_정방향이고_복귀_단계가_생긴다()
         {
             var job = new RecordingJob();
             var opts = new PrintRunOptions { SwathCount = 2, Bidirectional = false, Job = job, BufferIds = Buffers };
             var steps = PrintPassSequence.Embedded(null!, null!, opts, 1);
 
             foreach (var s in steps.Where(s => s.Name == "Step_Print_StartSwath"))
-                s.Action(default).GetAwaiter().GetResult();
+                await s.Action(default);
 
             Assert.Equal(2, job.Calls.Count(c => c == "StartSwath(FWD)"));
             Assert.DoesNotContain("StartSwath(REV)", job.Calls);

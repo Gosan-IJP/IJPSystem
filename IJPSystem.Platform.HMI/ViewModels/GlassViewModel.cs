@@ -981,12 +981,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // ※ 네비게이션으로 나갈 때는 MainViewModel.CurrentView 가 Dispose 를 불러 타이머를 세운다.
         //   Deactivate 는 그 경로를 타지 않는 경우(창 닫힘 등)를 위한 안전망이다 — 화면에서 내려간
         //   뒤에도 라이브가 돌면 보이지도 않는 프레임을 초당 5장씩 찍는다.
-        private bool _isViewActive = true;   // 화면 없이 쓰는 경로(시퀀스·테스트)는 항상 활성으로 본다
 
         /// <summary>화면에 올라왔다 — 라이브를 켠다. 정렬이 도는 중이면 그쪽이 프레임의 주인이라 두고 본다.</summary>
         public void Activate()
         {
-            _isViewActive = true;
             if (IsLiveMode || IsAutoAligning) return;
             StartLive();
         }
@@ -994,7 +992,6 @@ namespace IJPSystem.Platform.HMI.ViewModels
         /// <summary>화면을 벗어났다 — 라이브를 끈다(정렬은 진행 중이면 그대로 둔다).</summary>
         public void Deactivate()
         {
-            _isViewActive = false;
             if (IsLiveMode) StopLive();
         }
 

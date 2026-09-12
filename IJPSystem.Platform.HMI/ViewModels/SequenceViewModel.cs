@@ -200,7 +200,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // ── 실행 엔진 ─────────────────────────────────────────────────────────
         private async Task RunSequenceAsync()
         {
-            if (SelectedSequence == null) return;
+            if (SelectedSequence is not { } seq) return;   // 끝 로그도 시작한 시퀀스 이름으로 남긴다
 
             // 시퀀스 동작은 활성 레시피의 티칭 포인트를 참조하므로 적용된 레시피가 없으면 거부
             if (string.IsNullOrEmpty(_mainVM.RecipeVM.ActiveRecipeName))
@@ -308,14 +308,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 State = SequenceState.Aborted;
                 AddExecLog("⏹ 시퀀스 중단됨");
-                _mainVM.AddLog($"[SEQ] {SelectedSequence.Name} 중단", LogLevel.Warning);
+                _mainVM.AddLog($"[SEQ] {seq.Name} 중단", LogLevel.Warning);
             }
             else
             {
                 State    = SequenceState.Completed;
                 Progress = 100;
-                AddExecLog($"✅ [{SelectedSequence.Name}] 완료");
-                _mainVM.AddLog($"[SEQ] {SelectedSequence.Name} 완료", LogLevel.Success);
+                AddExecLog($"✅ [{seq.Name}] 완료");
+                _mainVM.AddLog($"[SEQ] {seq.Name} 완료", LogLevel.Success);
             }
 
             }

@@ -230,7 +230,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             var outOfRange = Domain.Models.Motion.TeachLimitCheck.Find(
                 TeachingPoints.Select(p => (p.PointName,
                                             (IReadOnlyDictionary<string, double>)p.Positions,
-                                            (IReadOnlyDictionary<string, bool>)p.AxisUsed)),
+                                            (IReadOnlyDictionary<string, bool>?)p.AxisUsed)),
                 AxisList.Select(a => a.Info));
             if (outOfRange.Count > 0)
             {
