@@ -3,6 +3,7 @@
   "_comment_teachlimit": "TeachLimit = { Min, Max } 티칭 좌표로 '저장'할 수 있는 값의 범위(화면에 보이는 좌표 그대로, InvertDirection 적용 후). 한쪽만 넣어도 되고 넣지 않은 쪽은 제한 없음. ★이동은 막지 않는다 — 조그·수동이동은 어디든 갈 수 있어야 정비·복구가 된다. 값이 공정 좌표로 굳어지는 순간(레시피 저장 / 위치 티칭 저장)에만 막는다. 범위 밖이면 저장이 거부되고 어느 포인트·축인지 창에 뜬다. 사용 안 함으로 꺼 둔 축은 검사하지 않는다.",
   "_comment_absolute":"Home.Absolute = true → 절대 엔코더 축. 원점복귀가 '홈 서치' 대신 '0 으로 절대이동'이 된다. 절대 엔코더는 전원을 넣은 순간 위치를 알아 찾아갈 원점이 없고, 홈 서치를 시키면 원점센서를 찾아 달리다 리밋을 때린다. 성공하더라도 그 뒤의 위치 0 재정의가 절대 기준을 홈 센서 자리로 덮어써서 초기화할 때마다 좌표계가 옮겨간다. Absolute 축은 위치를 손대지 않는다. 이동 속도는 아래 Velocity/Acceleration/Deceleration 을 쓰고 Direction/SpecVelocity 는 쓰이지 않는다. (T축 = 앱솔루트 DD 모터)",
   "_comment_home":"Home.Direction = 원점복귀 탐색 방향(코미조아 유틸 Home Return 탭의 Dir 버튼과 동일). -1=(-)방향, +1=(+)방향. 생략하면 (-). 반대로 넣으면 원점센서 반대편으로 달려 리밋을 때리므로 축마다 실물로 확인할 것. InvertDirection 의 영향은 받지 않는다(원점복귀는 드라이브가 수행).",
+  "_comment_homemode":"Home.Mode = 원점복귀 모드 번호(코미조아 유틸리티의 Home Mode 값 그대로). 적힌 축만 연결할 때 보드에 쓰고, 생략하면 보드 값을 그대로 둔다. 2026-09-11 보드에 들어 있던 값을 옮겼다: T=117, 나머지 114. ★틀린 모드는 원점센서를 지나쳐 리밋까지 달린다 — 바꿀 때는 유틸리티에서 먼저 확인한 값만 넣을 것. T 는 Absolute 라 앱의 원점복귀에서는 모드를 쓰지 않지만(0 으로 이동), 유틸리티와 값을 맞춰 둔다.",
   "MotionAxisList": [
     {
       "AxisNo": "X",
@@ -11,6 +12,7 @@
       "HwAxis": 4,
       "EncoderPulsePerUnit": 2000,
       "Home": {
+        "Mode": 114,
         "Velocity": 15,
         "Acceleration": 150,
         "Deceleration": 150,
@@ -25,6 +27,7 @@
       "HwAxis": 1,
       "EncoderPulsePerUnit": 1000,
       "Home": {
+        "Mode": 114,
         "Velocity": 10,
         "Acceleration": 100,
         "Deceleration": 100,
@@ -39,6 +42,7 @@
       "HwAxis": 5,
       "EncoderPulsePerUnit": 2000,
       "Home": {
+        "Mode": 114,
         "Velocity": 10,
         "Acceleration": 100,
         "Deceleration": 100,
@@ -57,6 +61,7 @@
       "TeachLimit": { "Min": -10, "Max": 10 },
       "Home": {
         "Absolute": true,
+        "Mode": 117,
         "Velocity": 10,
         "Acceleration": 100,
         "Deceleration": 100,
@@ -72,6 +77,7 @@
       "_comment": "실측 2026-08-03: 1rev = 5mm, 16000 pulse/rev → 16000/5 = 3200 pulse/mm",
       "EncoderPulsePerUnit": 3200,
       "Home": {
+        "Mode": 114,
         "Velocity": 10,
         "Acceleration": 100,
         "Deceleration": 100,
@@ -87,6 +93,7 @@
       "_comment": "실측 2026-08-03: 1rev = 1mm, 16000 pulse/rev → 16000/1 = 16000 pulse/mm",
       "EncoderPulsePerUnit": 16000,
       "Home": {
+        "Mode": 114,
         "Velocity": 10,
         "Acceleration": 100,
         "Deceleration": 100,

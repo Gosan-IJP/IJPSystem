@@ -406,6 +406,14 @@ namespace IJPSystem.Drivers.Motion.Comizoa
             _homeDir[a] = dir >= 0 ? +1 : -1;
         }
 
+        public void SetHomeMode(AxisId a, int mode)
+        {
+            Need();
+            // 방향과 달리 드라이브(보드) 설정이다 — 유틸리티의 Home Mode 칸을 앱이 대신 채우는 것.
+            int rc = ecmHomeCfg_SetMode(NetID, (int)a, mode, out int err);
+            CheckCmd(rc, err, "SetHomeMode");
+        }
+
         public void SetHomeSpeedPattern(AxisId a, double vel, double acc, double dec, double specVel)
         {
             Need();

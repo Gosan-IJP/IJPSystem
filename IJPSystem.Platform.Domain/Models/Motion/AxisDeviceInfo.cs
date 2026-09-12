@@ -83,7 +83,7 @@ namespace IJPSystem.Platform.Domain.Models.Motion
 
         // 원점복귀 속도 패턴. null이면 드라이브 기본값 사용(현행 동작).
         // 설정하면 Connect 시 드라이브에 다운로드(ecmHomeCfg_SetSpeedPatt) → 콜드부팅 후 첫 실행에도 정상.
-        // LabVIEW Set Home Parameters.vi 와 동일하게 '속도 패턴만' 설정(모드/방향/오프셋은 미변경 → 안전).
+        // 속도 패턴은 늘 넣고, 모드(Mode)·방향(Direction)은 적힌 축만 넣는다. 오프셋은 넣지 않는다.
         public HomeConfig? Home { get; set; }
 
         public MotionDetailConfig MotionConfig { get; set; } = new();
@@ -125,6 +125,13 @@ namespace IJPSystem.Platform.Domain.Models.Motion
         //   ※ InvertDirection(지령 미러링)의 영향을 받지 않는다 — 원점복귀는 드라이브가 수행하므로
         //      여기 값이 드라이브 기준 물리 방향 그대로 전달된다.
         public int? Direction { get; set; }
+
+        // 원점복귀 모드 번호(코미조아 유틸리티의 Home Mode 값 그대로, 예: 114). Connect 때 ecmHomeCfg_SetMode 로 쓴다.
+        // null 이면 쓰지 않는다 = 보드에 들어 있는 값을 그대로 둔다(종전 동작).
+        //   ※ 저장소에 기록해 두려고 넣었다 — 그전에는 유틸리티로 보드에만 넣어 두어, 보드를 바꾸거나
+        //      초기화하면 무슨 값이었는지 알 길이 없었다(2026-09-11: T=117, 나머지 114).
+        //   ※ 틀린 모드는 원점센서를 지나쳐 리밋까지 달린다. 보드에서 읽은 값을 그대로 옮길 것.
+        public int? Mode { get; set; }
     }
 
     // 3. 축별 상세 구동 설정 (계층 구조의 핵심)

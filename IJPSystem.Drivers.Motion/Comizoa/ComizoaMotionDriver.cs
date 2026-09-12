@@ -95,10 +95,15 @@ namespace IJPSystem.Drivers.Motion.Comizoa
                         }), c.AxisNo, "이동 속도");
 
                     // 3) 원점복귀 속도 패턴 — config 에 있을 때만 다운로드(콜드부팅 Y 고속 주행 해결).
-                    //    LabVIEW Set Home Parameters.vi 와 동일하게 '속도 패턴만' 설정(모드/방향/오프셋 미변경 → 안전).
+                    //    LabVIEW Set Home Parameters.vi 와 동일하게 속도 패턴은 늘 넣는다. 모드는 아래 5) — 적힌 축만.
                     //    없으면 미설정(현행 = 드라이브 기본값 유지).
                     if (c.Home is Platform.Domain.Models.Motion.HomeConfig h)
                     {
+                        // 5) 원점복귀 모드 — config 에 <b>적힌 축만</b> 쓴다. 없으면 보드 값을 그대로 둔다.
+                        //    속도보다 먼저 넣는다(SetHomeParameters 의 모드 → 오프셋 → 속도 순서를 따름).
+                        if (h.Mode is int hm)
+                            TrySetup(() => comi.SetHomeMode(ax, hm), c.AxisNo, $"원점 모드({hm})");
+
                         TrySetup(() => comi.SetHomeSpeedPattern(ax, h.Velocity, h.Acceleration, h.Deceleration, h.SpecVelocity),
                             c.AxisNo, $"원점 속도패턴(vel={h.Velocity}, acc={h.Acceleration}, dec={h.Deceleration}, spec={h.SpecVelocity})");
 
