@@ -80,6 +80,12 @@ namespace IJPSystem.Platform.HMI.Print
             CanvasRuler.PixelsX = _pxW;
             CanvasRuler.PixelsY = _pxH;
 
+            // 눈금을 켠 채로 연다 — 이 창에서 그리는 것은 결국 "어느 픽셀을 쏘는가" 이고,
+            // 격자 없이 그어 두면 나중에 눈금을 켜는 순간 선이 칸과 어긋나 있는 것을 보게 된다.
+            // ※ XAML 의 IsChecked="True" 로 켜면 안 된다 — 파싱 도중 Checked 가 나는데
+            //   그때는 CanvasRuler 가 아직 없어 핸들러가 그냥 돌아가고 격자가 안 보인다.
+            RulerToggle.IsChecked = true;
+
             UpdateStatus();
             UpdateLineWidthMm();
             UpdateBoundaryMm();
@@ -126,10 +132,24 @@ namespace IJPSystem.Platform.HMI.Print
         private double CellW => DrawCanvas.Width  / Math.Max(1, _pxW);
         private double CellH => DrawCanvas.Height / Math.Max(1, _pxH);
 
-        /// <summary>도형 꼭짓점을 픽셀 경계로 내린다. 픽셀 편집이 아니면 그대로 둔다.</summary>
-        private Point SnapToCell(Point p) => PixelEdit
-            ? new Point(Math.Floor(p.X / CellW) * CellW, Math.Floor(p.Y / CellH) * CellH)
-            : p;
+        /// <summary>
+        /// 도형 꼭짓점을 <b>칸 한가운데</b>로 맞춘다. 픽셀 편집이 아니면 그대로 둔다.
+        ///
+        /// <para>예전에는 칸의 왼쪽 위 <b>모서리</b>로 내렸다. 그러면 굵기 1짜리 선이 경계에 걸터앉아
+        /// 위아래 두 칸에 반씩 걸쳐 보인다 — 눈금에 맞춰 그었는데 선이 칸 사이에 그어진 것처럼 보였다.
+        /// 찍히는 픽셀은 점이 속한 칸이라 가운데로 맞춰도 같고, 화면의 선만 그 칸과 겹쳐진다.</para>
+        ///
+        /// <para>칸 번호를 이미지 범위로 자른다 — 오른쪽·아래 끝을 찍으면 모서리 기준일 때는 캔버스
+        /// 경계에 걸쳐 있던 점이, 가운데로 옮기면 캔버스 밖으로 반 칸 나가기 때문이다.</para>
+        /// </summary>
+        private Point SnapToCell(Point p)
+        {
+            if (!PixelEdit) return p;
+
+            double cx = Math.Clamp(Math.Floor(p.X / CellW), 0, Math.Max(0, _pxW - 1));
+            double cy = Math.Clamp(Math.Floor(p.Y / CellH), 0, Math.Max(0, _pxH - 1));
+            return new Point((cx + 0.5) * CellW, (cy + 0.5) * CellH);
+        }
 
         /// <summary>
         /// Line Width [이미지 px] 를 화면 캔버스 단위로 바꾼 값.
