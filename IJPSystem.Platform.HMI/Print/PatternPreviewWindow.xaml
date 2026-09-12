@@ -3,27 +3,94 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:print="clr-namespace:IJPSystem.Platform.HMI.Print"
         Title="패턴 미리보기" Height="760" Width="1180"
-        WindowStartupLocation="CenterOwner" Background="#F3F4F6">
+        WindowStartupLocation="CenterOwner"
+        Background="#0B0F1A" FontFamily="Segoe UI">
+    <!-- 색은 나머지 화면과 같은 팔레트다(2026-09-12). 이 창만 밝은 회색이라, 어두운 인쇄 화면에서
+         띄우면 다른 프로그램이 뜬 것처럼 보였다 — DXF 변환 창을 옮긴 것과 같은 이유다.
+         바탕 #0B0F1A · 카드 #111827 · 선 #334155 · 글자 #E2E8F0 / 흐린 글자 #94A3B8.
 
+         ※ 발사 지도(PatternPreview) 자체는 원래부터 이 팔레트였다(바탕 #0D1117 · 글자 #94A3B8) —
+           창만 밝아서 그림이 창에 얹힌 남의 화면처럼 보였다. 지도 쪽은 손대지 않는다. -->
     <Window.Resources>
+        <!-- 창 안의 스크롤바도 앱 공용 모양을 쓴다(App.xaml 의 Styles.xaml). -->
+        <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
+
         <Style x:Key="Lbl" TargetType="TextBlock">
-            <Setter Property="Foreground"          Value="#374151"/>
+            <Setter Property="Foreground"          Value="#94A3B8"/>
             <Setter Property="FontSize"            Value="12"/>
             <Setter Property="VerticalAlignment"   Value="Center"/>
             <Setter Property="Margin"              Value="0,0,8,0"/>
         </Style>
+
+        <!-- 카드 제목 — 다른 화면의 섹션 제목과 같은 파랑 -->
+        <Style x:Key="CardTitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#3B82F6"/>
+            <Setter Property="FontSize"   Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin"     Value="0,0,0,8"/>
+        </Style>
+
+        <!-- 카드 -->
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background"      Value="#111827"/>
+            <Setter Property="BorderBrush"     Value="#334155"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius"    Value="6"/>
+            <Setter Property="Padding"         Value="10"/>
+        </Style>
+
+        <!-- 입력칸 — 기본 TextBox 는 흰 바탕에 검은 글자라 어두운 창에서 겉돈다 -->
         <Style x:Key="Num" TargetType="TextBox">
             <Setter Property="Height"              Value="26"/>
             <Setter Property="Margin"              Value="0,0,0,8"/>
             <Setter Property="TextAlignment"       Value="Right"/>
             <Setter Property="FontFamily"          Value="Consolas"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Background"          Value="#0B0F1A"/>
+            <Setter Property="Foreground"          Value="#E2E8F0"/>
+            <Setter Property="BorderBrush"         Value="#334155"/>
+            <Setter Property="BorderThickness"     Value="1"/>
+            <Setter Property="CaretBrush"          Value="#E2E8F0"/>
+            <Setter Property="SelectionBrush"      Value="#1E3A5F"/>
+            <Setter Property="Padding"             Value="6,0"/>
         </Style>
+
+        <!-- 목록 — 앱 공용 다크 콤보박스에서 크기만 이 패널에 맞춘다 -->
+        <Style x:Key="Pick" TargetType="ComboBox" BasedOn="{StaticResource ModernComboBoxStyle}">
+            <Setter Property="Width"               Value="Auto"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Height"              Value="28"/>
+            <Setter Property="FontSize"            Value="11"/>
+            <Setter Property="FontWeight"          Value="Normal"/>
+            <Setter Property="Margin"              Value="0,0,0,4"/>
+        </Style>
+
         <Style x:Key="Act" TargetType="Button">
-            <Setter Property="Height"     Value="34"/>
-            <Setter Property="Margin"     Value="0,4,0,0"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Cursor"     Value="Hand"/>
+            <Setter Property="Height"          Value="34"/>
+            <Setter Property="Margin"          Value="0,4,0,0"/>
+            <Setter Property="FontWeight"      Value="Bold"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Foreground"      Value="White"/>
+            <Setter Property="Background"      Value="#1E3A5F"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="10,0"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#2A4F7F"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#1E293B"/>
+                                <Setter Property="Foreground" Value="#64748B"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
@@ -39,11 +106,10 @@
         </Grid.RowDefinitions>
 
         <!-- ══ 미리보기 ══════════════════════════════════════════════════ -->
-        <Border Grid.Row="0" Grid.Column="0" Background="White"
-                BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6" Padding="8">
+        <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource Card}" Padding="8">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="발사 지도  (가로 = 노즐, 세로 = 스캔 진행, 밝을수록 큰 방울)"
-                           Foreground="#374151" FontSize="12" Margin="2,0,0,6"/>
+                           Foreground="#94A3B8" FontSize="12" Margin="2,0,0,6"/>
                 <print:PatternPreview x:Name="Preview"/>
             </DockPanel>
         </Border>
@@ -53,24 +119,22 @@
             <StackPanel>
 
                 <!-- 원본 -->
-                <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1"
-                        CornerRadius="6" Padding="10" Margin="0,0,0,10">
+                <Border Style="{StaticResource Card}" Margin="0,0,0,10">
                     <StackPanel>
-                        <TextBlock Text="원본 이미지" FontWeight="Bold" Foreground="#111827" Margin="0,0,0,8"/>
-                        <TextBlock x:Name="SourceText" Text="(없음)" Foreground="#6B7280" FontSize="11"
+                        <TextBlock Style="{StaticResource CardTitle}" Text="원본 이미지"/>
+                        <TextBlock x:Name="SourceText" Text="(없음)" Foreground="#94A3B8" FontSize="11"
                                    FontFamily="Consolas" TextTrimming="CharacterEllipsis"/>
                         <Button Style="{StaticResource Act}" Content="이미지 열기" Click="OpenImage_Click"/>
                     </StackPanel>
                 </Border>
 
                 <!-- 노즐 배열 -->
-                <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1"
-                        CornerRadius="6" Padding="10" Margin="0,0,0,10">
+                <Border Style="{StaticResource Card}" Margin="0,0,0,10">
                     <StackPanel>
-                        <TextBlock Text="노즐 배열" FontWeight="Bold" Foreground="#111827" Margin="0,0,0,2"/>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="노즐 배열" Margin="0,0,0,2"/>
                         <!-- 이 값들이 미확인이라 화면에서 바꿀 수 있게 둔다. 실장 스핏 한 줄로
                              확정되면 장비 설정(MachineData.db)으로 옮긴다. -->
-                        <TextBlock Text="※ 실물 확인 전 가정값입니다" Foreground="#B45309" FontSize="10" Margin="0,0,0,8"/>
+                        <TextBlock Text="※ 실물 확인 전 가정값입니다" Foreground="#FBBF24" FontSize="10" Margin="0,0,0,8"/>
 
                         <TextBlock Style="{StaticResource Lbl}" Text="열 수"/>
                         <TextBox  x:Name="RowsBox"        Style="{StaticResource Num}" Text="3"/>
@@ -85,7 +149,7 @@
                         <TextBox  x:Name="RowOffsetBox"   Style="{StaticResource Num}" Text="84.7"/>
 
                         <TextBlock Style="{StaticResource Lbl}" Text="번호 규약"/>
-                        <ComboBox x:Name="OrderBox" Height="26" SelectedIndex="0" Margin="0,0,0,4">
+                        <ComboBox x:Name="OrderBox" Style="{StaticResource Pick}" SelectedIndex="0">
                             <ComboBoxItem Content="번갈아 (번호 1 = X 한 칸)"/>
                             <ComboBoxItem Content="한 열씩 (열을 끝까지)"/>
                         </ComboBox>
@@ -93,10 +157,9 @@
                 </Border>
 
                 <!-- RIP -->
-                <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1"
-                        CornerRadius="6" Padding="10" Margin="0,0,0,10">
+                <Border Style="{StaticResource Card}" Margin="0,0,0,10">
                     <StackPanel>
-                        <TextBlock Text="RIP" FontWeight="Bold" Foreground="#111827" Margin="0,0,0,8"/>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="RIP"/>
 
                         <TextBlock Style="{StaticResource Lbl}" Text="방울 단계"/>
                         <TextBox x:Name="LevelsBox"   Style="{StaticResource Num}" Text="2"/>
@@ -108,19 +171,19 @@
                         <TextBox x:Name="UmPerPxBox"  Style="{StaticResource Num}" Text="84.7"/>
 
                         <CheckBox x:Name="BlendBox" Content="헤드 이음새 섞기" IsChecked="True"
-                                  Foreground="#374151" Margin="0,2,0,0"/>
+                                  Foreground="#E2E8F0" Margin="0,2,0,0"/>
                     </StackPanel>
                 </Border>
 
                 <Button Style="{StaticResource Act}" Content="패턴 만들기" Click="Build_Click"
-                        Background="#1D4ED8" Foreground="White" Height="40"/>
+                        Height="40"/>
             </StackPanel>
         </ScrollViewer>
 
         <!-- ══ 결과 요약 ═════════════════════════════════════════════════ -->
         <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,10,0,0"
-                Background="White" BorderBrush="#D1D5DB" BorderThickness="1" CornerRadius="6" Padding="10,8">
-            <TextBlock x:Name="SummaryText" Foreground="#374151" FontSize="12"
+                Style="{StaticResource Card}" Padding="10,8">
+            <TextBlock x:Name="SummaryText" Foreground="#CBD5E1" FontSize="12"
                        FontFamily="Consolas" TextWrapping="Wrap"
                        Text="파라미터를 확인하고 [패턴 만들기]를 누르세요."/>
         </Border>
