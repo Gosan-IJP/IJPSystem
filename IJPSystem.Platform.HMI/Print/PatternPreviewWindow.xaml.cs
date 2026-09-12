@@ -75,7 +75,17 @@ namespace IJPSystem.Platform.HMI.Print
             if (dlg.ShowDialog() == true) LoadImage(dlg.FileName);
         }
 
-        /// <summary>이미지를 8비트 회색 배열로. 값이 클수록 잉크가 많이 나가야 하는 자리다.</summary>
+        /// <summary>
+        /// 이미지를 8비트 회색 배열로. RIP 이 받는 배열은 <b>값이 클수록 잉크가 많은</b> 자리이므로,
+        /// 읽으면서 밝기를 뒤집는다 — 도면·패턴 BMP 는 <b>흰 바탕에 검은 잉크</b>다.
+        ///
+        /// <para>뒤집지 않던 동안에는 바탕이 잉크로, 그림이 빈 곳으로 들어와 <b>흑백이 반대인 지도</b>가
+        /// 나왔다(2026-09-12). 인쇄 경로(<c>PrintDataSet.ReadPatternBmp</c>)와 DXF 변환
+        /// (<c>DxfRasterizer.LoadGray</c>)은 처음부터 검정을 잉크로 읽고 있었다 — 이 창만 반대였다.</para>
+        ///
+        /// <para>※ 변환 결과를 그대로 받아 여는 생성자는 이 길을 타지 않는다. 그쪽은 이미 만들어진
+        /// 패턴이라 손댈 것이 없다.</para>
+        /// </summary>
         private void LoadImage(string path)
         {
             try
@@ -95,7 +105,7 @@ namespace IJPSystem.Platform.HMI.Print
                 var gray = new byte[h, w];
                 for (int y = 0; y < h; y++)
                     for (int x = 0; x < w; x++)
-                        gray[y, x] = px[y * w + x];
+                        gray[y, x] = (byte)(255 - px[y * w + x]);   // 검정 = 잉크
 
                 _gray = gray;
                 _imagePath = path;
