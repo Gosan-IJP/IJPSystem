@@ -195,6 +195,23 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private bool _meniscusErrLogged;
         private const double PaPerKpa = 1000.0;
 
+        // ── 메니스커스 압력 추이 로그 ──
+        // 토출 불량은 압력이 <b>서서히</b> 틀어진 것이 원인인 경우가 많은데, 로그에는 설정·RUN·오류 같은
+        // 사건만 남아 시간에 따른 흐름을 볼 수 없었다(2026-09-13). 폴링(200ms)을 다 적으면 하루 43만 줄이라,
+        // 평소에는 1분에 한 줄, 크게 움직이거나 RUN 이 바뀌면 바로 한 줄 적는다. 화면에는 띄우지 않는다.
+        private DateTime _trendLoggedAt = DateTime.MinValue;
+        private double   _trendLoggedPa = double.NaN;
+        private bool?    _trendLoggedRun;
+
+        /// <summary>평소 추이 간격.</summary>
+        private static readonly TimeSpan TrendInterval = TimeSpan.FromMinutes(1);
+
+        /// <summary>이만큼 움직이면 간격을 기다리지 않고 적는다 [Pa]. 노이즈로 줄이 쏟아지면 키울 것.</summary>
+        private const double TrendJumpPa = 20.0;
+
+        /// <summary>급변 기록의 최소 간격 — 흔들리는 신호가 폴링마다 줄을 만들지 않게.</summary>
+        private static readonly TimeSpan TrendJumpMinGap = TimeSpan.FromSeconds(5);
+
         /// <summary>VV Control 패널(Final VV/Switching Pressure/Pump + 상태 LED) 로직.</summary>
         public IJPSystem.Platform.HMI.Print.VvControlViewModel Vv { get; }
 
@@ -1079,6 +1096,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 double pa = st.Pressure * PaPerKpa;
                 bool running = st.Running;
+                LogMeniscusTrend(pa, st.Value * PaPerKpa, running);
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 {
                     MeniscusCurrent = pa;
@@ -1087,6 +1105,30 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     IsMeniscusOn = running;
                 });
             }
+        }
+
+        /// <summary>
+        /// 압력 추이를 한 줄 남긴다 — 1분마다, 또는 <see cref="TrendJumpPa"/> 이상 움직였을 때, 또는 RUN 이 바뀌었을 때.
+        /// 폴링 스레드에서 불린다(파일·DB 기록뿐이라 화면 스레드를 거치지 않는다).
+        /// </summary>
+        /// <param name="svPa">설정값 — 목표압력을 넣을 때 장비가 되돌려 준 값이다(폴링마다 다시 읽지는 않는다).</param>
+        private void LogMeniscusTrend(double pvPa, double svPa, bool running)
+        {
+            var now = DateTime.Now;
+            bool runChanged = _trendLoggedRun != running;
+            bool jumped = !double.IsNaN(_trendLoggedPa)
+                          && Math.Abs(pvPa - _trendLoggedPa) >= TrendJumpPa
+                          && now - _trendLoggedAt >= TrendJumpMinGap;
+            bool due = now - _trendLoggedAt >= TrendInterval;
+            if (!runChanged && !jumped && !due) return;
+
+            string why = runChanged ? "RUN 변화" : jumped ? "급변" : "주기";
+            _mainVM.AddLogQuiet(
+                $"[MENISCUS] 추이 — 현재 {pvPa:F1}Pa · 설정 {svPa:F1}Pa · {(running ? "RUN" : "STOP")} ({why})");
+
+            _trendLoggedAt  = now;
+            _trendLoggedPa  = pvPa;
+            _trendLoggedRun = running;
         }
 
         /// <summary>

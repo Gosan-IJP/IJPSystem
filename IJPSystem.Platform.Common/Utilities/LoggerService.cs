@@ -44,7 +44,9 @@ namespace IJPSystem.Platform.Common.Utilities
                         _currentSize = File.Exists(_currentPath) ? new FileInfo(_currentPath).Length : 0;
                     }
 
-                    string logLine = $"[{DateTime.Now.ToTimeStampMs()}] [{level}] {message}" + Environment.NewLine;
+                    // 운전 중이면 줄 끝에 운전 번호를 붙인다 — 드라이버처럼 이 함수를 직접 부르는
+                    // 곳까지 한 번에 묶이도록 여기서 붙인다(RunContext 설명 참고).
+                    string logLine = $"[{DateTime.Now.ToTimeStampMs()}] [{level}] {message}{RunContext.Suffix}" + Environment.NewLine;
                     long bytes = Encoding.UTF8.GetByteCount(logLine);
 
                     if (_currentSize + bytes > MaxFileBytes)
@@ -59,6 +61,29 @@ namespace IJPSystem.Platform.Common.Utilities
             }
             catch { /* 파일 기록 실패 시 무시 — 로깅이 기능을 막으면 안 된다 */ }
         }
+
+        /// <summary>
+        /// 예외를 스택까지 파일에만 남긴다. 화면·DB 에는 부르는 쪽이 <see cref="ExceptionText.Summary"/> 한 줄을 쓴다.
+        /// </summary>
+        /// <param name="context">어디서 났나 — 예: <c>"[SEQ] AutoPrint step 7 Step_Print_Scan 실패"</c>.</param>
+        /// <remarks>
+        /// <b>같은 예외는 한 번만 쓴다.</b> 단계에서 난 예외는 SequenceStepLogger 가 쓰고 다시 던지는데,
+        /// 받는 쪽(자동 인쇄 루프)도 단계 밖 예외를 놓치지 않으려고 이 함수를 부른다 — 표시를
+        /// 예외 객체에 달아 두 번째부터는 건너뛴다. 스택이 두 번 찍히면 로그가 길어져 오히려 안 읽힌다.
+        /// </remarks>
+        public static void WriteException(string context, Exception ex)
+        {
+            try
+            {
+                if (ex.Data.Contains(LoggedMark)) return;
+                ex.Data[LoggedMark] = true;
+            }
+            catch { /* Data 를 못 쓰는 예외 — 중복될 수는 있어도 기록은 남긴다 */ }
+
+            WriteToFile("ERROR", $"{context} — {ExceptionText.Detail(ex)}");
+        }
+
+        private const string LoggedMark = "IJP.ExceptionLogged";
 
         private static string PartPath(string date, int index) =>
             Path.Combine(LogDirectory, index == 0 ? $"{date}.txt" : $"{date}_{index}.txt");

@@ -1,4 +1,5 @@
 ﻿using IJPSystem.Platform.Application.Sequences;
+using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.Domain.Enums;
 using IJPSystem.Platform.Domain.Interfaces;
@@ -47,6 +48,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
 
         /// <summary>START 옆에 띄울 인쇄 데이터 한 줄. 적재 상태를 아는 것은 MainViewModel 쪽이다.</summary>
         private readonly Func<PrintDataInfo>? _getPrintDataInfo;
+
+        /// <summary>운전 한 번의 조건 줄들 — <c>[RUN] ▶</c> 아래에 붙인다(MainViewModel.DescribeRunContext).</summary>
+        private readonly Func<System.Collections.Generic.IEnumerable<string>>? _describeRun;
 
         // 실장 구조 — 헤드: X(갠트리, 크로스스캔) + Z(승강) / 스테이지: Y(스캔 이송) + T(정렬 회전).
         // 메인 대시보드 애니메이션은 이 축들의 실측 위치·티칭 좌표로 구동한다.
@@ -572,8 +576,10 @@ namespace IJPSystem.Platform.HMI.ViewModels
             Func<double>? getFiducialPitchYMm = null,
             Func<(Application.Sequences.PrintRunOptions Opts, string? Blocked)>? getPrintRun = null,
             Func<bool>? isDryRun = null,
-            Func<PrintDataInfo>? getPrintDataInfo = null)
+            Func<PrintDataInfo>? getPrintDataInfo = null,
+            Func<System.Collections.Generic.IEnumerable<string>>? describeRun = null)
         {
+            _describeRun       = describeRun;
             _getPrintRun       = getPrintRun;
             _isDryRun          = isDryRun;
             _getPrintDataInfo  = getPrintDataInfo;
@@ -727,9 +733,16 @@ namespace IJPSystem.Platform.HMI.ViewModels
         private void LogCycleParameters(int cycle, int totalSteps)
         {
             var dm = AppSettingsService.Current?.DriverMode;
+
+            // Print Run 에서는 레시피의 프린팅수·스와스간격이 쓰이지 않는다 — 인쇄 데이터가 정한다.
+            // 예전에는 여기 레시피 값을 그대로 적어, 실제로 쓰이지 않은 숫자가 로그에 남았다.
+            bool dry = _isDryRun?.Invoke() ?? true;
+            string swath = dry
+                ? $"프린팅수 {SwathCount}, 스와스간격 {(_getSwathPitchMm?.Invoke() ?? 0):F3}mm"
+                : "스와스·간격은 인쇄 데이터 기준([RUN] 데이터 줄 참고)";
+
             _logAction(
-                $"[SEQ] AutoPrint 사이클 {cycle} 시작 — 레시피 '{ActiveRecipeName}', " +
-                $"프린팅수 {SwathCount}, 스와스간격 {(_getSwathPitchMm?.Invoke() ?? 0):F3}mm, " +
+                $"[SEQ] AutoPrint 사이클 {cycle} 시작 — 레시피 '{ActiveRecipeName}', {swath}, " +
                 $"{(IsBidirectional ? "양방향" : "단방향")}, 연속운전 {(IsContinuousMode ? "ON" : "OFF")}, " +
                 $"스텝 {totalSteps}개, 드라이버 IO={dm?.IO}/Motion={dm?.Motion}/Vision={dm?.Vision}",
                 LogLevel.Info);
@@ -821,6 +834,27 @@ namespace IJPSystem.Platform.HMI.ViewModels
             CurrentStepNumber = 0;
             CurrentStepName = "STARTING";
             CachePrintRange();
+
+            // ── 운전 기록 시작 ──
+            // 이 운전의 로그를 번호 하나로 묶는다 — 여기부터 끝(finally)까지 파일·DB 로그 줄 끝에
+            // 번호가 붙는다(RunContext). 불량 신고가 오면 번호로 그 운전의 줄만 골라낸다.
+            // 조건 줄은 [RUN] ▶ 바로 아래 — 무엇으로 찍었나를 한자리에서 읽게.
+            string runId   = RunContext.Begin();
+            var    runStart = DateTime.Now;
+            string outcome = "끝남(사유 미상)";
+            _logAction?.Invoke($"[RUN] ▶ {runId} AutoPrint 시작{SessionUser.Tag}", LogLevel.Info);
+            // 조건 수집이 실패해도 운전은 시작한다 — 이 자리는 try 밖이라, 여기서 예외가 새면
+            // IsRunning 이 켜진 채로 남아 다시는 START 가 안 된다.
+            try
+            {
+                if (_describeRun != null)
+                    foreach (var line in _describeRun())
+                        _logAction?.Invoke($"[RUN]   {line}", LogLevel.Info);
+            }
+            catch (Exception ex)
+            {
+                _logAction?.Invoke($"[RUN]   (조건 수집 실패: {ExceptionText.Summary(ex)})", LogLevel.Warning);
+            }
 
             // 정렬 애니메이션이 무엇을 근거로 그리는지 한 줄 남긴다 — 글라스가 안 움직인다는
             // 신고가 올 때, 티칭이 없는 것인지 피듀셜 간격이 0 인 것인지 로그만으로 갈린다.
@@ -925,33 +959,47 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 CurrentStepName = "COMPLETED";
                 _machine.SetSystemStatus(MachineState.Standby);
                 success = true;
+                outcome = "완료";
             }
             catch (OperationCanceledException)
             {
+                // 어느 단계에서 멈췄는지를 결과 줄에 남긴다 — 아래에서 표시를 덮어쓰기 전에 잡는다.
+                outcome = (_resettingForInit ? "초기화로 중단" : "중단(STOP)") + $" @ {CurrentStepName}";
                 MarkRunningStepAs(StepStatus.Aborted);
                 CurrentStepName = "ABORTED";
                 _machine.SetSystemStatus(MachineState.Standby);
             }
             catch (TimeoutException ex)
             {
+                outcome = $"타임아웃 @ {CurrentStepName} — {ExceptionText.Summary(ex)}";
                 MarkRunningStepAs(StepStatus.Failed);
                 IsError = true;
                 CurrentStepName = "TIMEOUT";
                 _machine.SetSystemStatus(MachineState.Alarm);
                 _logAction?.Invoke(T("Log_AutoPrintTimeoutMsg", ex.Message), LogLevel.Error);
-                _raiseAlarm?.Invoke("SEQ-MOTION-TIMEOUT"); 
+                LoggerService.WriteException("[RUN] AutoPrint 타임아웃", ex);
+                _raiseAlarm?.Invoke("SEQ-MOTION-TIMEOUT");
             }
             catch (Exception ex)
             {
+                outcome = $"실패 @ {CurrentStepName} — {ExceptionText.Summary(ex)}";
                 MarkRunningStepAs(StepStatus.Failed);
                 IsError = true;
                 CurrentStepName = "ERROR";
                 _machine.SetSystemStatus(MachineState.Alarm);
                 _logAction?.Invoke(T("Log_AutoPrintFailureMsg", ex.Message), LogLevel.Error);
-                _raiseAlarm?.Invoke("SEQ-AUTO-PRINT-FAIL");  
+                LoggerService.WriteException("[RUN] AutoPrint 실패", ex);
+                _raiseAlarm?.Invoke("SEQ-AUTO-PRINT-FAIL");
             }
             finally
             {
+                // ── 운전 기록 끝 ── 번호를 지우기 전에 남긴다(이 줄까지 같은 번호로 묶이게).
+                _logAction?.Invoke(
+                    $"[RUN] ■ {runId} AutoPrint {outcome} · 사이클 {cycle} · " +
+                    $"총 {(DateTime.Now - runStart).TotalSeconds:F1}s · 마지막 택트 {TactTime:F1}s",
+                    success ? LogLevel.Info : LogLevel.Warning);
+                RunContext.End(runId);
+
                 IsRunning = false;
                 IsPaused  = false;     // 다음 런을 위해 게이트 해제
                 _pausedByAlarm = false;

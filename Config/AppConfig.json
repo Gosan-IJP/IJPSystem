@@ -9,7 +9,9 @@
   "ChartFontFile": "none",
   "EngineerPassword": "00",
   "OperatorPassword": "11",
-  "LogSaveDays": 30,
+  "_comment7": "로그 보존 — LogSaveDays 일이 지난 것을 지우고, 남은 로그·비전 이미지 총량이 LogMaxTotalMB 를 넘으면 오래된 것부터 더 지운다(DB·최근 24시간은 안 지움). 출하 후 한 달 넘어 신고가 와도 로그가 남도록 일수는 넉넉히, 넘치는 것은 용량으로 막는다.",
+  "LogSaveDays": 365,
+  "LogMaxTotalMB": 2048,
   "IsDoorCheckEnabled": false,
 
   "_comment3": "MeteorConfigPath = PCC 가 읽는 PrintEngine 설정(.cfg). 비우면 Config/PrintEngine.cfg 를 찾는다. 상대경로는 Config 폴더 기준, 절대경로는 그대로.",

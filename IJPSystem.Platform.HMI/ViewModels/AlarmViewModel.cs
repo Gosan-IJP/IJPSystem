@@ -358,7 +358,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             OnPropertyChanged(nameof(ActiveAlarmCount));
             ((RelayCommand)AckSingleAlarmCommand).RaiseCanExecuteChanged();
 
-            _addLog?.Invoke($"[ALARM] {alarm.AlarmCode} — 해제: {alarm.AlarmName}", LogLevel.Info);
+            _addLog?.Invoke($"[ALARM] {alarm.AlarmCode} — 해제{SessionUser.Tag}: {alarm.AlarmName}", LogLevel.Info);
         }
 
         public void ClearAlarmAndSetStandby()
@@ -388,7 +388,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 OnPropertyChanged(nameof(ActiveAlarmCount));
 
                 _addLog?.Invoke(
-                    $"[ALARM] 전체 해제 — {clearedCount}건 클리어, 시스템 STANDBY",
+                    $"[ALARM] 전체 해제{SessionUser.Tag} — {clearedCount}건 클리어, 시스템 STANDBY",
                     LogLevel.Info);
             }
         }

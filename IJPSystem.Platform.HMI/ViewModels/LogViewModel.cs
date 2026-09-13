@@ -27,7 +27,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         // ── 카테고리(Quick-Filter) 패턴 ─────────────────────────────────────
         // 모든 로그 메시지는 "[CAT] ..." 언어-중립 prefix 로 시작하며, 버튼은 그 prefix 를
         // 그대로 LIKE 매칭한다(다국어 영향 없음). 아래 목록은 실제 코드에서 쓰이는 prefix 전수:
-        //   [AUTH] [NAV] [SEQ] [INITIALIZE] [PRINT] [MOTION] [IO] [PNID] [VALVE] [PRESSURE]
+        //   [AUTH] [NAV] [SEQ] [INITIALIZE] [PRINT] [RUN] [MOTION] [IO] [PNID] [VALVE] [PRESSURE]
         //   [MENISCUS] [VV] [VISION] [DW] [RECIPE] [WAVEFORM] [PATTERN] [ALARM]
         //   [BOOT] [CONFIG] [LOG] [LINK] [HEAD] [ComiEcat] [DASH]
         // 새 prefix 를 만들면 반드시 여기 어느 카테고리엔가 넣어야 한다. 안 그러면 ALL 에서만 보인다.
@@ -37,8 +37,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // 로그인/권한 + 화면 전환
             ["LOGIN_NAV"] = new[] { "[AUTH]", "[NAV]" },
 
-            // 시퀀스 (AutoPrint / Initialize / 프린트 실행)
-            ["SEQ"]       = new[] { "[SEQ]", "[INITIALIZE]", "[PRINT]" },
+            // 시퀀스 (AutoPrint / Initialize / 프린트 실행) + 운전 한 번의 시작·조건·결과([RUN])
+            ["SEQ"]       = new[] { "[SEQ]", "[INITIALIZE]", "[PRINT]", "[RUN]" },
 
             // 모터 — 조그/티칭/포인트 이동/도달 오차
             ["MOTION"]    = new[] { "[MOTION]" },
@@ -107,6 +107,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public ICommand ExportCsvCommand   { get; }
         public ICommand ClearAllCommand    { get; }
         public ICommand SetCategoryCommand { get; }
+        public ICommand CompressLogsCommand { get; }
+
+        /// <summary>[로그 압축]이 텍스트 로그를 며칠치 넣나. 오래된 것까지 넣으면 메일로 못 보낼 크기가 된다.</summary>
+        private const int CompressRecentDays = 30;
+
+        private bool _isCompressing;
+        /// <summary>압축 중 — 버튼을 잠근다(두 번 누르면 같은 파일을 두 곳에서 쓴다).</summary>
+        public bool IsCompressing
+        {
+            get => _isCompressing;
+            private set
+            {
+                if (SetProperty(ref _isCompressing, value))
+                    (CompressLogsCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
 
         public LogViewModel()
         {
@@ -115,6 +131,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             ResetFilterCommand = new RelayCommand(_ => ResetFilters());
             ExportCsvCommand   = new RelayCommand(_ => ExportCsv());
             ClearAllCommand    = new RelayCommand(_ => ClearAll());
+            CompressLogsCommand = new RelayCommand(async _ => await CompressLogsAsync(), _ => !IsCompressing);
             SetCategoryCommand = new RelayCommand(p =>
             {
                 ActiveCategory = (p as string) ?? "ALL";
@@ -201,6 +218,55 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 Dialogs.Show($"내보내기 실패:\n{ex.Message}", "Export",
                                 MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// 원격 분석용 묶음을 zip 으로 만든다(<see cref="Services.LogPackage"/>).
+        /// 수십 MB 를 읽고 압축하므로 백그라운드에서 돌린다 — 화면이 멈추면 운전 중 조작을 막는다.
+        /// </summary>
+        private async System.Threading.Tasks.Task CompressLogsAsync()
+        {
+            string machine = IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Current?.MachineNo?.Trim() ?? "";
+            string name = $"IJPSystem_{(machine.Length > 0 ? machine + "_" : "")}로그_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Title            = "로그 압축 — 저장할 위치",
+                Filter           = "ZIP (*.zip)|*.zip",
+                FileName         = name,
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            IsCompressing = true;
+            try
+            {
+                string path = dlg.FileName;
+                var result = await System.Threading.Tasks.Task.Run(
+                    () => Services.LogPackage.Create(path, CompressRecentDays));
+
+                LoggerService.WriteToFile("INFO",
+                    $"[LOG] 로그 압축{SessionUser.Tag} — {path} · {result.Files}개 · 원본 {result.Bytes / 1024.0 / 1024:F1}MB" +
+                    (result.Skipped.Count > 0 ? $" · 빠진 파일 {result.Skipped.Count}개" : ""));
+
+                long zipBytes = new FileInfo(path).Length;
+                string skippedNote = result.Skipped.Count == 0 ? ""
+                    : $"\n\n빠진 파일 {result.Skipped.Count}개 — 압축 안의 info.txt 끝에 이유가 적혀 있습니다.";
+                Dialogs.Show(
+                    $"로그를 압축했습니다.\n\n{path}\n\n파일 {result.Files}개 · {zipBytes / 1024.0 / 1024:F1}MB" +
+                    $"\n(텍스트 로그는 최근 {CompressRecentDays}일, 비전 이미지는 넣지 않았습니다){skippedNote}",
+                    "로그 압축", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                LoggerService.WriteException("[LOG] 로그 압축 실패", ex);
+                Dialogs.Show($"로그 압축에 실패했습니다.\n\n{ExceptionText.Summary(ex)}", "로그 압축",
+                             MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsCompressing = false;
             }
         }
 

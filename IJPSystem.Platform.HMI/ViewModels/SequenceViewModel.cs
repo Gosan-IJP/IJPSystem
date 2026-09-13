@@ -1,4 +1,5 @@
 using IJPSystem.Platform.Application.Sequences;
+using IJPSystem.Platform.Common.Utilities;
 using IJPSystem.Platform.Domain.Common;
 using IJPSystem.Platform.Domain.Enums;
 using IJPSystem.Platform.HMI.Common;
@@ -230,6 +231,14 @@ namespace IJPSystem.Platform.HMI.ViewModels
             // 글라스가 한 프레임씩 파킹 자리로 튄다. 실패로 return 하는 길이 있어 finally 가 내린다.
             IDisposable? alignScope = null;
 
+            // ── 운전 기록 시작 ── 자동 인쇄와 같은 방식이다(MainDashboardViewModel.RunAutoPrintAsync).
+            // 시퀀스 화면에서 돌린 INITIALIZE·PURGE 도 출하 후에는 똑같이 추적 대상이다.
+            string runId    = RunContext.Begin();
+            var    runStart = DateTime.Now;
+            _mainVM.AddLog($"[RUN] ▶ {runId} 시퀀스 '{seq.Name}' 시작{SessionUser.Tag}", LogLevel.Info);
+            foreach (var line in _mainVM.DescribeRunContext())   // 항목마다 따로 잡으므로 여기서 새지 않는다
+                _mainVM.AddLog($"[RUN]   {line}", LogLevel.Info);
+
             // 시퀀스 실제 실행 시작 — 화면 전환 차단 ON (try/finally 로 OFF 보장)
             _mainVM.SetSequenceRunning(true);
             try
@@ -288,7 +297,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 {
                     step.Status = StepStatus.Failed;
                     AddExecLog($"  → 타임아웃: {ex.Message}");
-                    _mainVM.AddLog($"[SEQ] Step {step.Number} 타임아웃: {ex.Message}", LogLevel.Error);
+                    // 스택은 SequenceStepLogger 가 이미 파일에 남겼다 — 여기서 또 쓰면 두 번 찍힌다.
+                    _mainVM.AddLog($"[SEQ] Step {step.Number} 타임아웃: {ExceptionText.Summary(ex)}", LogLevel.Error);
                     State = SequenceState.Error;
                     _mainVM.AlarmVM.RaiseAlarm("SEQ-STEP-TIMEOUT");
                     return;
@@ -297,7 +307,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 {
                     step.Status = StepStatus.Failed;
                     AddExecLog($"  → 실패: {ex.Message}");
-                    _mainVM.AddLog($"[SEQ] Step {step.Number} 실패: {ex.Message}", LogLevel.Error);
+                    _mainVM.AddLog($"[SEQ] Step {step.Number} 실패: {ExceptionText.Summary(ex)}", LogLevel.Error);
                     State = SequenceState.Error;
                     _mainVM.AlarmVM.RaiseAlarm("SEQ-STEP-FAIL");
                     return;
@@ -323,6 +333,19 @@ namespace IJPSystem.Platform.HMI.ViewModels
             {
                 alignScope?.Dispose();
                 _mainVM.SetSequenceRunning(false);
+
+                // ── 운전 기록 끝 ── 실패로 return 한 길도 여기를 지난다. 번호를 지우기 전에 남긴다.
+                string outcome = State switch
+                {
+                    SequenceState.Completed => "완료",
+                    SequenceState.Aborted   => "중단",
+                    SequenceState.Error     => "실패",
+                    _                       => State.ToString(),
+                };
+                _mainVM.AddLog(
+                    $"[RUN] ■ {runId} 시퀀스 '{seq.Name}' {outcome} · 총 {(DateTime.Now - runStart).TotalSeconds:F1}s",
+                    State == SequenceState.Completed ? LogLevel.Info : LogLevel.Warning);
+                RunContext.End(runId);
             }
         }
 

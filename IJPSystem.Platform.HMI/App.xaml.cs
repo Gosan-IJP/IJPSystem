@@ -111,7 +111,8 @@ namespace IJPSystem.Platform.HMI
                 // 로그 보존 정리 — 기동 시 1회. 파일 수가 많으면 수 초 걸릴 수 있어 백그라운드로 돌린다
                 // (스플래시 진행을 막지 않는다). 실패해도 기동에 영향 없음.
                 int keepDays = appSettings.LogSaveDays;
-                _ = Task.Run(() => LogRetentionService.Cleanup(keepDays));
+                int maxMb    = appSettings.LogMaxTotalMB;
+                _ = Task.Run(() => LogRetentionService.Cleanup(keepDays, maxMb));
 
                 // 실장 진단: 실제로 읽은 설정 파일 경로와 파싱된 DriverMode 값을 기록.
                 // 스플래시/화면이 Virtual 로 뜨는 원인(잘못된 파일/파싱 실패)을 이 로그로 즉시 확인.

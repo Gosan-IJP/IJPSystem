@@ -26,7 +26,18 @@ namespace IJPSystem.Platform.Domain.Models.Config
         public string AdminPassword     { get; set; } = "admin";
         public string EngineerPassword  { get; set; } = "engineer";
         public string OperatorPassword  { get; set; } = "operator";
-        public int    LogSaveDays       { get; set; } = 30;
+        /// <summary>
+        /// 로그 보존 일수. 0 이하면 일수로는 지우지 않는다.
+        /// <para>기본을 30 → 365 로 늘렸다(2026-09-13) — 출하 후 한 달 넘게 지나 신고가 오면 로그가 이미 없었다.
+        /// 넘치는 것은 <see cref="LogMaxTotalMB"/> 가 막는다.</para>
+        /// </summary>
+        public int    LogSaveDays       { get; set; } = 365;
+
+        /// <summary>
+        /// 로그 폴더(텍스트·CSV·비전 이미지) 총량 상한[MB]. 넘으면 오래된 것부터 지운다. 0 이하면 용량으로는 지우지 않는다.
+        /// <para>DB(<c>*.db</c>)와 최근 24시간 파일은 지우지 않는다.</para>
+        /// </summary>
+        public int    LogMaxTotalMB     { get; set; } = 2048;
 
         /// <summary>
         /// 차트(LiveCharts/Skia) 축 글자에 쓸 글꼴 파일. <b>기본값 "none" = 지정하지 않음.</b>

@@ -1478,7 +1478,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                                          }, trans);
                         }
                         trans.Commit();
-                        _addLogAction?.Invoke($"[RECIPE] {newName} — 생성 완료", LogLevel.Success);
+                        _addLogAction?.Invoke($"[RECIPE] {newName} — 생성 완료{SessionUser.Tag}", LogLevel.Success);
                     }
                     catch (Exception)
                     {
@@ -1564,6 +1564,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     {
                         int recipeId = db.QuerySingle<int>("SELECT Id FROM Recipes WHERE Name = @SelectedRecipeName", new { SelectedRecipeName }, trans);
 
+                        // 쓰기 전 값 — 아래에서 쓴 뒤 다시 읽어 견준다(무엇이 바뀌었나를 로그·이력에 남기려고).
+                        var before = Services.RecipeChangeSet.Read(db, trans, recipeId);
+
                         // DELETE + INSERT: AxisNo가 JSON 설정에서 변경되어도 항상 최신 상태로 저장
                         db.Execute("DELETE FROM RecipeDetails_Motor WHERE RecipeId=@recipeId", new { recipeId }, trans);
 
@@ -1625,15 +1628,21 @@ namespace IJPSystem.Platform.HMI.ViewModels
                             }
                         }
 
+                        // 쓴 뒤 값과 견준다 — 같은 트랜잭션 안이라 아직 커밋 전 값이 읽힌다.
+                        var changes = Services.RecipeChangeSet.Diff(
+                            before, Services.RecipeChangeSet.Read(db, trans, recipeId));
+
                         // ✅ 변경 이력(Audit Trail) DB 기록
+                        // 예전에는 사용자 "Engineer", 내용 "Parameters Updated by User" 가 고정으로 박혀
+                        // 누가 무엇을 바꿨는지 알 수 없었다 — 실제 권한과 변경 목록 전체를 적는다.
                         db.Execute(@"INSERT INTO RecipeChangeLogs (LogTime, RecipeName, ActionType, Details, User)
                              VALUES (@time, @name, 'SAVE', @details, @user)",
                                      new
                                      {
                                          time = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                                          name = SelectedRecipeName,
-                                         details = "Parameters Updated by User",
-                                         user = "Engineer" // 로그인 기능 연결 시 해당 유저명 사용
+                                         details = changes.Count == 0 ? "변경 없음" : string.Join(" · ", changes),
+                                         user = string.IsNullOrEmpty(SessionUser.Role) ? "Unknown" : SessionUser.Role
                                      }, trans);
 
                         trans.Commit();
@@ -1657,14 +1666,22 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         }
 
                         // UI 알림 및 로그
-                        _addLogAction?.Invoke($"[RECIPE] {SelectedRecipeName} — 파라미터 저장 완료", LogLevel.Success);
+                        _addLogAction?.Invoke(
+                            $"[RECIPE] {SelectedRecipeName} — 파라미터 저장 완료{SessionUser.Tag} · " +
+                            Services.RecipeChangeSet.Summarize(changes),
+                            LogLevel.Success);
 
                         string successMsg = CurrentLanguage == "KO" ? "저장되었습니다." : "Saved successfully.";
                         Dialogs.Show(successMsg);
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
                         trans.Rollback();
+                        // 예전에는 예외를 그대로 삼키고 알람만 띄웠다 — 왜 저장이 안 됐는지 어디에도 남지 않았다.
+                        _addLogAction?.Invoke(
+                            $"[RECIPE] {SelectedRecipeName} — 저장 실패{SessionUser.Tag}: {ExceptionText.Summary(ex)}",
+                            LogLevel.Error);
+                        LoggerService.WriteException($"[RECIPE] {SelectedRecipeName} 저장 실패", ex);
                         _raiseAlarm?.Invoke("RCP-SAVE-FAIL");
                     }
                 }
@@ -1693,7 +1710,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     ApplyHeadSpecToMachine();
 
                     // 실제 모터 주입 로직은 여기서 호출 (이미 LoadAllRecipeData가 되어있으므로, 필요 시 PLC/Driver 전송 로직 추가)
-                    _addLogAction?.Invoke($"[RECIPE] {SelectedRecipeName} — 모델 적용 완료", LogLevel.Success);
+                    _addLogAction?.Invoke($"[RECIPE] {SelectedRecipeName} — 모델 적용 완료{SessionUser.Tag}", LogLevel.Success);
                     Dialogs.Show("설비에 적용되었습니다.");
                 }
             }
@@ -1753,7 +1770,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     }
                 }
 
-                _addLogAction?.Invoke($"[RECIPE] 이름 변경: {SelectedRecipeName} → {newName}", LogLevel.Info);
+                _addLogAction?.Invoke($"[RECIPE] 이름 변경: {SelectedRecipeName} → {newName}{SessionUser.Tag}", LogLevel.Info);
 
                 // 리스트 갱신 및 선택 유지
                 RefreshRecipeList();
@@ -1841,6 +1858,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     db.Open();
                     db.Execute("DELETE FROM Recipes WHERE Name = @SelectedRecipeName", new { SelectedRecipeName });
                 }
+                // 삭제는 되돌릴 수 없는데 예전에는 아무 기록도 남지 않았다 — 레시피가 사라졌다는
+                // 신고가 오면 누가 언제 지웠는지부터 알아야 한다.
+                _addLogAction?.Invoke($"[RECIPE] {SelectedRecipeName} — 삭제{SessionUser.Tag}", LogLevel.Warning);
                 RefreshRecipeList();
                 SelectedRecipeName = RecipeNames.FirstOrDefault() ?? string.Empty;
             }
@@ -1958,7 +1978,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
                     }
                 }
 
-                _addLogAction?.Invoke($"[RECIPE] 복사: {SelectedRecipeName} → {newName}", LogLevel.Success);
+                _addLogAction?.Invoke($"[RECIPE] 복사: {SelectedRecipeName} → {newName}{SessionUser.Tag}", LogLevel.Success);
 
                 RefreshRecipeList();
                 SelectedRecipeName = newName;

@@ -1,4 +1,5 @@
 using IJPSystem.Platform.Common.Enums;
+using IJPSystem.Platform.Common.Utilities;
 using System;
 using System.Diagnostics;
 using System.Threading;
@@ -57,7 +58,9 @@ namespace IJPSystem.Platform.Application.Sequences
             }
             catch (Exception ex)
             {
-                log($"{head} — 실패 ({sw.Elapsed.TotalSeconds:F2}s): {ex.Message}", LogLevel.Error);
+                // 화면에는 종류가 붙은 한 줄, 파일에는 스택까지 — 메시지만으로는 어디서 났는지 모른다.
+                log($"{head} — 실패 ({sw.Elapsed.TotalSeconds:F2}s): {ExceptionText.Summary(ex)}", LogLevel.Error);
+                LoggerService.WriteException($"{head} 실패", ex);
                 throw;
             }
         }

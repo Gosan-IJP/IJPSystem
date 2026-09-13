@@ -166,6 +166,93 @@ namespace IJPSystem.Platform.HMI.ViewModels
                 SwathWarn: false);
         }
 
+        /// <summary>
+        /// 운전 한 번의 조건을 로그 몇 줄로 — <c>[RUN] ▶</c> 아래에 붙는다.
+        ///
+        /// <para><b>무엇을 남기나</b>: 불량 신고가 왔을 때 "그때 무엇으로 찍었나" 를 다시 세우는 데
+        /// 필요한 것 전부 — 레시피, 운전 모드, 올린 인쇄 데이터와 그 노즐 배치, 헤드 사양, 사용 노즐,
+        /// PCC 가 읽는 cfg 의 파형·해상도, 메니스커스.</para>
+        ///
+        /// <para><b>레시피의 프린팅수·스와스간격을 쓰지 않는 이유</b>: Print Run 에서는 인쇄 데이터가
+        /// 스와스와 이동량을 정한다(<see cref="BuildPrintRunOptions"/>). 레시피 값을 적으면 실제로 쓰이지
+        /// 않은 숫자가 로그에 남아 분석을 틀리게 이끈다.</para>
+        ///
+        /// <para>값 하나를 못 읽어도 나머지는 남긴다 — 진단 줄이 운전을 막으면 안 된다.</para>
+        /// </summary>
+        public IEnumerable<string> DescribeRunContext()
+        {
+            var lines = new List<string>();
+
+            void Try(Func<string> make)
+            {
+                try { lines.Add(make()); }
+                catch (Exception ex) { lines.Add($"(수집 실패: {ExceptionText.Summary(ex)})"); }
+            }
+
+            Try(() =>
+                $"레시피 '{RecipeVM.ActiveRecipeName}' · {(RecipeVM.ActiveIsDryRun ? "Dry Run" : "Print Run")} · " +
+                $"{(RecipeVM.ActivePrintDirection == 1 ? "양방향" : "단방향")} · " +
+                $"자동정렬 {(RecipeVM.ActiveAutoAlign != 0 ? "ON" : "OFF")} · " +
+                $"{IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Current?.MachineNoText ?? "호기 미지정"} · " +
+                $"{BuildInfo.Stamp}");
+
+            Try(() =>
+            {
+                if (RecipeVM.ActiveIsDryRun)
+                    return $"데이터 — (Dry Run: 레시피 프린팅수 {RecipeVM.ActiveSwath} · 스와스간격 {RecipeVM.ActiveSwathPitchMm:F3}mm)";
+
+                var job = PrintJob.CurrentJob;
+                if (job == null) return "데이터 — 올라간 인쇄 데이터 없음";
+
+                double pitch = EffectivePitchUm(job.Pattern);
+                return $"데이터 — {job.Folder} · {job.Source} · 노즐 {job.Nozzles} · 실효 {pitch:F2}µm · " +
+                       $"스텝 {job.Steps}×{job.Pattern.ScanStepUm:F2}µm = {job.Steps * job.Pattern.ScanStepUm / 1000.0:F2}mm · " +
+                       $"BPP {job.Para.BitsPerPixel} · 스와스 {job.SwathCount}×패스 {job.PassCount} " +
+                       $"(스와스간격 {job.SwathPitchMm:F3}mm, 패스간격 {job.PassPitchMm:F4}mm) · " +
+                       $"방울 {job.DropCount:N0} · 버퍼 {PrintJob.BufferIds.Count}개 · 헤드 {(IsMeteorHead() ? "Meteor" : "가상")}";
+            });
+
+            Try(() =>
+            {
+                int used = Nozzle.NozzleControlGlobal.Instance.UsingNozzle.Count;
+                return $"헤드 — 노즐 {IJPSystem.Platform.Infrastructure.Config.HeadSpec.Count} " +
+                       $"({IJPSystem.Platform.Infrastructure.Config.HeadSpec.ChipCount}칩 × " +
+                       $"{IJPSystem.Platform.Infrastructure.Config.HeadSpec.Rows}열) · 사용 노즐 {used}개";
+            });
+
+            Try(() =>
+            {
+                string configured = IJPSystem.Platform.Infrastructure.Config.AppSettingsService.Current?.MeteorConfigPath ?? "";
+                string path = PathUtils.ResolveConfigPath(configured, AppConstants.MeteorConfigFile);
+                var cfg = IJPSystem.Platform.Infrastructure.Print.Meteor.MeteorConfigFile.Load(path);
+                if (!cfg.Exists) return $"cfg — 없음 ({path})";
+                return $"cfg — {System.IO.Path.GetFileName(path)} · {cfg.HeadType} · {cfg.PccType} · " +
+                       $"Xdpi {cfg.Xdpi} · BPP {cfg.BitsPerPixel} · 파형 idx {cfg.WaveformFileIdx}";
+            });
+
+            Try(() =>
+            {
+                var pp = _patternPrintVM;
+                return pp == null
+                    ? "메니스커스 — 패턴 인쇄 화면을 연 적이 없어 값 모름"
+                    : $"메니스커스 — 현재 {pp.MeniscusCurrent:F0}Pa · 설정 {pp.MeniscusSetpoint:F0}Pa · {(pp.IsMeniscusOn ? "RUN" : "STOP")}";
+            });
+
+            return lines;
+        }
+
+        /// <summary>패턴의 실제 노즐 간격 — 이웃 컬럼 X 차의 최솟값. 컬럼이 하나면 0.</summary>
+        private static double EffectivePitchUm(IJPSystem.Platform.Infrastructure.Print.PrintPattern p)
+        {
+            double min = double.MaxValue;
+            for (int c = 1; c < p.Columns.Count; c++)
+            {
+                double d = p.Columns[c].XUm - p.Columns[c - 1].XUm;
+                if (d > 1e-6 && d < min) min = d;
+            }
+            return min == double.MaxValue ? 0 : min;
+        }
+
         /// <summary>인쇄가 어디서 시작해 어디서 끝나는가 — 종료는 <b>계산값</b>이다(시작 + 패턴 길이).</summary>
         private (string Start, string End, bool Warn) DescribeScanRange(double patternLenMm)
         {
@@ -465,6 +552,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             set
             {
                 SetProperty(ref _currentUserRole, value);
+                SessionUser.Role = value.ToString();   // 레시피·알람·IO 로그가 "누가" 를 읽는 자리
                 OnPropertyChanged(nameof(UserStatusText));
                 OnPropertyChanged(nameof(IsEngineerMode)); // 누락 수정
                 OnPropertyChanged(nameof(LoginButtonText));
@@ -592,6 +680,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
         public MainViewModel(PulseController controller)
         {
             _controller = controller;
+            SessionUser.Role = _currentUserRole.ToString();   // 기동 권한 — setter 를 안 거치므로 여기서 한 번 적는다
             var machine = _controller.GetMachine();
             MachineTitle = _controller.GetMachine().MachineName.ToUpper();
 
@@ -669,7 +758,9 @@ namespace IJPSystem.Platform.HMI.ViewModels
                         return (o, blocked);
                     },
                     isDryRun: () => RecipeVM.ActiveIsDryRun,
-                    getPrintDataInfo: DescribePrintData
+                    getPrintDataInfo: DescribePrintData,
+                    // 운전 한 번의 조건([RUN] ▶ 아래 줄) — 레시피·데이터·헤드·cfg 를 다 아는 것은 이쪽이다.
+                    describeRun: DescribeRunContext
                 );
 
             // 적재가 바뀌면 메인화면 표시도 바뀐다 — 패턴 인쇄 화면에서 올린 것을 여기서 본다.
@@ -740,6 +831,18 @@ namespace IJPSystem.Platform.HMI.ViewModels
                        $"IO={dm?.IO}, Motion={dm?.Motion}, Vision={dm?.Vision}", LogLevel.Info);
             }
             catch { /* 진단 로그 실패는 무시 */ }
+
+            // 설정 파일마다 수정시각·해시·호기별 값 — "그날 어떤 설정으로 돌았나" 를 로그로 확정한다.
+            // 수십 줄이라 화면 로그(최근 100줄)에는 흘리지 않는다.
+            try
+            {
+                foreach (var line in IJPSystem.Platform.Infrastructure.Config.ConfigSnapshot.Lines())
+                    AddLogQuiet(line);
+            }
+            catch (Exception ex)
+            {
+                AddLogQuiet($"[CONFIG] 스냅샷 실패 — {ExceptionText.Summary(ex)}", LogLevel.Warning);
+            }
 
             void Report(string tag, object? drv, bool connected)
             {
@@ -837,8 +940,21 @@ namespace IJPSystem.Platform.HMI.ViewModels
             });
 
             // 두 sink 모두 적재 — txt 는 fail-safe 백업, DB 는 화면 필터/검색용
+            // 운전 번호는 txt 쪽은 LoggerService 가, DB 쪽은 여기서 붙인다(화면에는 안 붙인다).
             LoggerService.WriteToFile(level.ToString(), message);
-            SystemLogRepository.Write(time, level.ToString(), message);
+            SystemLogRepository.Write(time, level.ToString(), message + RunContext.Suffix);
+        }
+
+        /// <summary>
+        /// 화면에는 띄우지 않고 파일·DB 에만 남긴다.
+        ///
+        /// <para>분석용으로만 필요한 줄이 있다 — 기동 때 설정 파일 스냅샷(수십 줄), 1분마다 쌓이는
+        /// 압력 추이. 이걸 화면 로그에 흘리면 최근 100줄 창이 금세 밀려 운전자가 봐야 할 줄이 사라진다.</para>
+        /// </summary>
+        public void AddLogQuiet(string message, LogLevel level = LogLevel.Info)
+        {
+            LoggerService.WriteToFile(level.ToString(), message);
+            SystemLogRepository.Write(DateTime.Now, level.ToString(), message + RunContext.Suffix);
         }
 
         private void InitializeIOList()

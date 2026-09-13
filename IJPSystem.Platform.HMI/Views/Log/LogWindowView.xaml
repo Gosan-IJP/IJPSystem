@@ -372,6 +372,14 @@
                         Style="{StaticResource ModernActionButton}"
                         Background="#334155" BorderBrush="#475569"
                         ToolTip="현재 필터로 조회된 로그를 CSV 로 저장"/>
+
+                <!-- 원격 분석용 묶음 — 로그·DB·설정·PCC cfg·엔진 로그·장비 정보를 zip 하나로.
+                     고객에게 "이 버튼 눌러서 나온 파일을 보내 주세요" 한마디로 끝나게 하려는 것이다. -->
+                <Button Content="로그 압축" Command="{Binding CompressLogsCommand}"
+                        Width="130" Height="38" Margin="12,0,0,0"
+                        Style="{StaticResource ModernActionButton}"
+                        Background="#1E3A5F" BorderBrush="#3B82F6"
+                        ToolTip="최근 30일 로그, 로그·레시피·알람 DB, 설정 파일, PCC cfg·엔진 로그, 장비 정보를 zip 하나로 저장합니다. 비전 이미지는 넣지 않습니다."/>
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

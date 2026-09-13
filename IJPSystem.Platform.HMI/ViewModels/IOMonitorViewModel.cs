@@ -65,7 +65,8 @@ namespace IJPSystem.Platform.HMI.ViewModels
             if (ioDriver != null && !string.IsNullOrEmpty(ioItem.Index))
             {
                 ioDriver.SetOutput(ioItem.Index, isOn);
-                _mainVM.AddLog($"[IO] DO {ioItem.Index} → {(isOn ? "ON" : "OFF")}",
+                // 사람이 손으로 켠 출력이다 — 누가 했는지까지 남긴다(엣지 로그는 "바뀌었다" 만 안다).
+                _mainVM.AddLog($"[IO] DO {ioItem.Index} → {(isOn ? "ON" : "OFF")} 수동{Platform.Common.Utilities.SessionUser.Tag}",
                                LogLevel.Warning);
             }
         }
@@ -79,7 +80,7 @@ namespace IJPSystem.Platform.HMI.ViewModels
             if (ioDriver != null && !string.IsNullOrEmpty(ioItem.Index))
             {
                 ioDriver.SetAnalogOutput(ioItem.Index, value);
-                _mainVM.AddLog($"[IO] AO {ioItem.Index} → {value:F2}",
+                _mainVM.AddLog($"[IO] AO {ioItem.Index} → {value:F2} 수동{Platform.Common.Utilities.SessionUser.Tag}",
                                LogLevel.Warning);
             }
         }

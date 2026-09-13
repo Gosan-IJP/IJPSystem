@@ -446,7 +446,9 @@
       "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -c Release -v q --nologo 2>&1\")",
       "Bash(powershell.exe -NoProfile -Command \"dotnet build IJPSystem.Platform.HMI/IJPSystem.Platform.HMI.csproj -c Release -v q --nologo 2>&1\" > /tmp/b.txt 2>&1; grep -E \": error\" /tmp/b.txt | sort -u | head; tail -3 /tmp/b.txt)",
       "Bash(powershell.exe -NoProfile -Command \"dotnet test IJPSystem.Tests/IJPSystem.Tests.csproj -v q --nologo 2>&1\")",
-      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\\\IJP\\\\IJPSystem\\\\Tools\\\\Deploy\\\\Build-Hotfix.ps1\")"
+      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\\\IJP\\\\IJPSystem\\\\Tools\\\\Deploy\\\\Build-Hotfix.ps1\")",
+      "Bash(S=\"/c/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/f76b0c49-fb92-4e5b-9cc1-484f42c4a7e2/scratchpad\"; cd \"$S\"; powershell.exe -NoProfile -Command \"Set-Location D:\\\\IJP\\\\IJPSystem; dotnet build IJPSystem.slnx -c Debug -clp:NoSummary 2>&1\" > b6.log; grep -E \"warning|error\" b6.log | sed 's/ \\\\[D:.*\\\\]$//' | sort -u | head -10; tail -3 b6.log; powershell.exe -NoProfile -Command \"Set-Location D:\\\\IJP\\\\IJPSystem; dotnet test IJPSystem.Tests --no-build 2>&1\" | grep -a \"실패\\\\|통과!\" | tail -8)",
+      "Read(//c/Users/bluey/AppData/Local/Temp/claude/d--IJP-IJPSystem/f76b0c49-fb92-4e5b-9cc1-484f42c4a7e2/scratchpad/**)"
     ],
     "additionalDirectories": [
       "d:\\tmp",
