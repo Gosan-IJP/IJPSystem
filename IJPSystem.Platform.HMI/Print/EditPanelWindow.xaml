@@ -196,7 +196,12 @@
 
             <!-- 우측 액션 패널 -->
             <StackPanel Grid.Column="2" Margin="8,8,8,8">
-                <Button Style="{StaticResource ActBtn}" Height="46" Margin="0,0,0,10" Content="✓   Apply Draw" Click="ApplyDraw_Click"/>
+                <!-- [Apply Draw] 를 뺐다(2026-09-12). 하는 일이 없었다 — 캔버스를 이미지 해상도로
+                     한 번 그려 보고 그 결과를 그냥 버렸고, 남는 것은 상태바 문구뿐이었다.
+                     "반영" 이라고 적혀 있어 무언가 확정되는 것처럼 보였지만 눌러도 안 눌러도
+                     저장 결과가 같았다. 게다가 결과를 안 쓰면서 전체 크기 32비트 비트맵을
+                     한 장 잡는다(200mm·600dpi 면 89MB) — x86 인 이 앱에서는 그것만으로 위험하다.
+                     그림을 한 장으로 굳히는 일은 Fill / Auto Fill / Pattern Dithering 이 한다. -->
                 <RadioButton GroupName="tool" Tag="Eraser" Checked="Tool_Checked" Cursor="Hand" Margin="0,0,0,4">
                     <RadioButton.Template>
                         <ControlTemplate TargetType="RadioButton">

@@ -537,12 +537,7 @@ namespace IJPSystem.Platform.HMI.Print
         }
 
         // ── 액션 버튼 ────────────────────────────────────────────────
-        private void ApplyDraw_Click(object sender, RoutedEventArgs e)
-        {
-            RenderCanvas(_pxW, _pxH);
-            StatusInfo.Text = $"Apply Draw — 요소 {_added.Count}개, {_pxW}x{_pxH}px 반영";
-        }
-
+        // ※ ApplyDraw_Click 은 지웠다(2026-09-12) — 이유는 EditPanelWindow.xaml 의 그 자리 주석 참고.
         private void ClearCanvas_Click(object sender, RoutedEventArgs e)
         {
             if (_added.Count > 0) _dirty = true;
