@@ -9,8 +9,10 @@
          띄우면 다른 프로그램이 뜬 것처럼 보였다 — DXF 변환 창을 옮긴 것과 같은 이유다.
          바탕 #0B0F1A · 카드 #111827 · 선 #334155 · 글자 #E2E8F0 / 흐린 글자 #94A3B8.
 
-         ※ 발사 지도(PatternPreview) 자체는 원래부터 이 팔레트였다(바탕 #0D1117 · 글자 #94A3B8) —
-           창만 밝아서 그림이 창에 얹힌 남의 화면처럼 보였다. 지도 쪽은 손대지 않는다. -->
+         ※ 발사 지도(PatternPreview)의 <b>그림만은 흰 종이</b>다(2026-09-13) — 흰 바탕에 진할수록 큰 방울.
+           처음에는 "지도는 원래 어두웠으니 손대지 않는다" 고 두었는데, 그러면 검은 잉크로 그린 BMP 가
+           지도에서 하얗게 나와 반전된 그림으로 보였다. DXF 변환 창도 같은 이유로 미리보기만 흰 바탕이다.
+           그림 밖 여백·눈금 글자는 어두운 채다 — 흰 사각형이 "종이" 로 읽히게. -->
     <Window.Resources>
         <!-- 창 안의 스크롤바도 앱 공용 모양을 쓴다(App.xaml 의 Styles.xaml). -->
         <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ModernScrollBarStyle}"/>
@@ -108,7 +110,7 @@
         <!-- ══ 미리보기 ══════════════════════════════════════════════════ -->
         <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource Card}" Padding="8">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="발사 지도  (가로 = 노즐, 세로 = 스캔 진행, 밝을수록 큰 방울)"
+                <TextBlock DockPanel.Dock="Top" Text="발사 지도  (가로 = 노즐, 세로 = 스캔 진행, 진할수록 큰 방울 · 회색 줄무늬 = 노즐 없음)"
                            Foreground="#94A3B8" FontSize="12" Margin="2,0,0,6"/>
                 <print:PatternPreview x:Name="Preview"/>
             </DockPanel>

@@ -16,7 +16,19 @@ namespace IJPSystem.Platform.HMI.Print
     /// 알게 되면 늦다. 찍기 전에 "무엇을 찍으려 하는가"를 눈으로 확인하기 위한 화면이다.
     /// </para>
     /// <para>
-    /// 가로 = 노즐(왼쪽이 X 작은 쪽), 세로 = 스캔 진행 방향. 밝을수록 큰 방울.
+    /// 가로 = 노즐(왼쪽이 X 작은 쪽), 세로 = 스캔 진행 방향. <b>흰 종이에 진할수록 큰 방울</b>이고,
+    /// 노즐이 아예 없는 자리는 옅은 회색 줄무늬다.
+    /// </para>
+    /// <para>
+    /// <b>왜 종이 색인가</b>(2026-09-13): 예전에는 어두운 바탕에 밝을수록 큰 방울로 그렸다. 그러자
+    /// 검은 잉크로 그린 BMP 가 이 지도에서는 하얗게 나와, 계산은 맞는데 눈에는 반전된 그림으로
+    /// 보였다. 패턴 BMP · DXF 변환 창의 미리보기가 모두 흰 바탕에 검은 잉크이므로 여기도 맞춘다 —
+    /// 파일에서 본 모양과 지도에서 본 모양이 같아야 "이대로 찍힌다" 를 눈으로 확인할 수 있다.
+    /// 그림 밖 여백은 어두운 채로 둔다 — 흰 사각형이 "종이" 로 읽히게(DXF 변환 창과 같은 방식).
+    /// </para>
+    /// <para>
+    /// <b>줄무늬를 따로 두는 이유</b>: 흰색 하나로 두면 "노즐은 있는데 여기서는 안 쏨" 과
+    /// "노즐이 없음" 이 똑같이 보인다. 이 화면의 목적이 빠진 노즐을 찾는 것이라 둘을 갈라야 한다.
     /// </para>
     /// <para>
     /// 텍스트는 WPF FormattedText(DirectWrite)로 그린다 — 제어 PC 글꼴 문제의 영향을 받지 않는다.
@@ -39,6 +51,21 @@ namespace IJPSystem.Platform.HMI.Print
         private static readonly Pen   BorderPen = FrozenPen(0x47, 0x55, 0x69, 1.0);
         private static readonly Brush BackBrush = Frozen(0x0D, 0x11, 0x17);
         private static readonly Brush EmptyText = Frozen(0x47, 0x55, 0x69);
+
+        // 노즐 없는 자리의 줄무늬 두 톤. 흰 종이(255)와도, 가장 옅은 방울(4단계의 1단계 = 170)과도
+        // 갈려야 한다 — 그 사이의 옅은 회색 두 톤을 번갈아 칠한다.
+        private const byte NoNozzleA = 0xDC;
+        private const byte NoNozzleB = 0xEB;
+
+        /// <summary>줄무늬 한 줄의 높이를 정할 때 지도 높이를 몇 조각으로 나누나. 너무 가늘면 확대 전에 안 보인다.</summary>
+        private const int NoNozzleBands = 80;
+
+        public PatternPreview()
+        {
+            // 방울 칸이 번지면 안 된다 — 확대했을 때 한 칸이 한 칸으로 보여야 빠진 노즐을 짚는다.
+            // 기본(부드러운 확대)이면 칸 경계가 번져 옆 노즐이 쏘는 것처럼 보인다.
+            RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.NearestNeighbor);
+        }
 
         private static Brush Frozen(byte r, byte g, byte b)
         { var x = new SolidColorBrush(Color.FromRgb(r, g, b)); x.Freeze(); return x; }
@@ -120,11 +147,15 @@ namespace IJPSystem.Platform.HMI.Print
                     if (p.Levels[y, x] > maxLevel) maxLevel = p.Levels[y, x];
             if (maxLevel == 0) maxLevel = 1;
 
-            var px = new byte[w * h];
+            // 잉크량(0 = 안 쏨, 255 = 가장 큰 방울)과 "그 화면 열에 노즐이 있나" 를 따로 모은다.
+            // 둘을 한 배열에 섞으면 안 쏘는 노즐과 없는 노즐이 같은 값이 되어 갈라낼 수 없다.
+            var ink     = new byte[w * h];
+            var present = new bool[w];
             for (int c = 0; c < p.Nozzles; c++)
             {
                 int slot = (int)Math.Round((p.Columns[c].XUm - x0) / pitch);
                 int dx = Math.Clamp(slot / stride0, 0, w - 1);
+                present[dx] = true;
 
                 for (int y = 0; y < srcH; y++)
                 {
@@ -132,8 +163,22 @@ namespace IJPSystem.Platform.HMI.Print
                     if (v == 0) continue;
                     int dy = Math.Clamp(y / stride0, 0, h - 1);
                     byte scaled = (byte)(v * 255 / maxLevel);
-                    if (scaled > px[dy * w + dx]) px[dy * w + dx] = scaled;
+                    if (scaled > ink[dy * w + dx]) ink[dy * w + dx] = scaled;
                 }
+            }
+
+            // 종이에 옮긴다 — 흰 바탕, 진할수록 큰 방울. 노즐 없는 열은 옅은 회색 줄무늬.
+            // ※ 크게 줄여 그릴 때(stride0 > 1)는 한 화면 열에 노즐 있는 칸과 없는 칸이 섞일 수 있고,
+            //   그러면 "있음" 이 이긴다 — 방울을 최대값으로 모으는 것과 같은 이유(찍히는 것을 숨기지 않는다).
+            //   노즐 하나짜리 빈틈은 확대해야 보인다.
+            int band = Math.Max(1, h / NoNozzleBands);
+            var px = new byte[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                byte hatch = (y / band) % 2 == 0 ? NoNozzleA : NoNozzleB;
+                int row = y * w;
+                for (int x = 0; x < w; x++)
+                    px[row + x] = present[x] ? (byte)(255 - ink[row + x]) : hatch;
             }
 
             var bmp = BitmapSource.Create(w, h, 96, 96, PixelFormats.Gray8, null, px, w);
